@@ -3298,9 +3298,11 @@ function renderRulesPause(status) {
       <button class="btn" type="button" data-pause="0">Resume now</button>`;
   } else {
     box.innerHTML = `<span class="note">Pause all rules:</span>
-      <button class="btn quiet" type="button" data-pause="60">1 hour</button>
-      <button class="btn quiet" type="button" data-pause="180">3 hours</button>
-      <button class="btn quiet" type="button" data-pause="morning">Until morning</button>`;
+      <span class="pause-chips">
+        <button class="pause-chip" type="button" data-pause="60">1 hour</button>
+        <button class="pause-chip" type="button" data-pause="180">3 hours</button>
+        <button class="pause-chip" type="button" data-pause="morning" title="Rules come back on at 7 in the morning">Until 7 AM</button>
+      </span>`;
   }
 }
 $("#rules-pause").addEventListener("click", async (e) => {
@@ -3916,6 +3918,7 @@ function renderViews() {
     btn.setAttribute("aria-pressed", String(btn.dataset.view === state.view));
     btn.hidden = unavailable.includes(btn.dataset.view);
   }
+  $("#views").dataset.count = String(document.querySelectorAll("#views [data-view]:not([hidden])").length);
   for (const view of document.querySelectorAll(".view")) view.hidden = view.dataset.view !== state.view;
   document.documentElement.dataset.view = state.view;
 }

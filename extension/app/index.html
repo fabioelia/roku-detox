@@ -175,8 +175,16 @@
   .tile.busy { border-color: var(--keep); }
 
   /* Rules */
-  .rules-pause { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin: 10px 0 0; }
-  .rules-pause p { flex-basis: 100%; }
+  .rules-pause { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin: 12px 0 0; }
+  .rules-pause p { flex-basis: 100%; margin: 0; }
+  .pause-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .pause-chip {
+    min-height: 36px; padding: 4px 12px; border: 1px solid var(--line); border-radius: 999px;
+    background: var(--raised); color: var(--ink); cursor: pointer; font: inherit; font-size: 14px; font-weight: 600;
+  }
+  .pause-chip:hover:not(:disabled) { border-color: var(--muted); }
+  .pause-chip:disabled { opacity: .55; cursor: not-allowed; }
+  @media (pointer: coarse) { .pause-chip { min-height: 44px; padding-inline: 14px; } }
   .rules-status { display: flex; align-items: center; gap: 10px; margin: -6px 0 18px; font-weight: 600; }
   .rules-status::before { content: ""; width: 10px; height: 10px; border-radius: 50%; background: var(--line); flex: none; }
   .rules-status[data-state="on"]::before { background: var(--keep); }
@@ -392,6 +400,10 @@
     .tv-name { font-size: 22px; }
     .tv-status { margin-top: 2px; font-size: 15px; }
     .tv[data-state="ready"] .tv-facts, .tv[data-state="ready"] .engine-badge { display: none; }
+    /* Every menu in view at once (rows of three) instead of a strip that hides some off the edge. */
+    .views { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); width: auto; overflow: visible; border-radius: 20px; margin-bottom: 24px; }
+    .views button { padding: 6px 6px; }
+    .views[data-count="4"] { grid-template-columns: repeat(2, minmax(0, 1fr)); }   /* lite: two by two */
   }
 
   .section { padding: 30px 0; border-top: 1px solid var(--line); }
