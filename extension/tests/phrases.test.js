@@ -13,7 +13,7 @@ const TV = "127.0.0.1:9072";
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const PHRASES = ["pause", "Open Netflix", "hdmi 2", "volume up 3", "sleep 30", "cancel sleep", "home",
   "open zzzz", "YouTube", "watch the roku channel", "louder", "  ", "Pokémon", "It", "tv", "a", "Us",
-  "search for cafe", "Run Lola Run", "sleep timer 20", "netflix"];
+  "search for cafe", "Run Lola Run", "sleep timer 20", "netflix", "pause rules", "resume rules"];
 
 function python(phrases, strict = false) {
   const code = `import json, sys; sys.path.insert(0, ${JSON.stringify(ROOT)}); import roku_detox as rd, tempfile, os

@@ -2103,6 +2103,7 @@ function exportableRules(rules) {
   const copy = JSON.parse(JSON.stringify(rules || {}));
   if (copy.autopilot) delete copy.autopilot.skipNext;
   if (copy.bedtime) delete copy.bedtime.extendUntil;
+  delete copy.pausedUntil;
   return copy;
 }
 
@@ -3232,12 +3233,59 @@ async function loadRules() {
   renderRules();
 }
 
+// Pause every rule for a while (guests over, movie night); the viewing log keeps counting.
+function minutesUntilMorning() {
+  const now = new Date();
+  const morning = new Date(now);
+  morning.setHours(7, 0, 0, 0);
+  if (morning <= now) morning.setDate(morning.getDate() + 1);
+  return Math.min(24 * 60, Math.round((morning - now) / 60000));
+}
+function renderRulesPause(status) {
+  const box = $("#rules-pause");
+  box.hidden = !status.active;
+  if (box.hidden) return;
+  const until = status.rules.pausedUntil || 0;
+  if (until * 1000 > Date.now()) {
+    const at = new Date(until * 1000).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+    box.innerHTML = `<p><strong>All rules are paused until ${esc(at)}.</strong> The viewing log keeps counting.</p>
+      <button class="btn" type="button" data-pause="0">Resume now</button>`;
+  } else {
+    box.innerHTML = `<span class="note">Pause all rules:</span>
+      <button class="btn quiet" type="button" data-pause="60">1 hour</button>
+      <button class="btn quiet" type="button" data-pause="180">3 hours</button>
+      <button class="btn quiet" type="button" data-pause="morning">Until morning</button>`;
+  }
+}
+$("#rules-pause").addEventListener("click", async (e) => {
+  const btn = e.target.closest("[data-pause]");
+  if (!btn || !state.tv) return;
+  const minutes = btn.dataset.pause === "morning" ? minutesUntilMorning() : Number(btn.dataset.pause);
+  btn.disabled = true;
+  try {
+    const status = await api("/api/rules/pause", { tv: state.tv, minutes });
+    state.rulesStatus = status;
+    state.rules = JSON.parse(JSON.stringify(status.rules));
+    state.rulesVersion += 1;
+    renderRules();
+    toast(minutes ? "Rules paused." : "Rules are back on.");
+  } catch (err) {
+    toast(err.message);
+    btn.disabled = false;
+  }
+});
+
 function renderRules() {
   const status = state.rulesStatus;
   const rules = state.rules;
   if (!status || !rules) return;
   const line = $("#rules-status");
+  const pausedUntil = (status.rules?.pausedUntil || 0) * 1000;
   if (!status.active) { line.dataset.state = "off"; line.textContent = "No rules are on."; }
+  else if (pausedUntil > Date.now()) {
+    line.dataset.state = "off";
+    line.textContent = `Rules are paused until ${new Date(pausedUntil).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}.`;
+  }
   else if (!status.watching) { line.dataset.state = "problem"; line.textContent = "Starting to watch the TV…"; }
   else {
     line.dataset.state = "on";
@@ -3245,6 +3293,7 @@ function renderRules() {
     line.textContent = `Watching the TV. ${screen}${status.awake ? " Your Mac is kept awake." : ""}`;
   }
   renderRuleList();
+  renderRulesPause(status);
 
   const usage = Object.entries(status.usage).filter(([, s]) => s >= 30).sort((a, b) => b[1] - a[1]);
   $("#usage-list").innerHTML = usage.map(([id, seconds]) => `<li><span>${esc(usageLabel(id))}</span><span>${minutesText(seconds)}</span></li>`).join("");

@@ -144,3 +144,24 @@ test("an unreachable TV raises one alert after 3 minutes", async () => {
   await setRules({});
   assert.ok(chrome.storage.local.dump().events.length <= 300);
 });
+
+test("pausing rules lets a blocked app stay on, then they're back", async () => {
+  await setRules({ blocked: ["12"] });
+  await tv("/keypress/PowerOn");
+  await tv("/launch/12");
+  mock.timers.setTime(new Date("2026-11-09T15:00:00").getTime());
+  const paused = await ok("POST", "/api/rules/pause", { tv: TV, minutes: 60 });
+  assert.equal(paused.rules.pausedUntil, Math.trunc(new Date("2026-11-09T16:00:00").getTime() / 1000));
+  await roundAt("2026-11-09T15:00:05");
+  await roundAt("2026-11-09T15:00:10");
+  assert.equal((await active()).id, "12", "paused: Netflix stays");
+  await roundAt("2026-11-09T16:00:05"); // the hour is up
+  await roundAt("2026-11-09T16:00:10");
+  assert.notEqual((await active()).id, "12", "back on: the blocked app is closed again");
+  await tv("/launch/12");
+  await ok("POST", "/api/rules/pause", { tv: TV, minutes: 60 });
+  const resumed = await ok("POST", "/api/rules/pause", { tv: TV, minutes: 0 });
+  assert.equal(resumed.rules.pausedUntil, 0);
+  await setRules({});
+  await tv("/keypress/Home");
+});

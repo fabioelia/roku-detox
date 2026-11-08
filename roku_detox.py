@@ -1262,6 +1262,7 @@ RULES_DEFAULT = {
     "autopilot": {"enabled": False, "target": "", "skipNext": False},
     "bedtime": {"enabled": False, "start": "21:00", "end": "06:30", "extendUntil": 0},
     "nightGuard": {"enabled": False, "start": "00:30", "end": "06:00", "idleMinutes": 3},
+    "pausedUntil": 0,  # epoch seconds: every rule rests until then (guests over, movie night)
     "limits": {},      # app id -> minutes per day
     "blocked": [],     # app ids sent back to the home screen
     "redirects": {},   # app id -> app id to open instead
@@ -1318,6 +1319,7 @@ def clean_rules(raw):
         "blocked": sorted({app_id(a) for a in (raw.get("blocked") or [])[:50]}),
         "redirects": {app_id(k): app_id(v) for k, v in redirects.items() if k != v},
         "log": bool(raw.get("log")),
+        "pausedUntil": bounded_int(raw.get("pausedUntil"), 0, 4_102_444_800),
     }
     # Refuse rules that would fight each other.
     for source, dest in rules["redirects"].items():
@@ -1567,6 +1569,8 @@ class Watcher:
             state.on_since = now  # already on when we started watching
 
         self.tick_usage(address, state, app, now)
+        if now < rules.get("pausedUntil", 0):  # paused: keep counting viewing time, enforce nothing
+            return
 
         if self.bedtime(address, rules, state, target, local, now):
             return
@@ -1739,6 +1743,14 @@ def save_rules(address, rules):
     save_tv_settings(address, rules=rules)
 
 
+def pause_rules(address, minutes):
+    """Rest every rule for `minutes` (0 picks them back up). The viewing log keeps counting."""
+    rules = tv_rules(address)
+    rules["pausedUntil"] = int(time.time() + minutes * 60) if minutes else 0
+    save_rules(address, rules)
+    return rules
+
+
 def extend_bedtime(address, minutes):
     rules = tv_rules(address)
     start = max(time.time(), rules["bedtime"]["extendUntil"])
@@ -1887,6 +1899,12 @@ def do_phrase(target, phrase, strict=False):
     if words in ("cancel sleep", "sleep off", "stop sleep timer", "cancel sleep timer"):
         set_sleep(target, 0)
         return "Sleep timer off."
+    if words in ("pause rules", "pause the rules", "rules off"):
+        pause_rules(display_address(target), 60)
+        return "Rules are paused for an hour."
+    if words in ("resume rules", "rules on", "unpause rules"):
+        pause_rules(display_address(target), 0)
+        return "Rules are back on."
     match = re.match(r"^(?:search for|search|find|look for|look up) (.+)$", words)
     if match:
         search(target, match.group(1))
@@ -3131,6 +3149,7 @@ class Handler(BaseHTTPRequestHandler):
             "/api/rules": lambda: self.save_rules(body),
             "/api/rules/extend": lambda: self.rules_extend(body),
             "/api/rules/skip": lambda: self.rules_skip(body),
+            "/api/rules/pause": lambda: self.rules_pause(body),
             "/api/tvapp/install": lambda: self.mac_only(lambda: (install_tv_app(self.server.phone, target(), str(body.get("password", ""))), self.send(200, tv_app_status(target())))),
             "/api/tvapp/remove": lambda: self.mac_only(lambda: (remove_tv_app(self.server.phone, target(), str(body.get("password", ""))), self.send(200, tv_app_status(target())))),
             "/api/tvapp/options": lambda: self.send(200, save_tv_app_options(target(), body)),
@@ -3298,6 +3317,11 @@ class Handler(BaseHTTPRequestHandler):
     def save_rules(self, body):
         address = display_address(parse_target(body.get("tv")))
         save_rules(address, clean_rules(body.get("rules")))
+        self.send(200, WATCHER.status(address))
+
+    def rules_pause(self, body):
+        address = display_address(parse_target(body.get("tv")))
+        pause_rules(address, bounded_int(body.get("minutes"), 0, 24 * 60))
         self.send(200, WATCHER.status(address))
 
     def rules_extend(self, body):

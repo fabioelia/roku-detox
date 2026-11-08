@@ -3,6 +3,7 @@
 
 import { launch, listApps, press, pressSequence, runScene, search } from "./ecp.js";
 import { setSleep } from "./sleep.js";
+import { pauseRules } from "./rules.js";
 import { tvSettings } from "./store.js";
 import { ValueError, cut, displayAddress, pyLen } from "./util.js";
 
@@ -59,6 +60,14 @@ export async function doPhrase(target, phrase, { strict = false } = {}) {
   if (["cancel sleep", "sleep off", "stop sleep timer", "cancel sleep timer"].includes(words)) {
     await setSleep(target, 0);
     return "Sleep timer off.";
+  }
+  if (["pause rules", "pause the rules", "rules off"].includes(words)) {
+    await pauseRules(displayAddress(target), 60);
+    return "Rules are paused for an hour.";
+  }
+  if (["resume rules", "rules on", "unpause rules"].includes(words)) {
+    await pauseRules(displayAddress(target), 0);
+    return "Rules are back on.";
   }
   match = /^(?:search for|search|find|look for|look up) (.+)$/.exec(words);
   if (match) {

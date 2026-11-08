@@ -19,6 +19,7 @@ export const RULES_DEFAULT = {
   autopilot: { enabled: false, target: "", skipNext: false },
   bedtime: { enabled: false, start: "21:00", end: "06:30", extendUntil: 0 },
   nightGuard: { enabled: false, start: "00:30", end: "06:00", idleMinutes: 3 },
+  pausedUntil: 0, // epoch seconds: every rule rests until then (guests over, movie night)
   limits: {},    // app id -> minutes per day
   blocked: [],   // app ids sent back to the home screen
   redirects: {}, // app id -> app id to open instead
@@ -84,6 +85,7 @@ export function cleanRules(raw) {
     blocked: [],
     redirects: {},
     log: truthy(raw.log),
+    pausedUntil: boundedInt(raw.pausedUntil, 0, 4_102_444_800),
   };
   for (const [k, v] of Object.entries(limits)) rules.limits[appId(k)] = boundedInt(v, 1, 720);
   rules.blocked = [...new Set(blockedRaw.slice(0, 50).map((a) => appId(a)))].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
@@ -313,6 +315,7 @@ async function check(address, rules) {
   }
 
   await tickUsage(address, state, app, t);
+  if (t < (rules.pausedUntil || 0)) return; // paused: keep counting viewing time, enforce nothing
 
   if (await bedtime(address, rules, state, target, local, t)) return;
   if (await nightGuard(address, rules, state, target, local, t)) return;
@@ -582,6 +585,14 @@ export async function extendBedtime(address, minutes) {
   const rules = await tvRules(address);
   const start = Math.max(now(), rules.bedtime.extendUntil);
   rules.bedtime.extendUntil = Math.trunc(start + minutes * 60);
+  await saveRules(address, rules);
+  return rules;
+}
+
+/** Rest every rule for `minutes` (0 picks them back up). The viewing log keeps counting. */
+export async function pauseRules(address, minutes) {
+  const rules = await tvRules(address);
+  rules.pausedUntil = minutes ? Math.trunc(now() + minutes * 60) : 0;
   await saveRules(address, rules);
   return rules;
 }

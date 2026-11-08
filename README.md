@@ -44,7 +44,8 @@ The page has six menus:
   skip the home screen when the TV turns on, bedtime, daily time limits, blocked apps, swap apps,
   night guard (turns the TV back off when it wakes itself up at night), and a viewing log.
   It checks the TV every 4 seconds and keeps the Mac from sleeping (`caffeinate`) while any rule is on.
-  Alerts show as macOS notifications. Includes a connection check with plain-language fixes, and
+  Alerts show as macOS notifications. "Pause all rules" turns them off for an hour, three hours or until
+  morning (viewing time still counts), then they come back on by themselves. Includes a connection check with plain-language fixes, and
   screen time for the past days (total, daily average, a bar for each day, top apps). Apps with a daily
   limit show the time left today on the Remote menu and in the extension's popup, and an upcoming bedtime
   shows there within the hour.
@@ -63,7 +64,7 @@ The page has six menus:
   for Apple's Shortcuts app (or anything that can send a web request): POST `{"do": "pause"}` to
   `http://<this Mac>:8642/api/do` with the header `X-Detox-Key`. Phrases: pause, home, back, louder,
   quieter, mute, on, off, volume up 5, open Netflix, HDMI 2, one of your scene names, sleep 30,
-  cancel sleep, search The Bear; anything else searches the TV. The answer is a sentence Siri can read out.
+  cancel sleep, pause rules, resume rules, search The Bear; anything else searches the TV. The answer is a sentence Siri can read out.
   The Phone menu also lists **home-screen buttons**: links like `http://<this Mac>:8642/#do=open%20Netflix`
   that open the page and do that on the TV after a 2-second pause you can cancel. Add them to a phone's
   home screen for one-tap Netflix, a scene, or "sleep 30".

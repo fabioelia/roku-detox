@@ -175,6 +175,8 @@
   .tile.busy { border-color: var(--keep); }
 
   /* Rules */
+  .rules-pause { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin: 10px 0 0; }
+  .rules-pause p { flex-basis: 100%; }
   .rules-status { display: flex; align-items: center; gap: 10px; margin: -6px 0 18px; font-weight: 600; }
   .rules-status::before { content: ""; width: 10px; height: 10px; border-radius: 50%; background: var(--line); flex: none; }
   .rules-status[data-state="on"]::before { background: var(--keep); }
@@ -838,6 +840,7 @@
         <h2>Rules</h2>
         <p class="intro" id="rules-intro">Rules run in the background while Roku Detox is open on your Mac. It checks the TV every few seconds and keeps your Mac from going to sleep while any rule is on.</p>
         <p class="rules-status" id="rules-status" role="status"></p>
+        <div class="rules-pause" id="rules-pause" hidden></div>
         <ul class="rule-list" id="rule-list"></ul>
       </section>
       <section class="section needs-engine">
