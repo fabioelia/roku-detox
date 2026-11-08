@@ -77,13 +77,16 @@ async function loadTvPicker() {
 }
 
 async function loadTvName() {
-  if (!tv || $("#tv-pick")) return;
+  if (!tv) return;
   try {
     const { device } = await api("GET", "/api/device", { query: { tv } });
+    tvOff = Boolean(device.powerMode) && device.powerMode !== "PowerOn";
+    if (tvOff) $("#now").textContent = "The TV is off. Power turns it on.";
+    if ($("#tv-pick")) return;   // the TV menu already names it
     $("#tv").textContent = device.name;
     $("#tv").title = tv;
   } catch {
-    $("#tv").title = "The TV didn't answer just now.";
+    if (!$("#tv-pick")) $("#tv").title = "The TV didn't answer just now.";
   }
 }
 
@@ -145,6 +148,7 @@ async function openApp() {
 let keyChain = Promise.resolve();
 function pressKey(key) {
   if (!tv) return;
+  if (key === "Power" || key === "PowerOn") setTimeout(() => { loadTvName().then(() => { if (!tvOff) loadNow(); }); }, 3000);
   const btn = $(`#keys [data-key="${key}"]`);
   if (btn) {
     btn.classList.add("sent");
@@ -158,10 +162,12 @@ function pressKey(key) {
 
 const POPUP_KEYS = { ArrowUp: "Up", ArrowDown: "Down", ArrowLeft: "Left", ArrowRight: "Right", Enter: "Select", Backspace: "Back" };
 
+let tvOff = false;
 async function loadNow() {
-  if (!tv) return;
+  if (!tv || tvOff) return;
   try {
     const { now } = await api("GET", "/api/now", { query: { tv } });
+    if (tvOff) return;   // found out meanwhile that the TV is off
     const state = { play: "playing", pause: "paused", buffer: "loading" }[now?.state] || "";
     const screen = now?.screen || {};
     const home = !screen.id || ["roku", "roku dynamic menu", "home"].includes((screen.name || "").toLowerCase());
