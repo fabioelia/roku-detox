@@ -3,7 +3,7 @@
 
 import { deviceInfo, launch, listApps, nowPlaying, press, pressSequence, runScene, search } from "./ecp.js";
 import { setSleep } from "./sleep.js";
-import { cast } from "./video.js";
+import { parseLink } from "./video.js";
 import { BEDTIME_DAYS, appLabel, dayKey, isHome, pauseRules, plainName, rulesEnforcing, rulesStatus, tvRules } from "./rules.js";
 import { tvSettings } from "./store.js";
 import { ValueError, cut, displayAddress, pyLen } from "./util.js";
@@ -106,10 +106,14 @@ export function foldWords(text) {
  * a number phrase ("sleep 30", "volume up 5", "hdmi 2"), or an app or scene's exact name.
  * Anything else, single button words like "home" included, is a search.
  */
-export async function doPhrase(target, phrase, { strict = false } = {}) {
-  if (/^\s*https?:\/\/\S+\s*$/i.test(phrase)) { // a link, say from the iPhone share sheet
-    const result = await cast(target, cut(String(phrase).trim(), 4000));
-    return `Playing it on the TV in ${result.app}.`;
+export async function doPhrase(target, phrase, { strict = false, links = false } = {}) {
+  if (/^\s*https?:\/\/\S+\s*$/i.test(phrase)) {
+    // links: only for a Shortcuts key (do_phrase), and only YouTube and Netflix, which open in their apps.
+    if (!links) throw new ValueError("That's a link. Send it with the box under the remote instead.");
+    const link = parseLink(String(phrase).trim());
+    if (!link) throw new ValueError("A shortcut can send YouTube and Netflix links. For other pages, use Send to TV on this computer.");
+    await launch(target, link.appId, link.params);
+    return `Playing it on the TV in ${link.app}.`;
   }
   const words = cut(foldWords(phrase), 120);
   if (!words) throw new ValueError("Say what to do, like pause, open Netflix or sleep 30.");

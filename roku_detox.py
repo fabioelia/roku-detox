@@ -79,6 +79,7 @@ ROKU_OWNED_IDS = {"151908", "2213"}  # The Roku Channel, Roku Media Player
 APP_ID_RE = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
 MAX_BODY = 64 * 1024
 # Changes that need the household PIN (when one is set) from phones and other computers.
+MAC_ONLY_PATHS = ("/api/phone/key", "/api/tvapp/install", "/api/tvapp/remove")
 PIN_PATHS = ("/api/rules", "/api/tvapp", "/api/sites", "/api/phone", "/api/household")
 
 
@@ -1608,6 +1609,8 @@ class Watcher:
             # and start fresh afterwards: a full bedtime warning and a new idle count
             state.bedtime_warned = state.idle_since = None
             state.said.pop("bedtime-off", None)
+            if state.autopilot != "pending":  # a skip-home already under way doesn't pick up an hour later
+                state.autopilot = None
             return
 
         if self.bedtime(address, rules, state, target, local, now):
@@ -1998,7 +2001,10 @@ def say_time_left(target):
     return " ".join(parts) or "There's no daily limit or bedtime set."
 
 
-def do_phrase(target, phrase, strict=False):
+LINK_PHRASE_RE = r"^\s*https?://\S+\s*$"
+
+
+def do_phrase(target, phrase, strict=False, links=False):
     """Do what a short phrase says on the TV. Returns a sentence saying what happened.
 
     strict (the page's search box): only clear commands act, meaning a verb ("open ...", "watch ..."),
@@ -2006,9 +2012,16 @@ def do_phrase(target, phrase, strict=False):
     Anything else, single button words like "home" included, is a search, because people type
     show names there.
     """
-    if re.match(r"^\s*https?://\S+\s*$", phrase, re.I):  # a link, say from the iPhone share sheet
-        result = cast(target, phrase.strip()[:4000])
-        return f"Playing it on the TV in {result['app']}."
+    if re.match(LINK_PHRASE_RE, phrase, re.I):
+        # links=True only for a Shortcuts key (the iPhone share sheet), and only YouTube and Netflix, which open
+        # in their apps: nothing is fetched, so a key can't make this computer load other addresses.
+        link = parse_link(phrase.strip()) if links else None
+        if not links:
+            raise ValueError("That's a link. Send it with the box under the remote instead.")
+        if not link:
+            raise ValueError("A shortcut can send YouTube and Netflix links. For other pages, use Send to TV on this computer.")
+        launch(target, link["appId"], link["params"])
+        return f"Playing it on the TV in {link['app']}."
     words = fold_words(phrase)[:120]
     if not words:
         raise ValueError("Say what to do, like pause, open Netflix or sleep 30.")
@@ -2111,7 +2124,7 @@ def set_household(open_access=None, pin=None):
             info["open"] = bool(open_access)
         if pin is not None:
             digits = str(pin).strip()
-            if digits and not re.match(r"^\d{4,8}$", digits):
+            if digits and not re.match(r"^[0-9]{4,8}$", digits):  # plain 0-9: what every keyboard can send
                 raise ValueError("Use 4 to 8 digits for the household PIN.")
             info["pin"] = token_hash(digits) if digits else ""
     update_settings(change)
@@ -3250,6 +3263,8 @@ class Handler(BaseHTTPRequestHandler):
 
         if tv_app:
             return self.run(lambda: self.from_tv_app(path, {}, body))
+        if path in MAC_ONLY_PATHS and self.on_lan:  # say so first, instead of asking for a PIN that won't help
+            return self.fail(403, "Do this on your Mac.")
         if path.startswith(PIN_PATHS) and not self.pin_ok():
             return self.fail(403, "Enter the household PIN to change this.", pin=True)
         if path == "/api/do" and fold_words(str(body.get("do", "")))[:120] in PAUSE_RULE_PHRASES and not self.pin_ok():
@@ -3287,7 +3302,7 @@ class Handler(BaseHTTPRequestHandler):
             "/api/wake": lambda: self.send(200, wake_tv(target())),
             "/api/do": lambda: self.send(200, {"done": do_phrase(
                 parse_target(body["tv"]) if body.get("tv") else default_tv(), str(body.get("do", "")),
-                strict=body.get("strict") is True)}),
+                strict=body.get("strict") is True, links=bool(shortcut))}),
             "/api/phone/key": lambda: self.mac_only(lambda: self.send(200, {
                 "key": self.server.phone.new_key(), "url": f"{self.server.phone.url}/api/do"})),
             "/api/rules": lambda: self.save_rules(body),

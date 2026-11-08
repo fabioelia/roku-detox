@@ -67,8 +67,8 @@ The page has six menus:
   cancel sleep, pause rules, resume rules, search The Bear; anything else searches the TV. The answer is a sentence Siri can read out,
   and you can ask too: "what's on" (Netflix is on, playing, 12 minutes in), "screen time" (today's total and the top app,
   from the viewing log) and "time left" (what's left on each daily limit, and when bedtime is). With a household PIN set,
-  "pause rules" needs it too. A link as `do` plays it on the TV, so a shortcut shown in the iPhone share sheet
-  sends YouTube and Netflix links (or a page with a video) straight to the TV.
+  "pause rules" needs it too. With the key, a YouTube or Netflix link as `do` plays it on the TV, so a shortcut
+  shown in the iPhone share sheet sends those links straight to the TV. (`#do=` links never play links.)
   The Phone menu also lists **home-screen buttons**: links like `http://<this Mac>:8642/#do=open%20Netflix`
   that open the page and do that on the TV after a 2-second pause you can cancel. Add them to a phone's
   home screen for one-tap Netflix, a scene, or "sleep 30".

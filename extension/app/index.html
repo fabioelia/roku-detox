@@ -394,6 +394,13 @@
     position: sticky; top: 20px; max-height: calc(100vh - 40px); overflow-y: auto;
     display: grid; gap: 18px; justify-items: center; padding: 4px 4px 12px; margin: -4px;
   }
+  @media (max-width: 720px) {
+    /* Every menu in view at once (rows of three) instead of a strip that hides some off the edge. */
+    #views { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); width: auto; overflow: visible; border-radius: 20px; margin-bottom: 24px; }
+    #views button { padding: 6px 6px; }
+    #views[data-count="4"] { grid-template-columns: repeat(2, minmax(0, 1fr)); }   /* lite: two by two */
+  }
+  @media (max-width: 360px) { #views button { padding: 6px 2px; font-size: 14px; } }
   @media (max-width: 880px) {
     .layout { grid-template-columns: minmax(0, 1fr); gap: 28px; }
     .side { position: static; order: -1; max-height: none; overflow: visible; }
@@ -412,10 +419,7 @@
     .tv-name { font-size: 22px; }
     .tv-status { margin-top: 2px; font-size: 15px; }
     .tv[data-state="ready"] .tv-facts, .tv[data-state="ready"] .engine-badge { display: none; }
-    /* Every menu in view at once (rows of three) instead of a strip that hides some off the edge. */
-    #views { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); width: auto; overflow: visible; border-radius: 20px; margin-bottom: 24px; }
-    #views button { padding: 6px 6px; }
-    #views[data-count="4"] { grid-template-columns: repeat(2, minmax(0, 1fr)); }   /* lite: two by two */
+
     /* Link-style actions that wrap under a heading line up with it instead of sitting indented. */
     .section-head { gap: 2px 16px; }
     .section-head > .btn.quiet { padding-left: 0; }

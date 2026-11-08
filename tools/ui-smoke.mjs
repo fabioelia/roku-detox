@@ -156,6 +156,8 @@ async function main() {
       weekTrend(days([3600, 3600, 3600, 3600, 3600, 3600, 3800, 3700, 3600, 3600, 3600, 3600, 3500, 0]), today),
       weekTrend(days([0, 0, 0, 0, 0, 0, 0, 1800, 1800, 1800, 1800, 1800, 1800, 1800]), "2026-11-15"),
       weekTrend(days([3600, 3600, 3600, 3600, 3600, 3600]), today),
+      // Away Nov 3-7: the week before has only two days on record, so no comparison.
+      weekTrend(days([3600, 3600, 0, 0, 0, 0, 0, 1800, 1800, 1800, 1800, 1800, 1800, 1800]).filter((d, i) => i < 2 || i > 6), "2026-11-15"),
     ]; })()`);
   const nights = await page(`(async () => {
     const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -172,7 +174,7 @@ async function main() {
   check("bedtime can be set for school nights", nights.saved.join() === "mon,tue,wed,thu,sat,sun" && nights.note === "Every night except Friday.", JSON.stringify(nights));
   check("screen time compares the past week with the one before",
     trend[0] === "Past week: about 1 h a day, 50% less than the week before." && trend[1] === "Past week: about 1 h a day, about the same as the week before."
-    && trend[2] === "Past week: about 30 min a day, up from almost nothing the week before." && trend[3] === "", JSON.stringify(trend));
+    && trend[2] === "Past week: about 30 min a day, up from almost nothing the week before." && trend[3] === "" && trend[4] === "", JSON.stringify(trend));
 
   // Narrow screen: the remote leads on Remote, follows on other menus.
   await send("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 2, mobile: true });
@@ -182,19 +184,27 @@ async function main() {
     const onFind = top(document.querySelector(".side")) > top(document.querySelector("main"));
     document.querySelector('#views [data-view="remote"]').click(); return onRemote && onFind; })()`);
   check("on phones the remote leads only on Remote", order);
-  // Every menu at phone width: no sideways scrolling, and no button whose words are cut off.
-  const fit = await page(`(async () => {
+  // Every menu at phone and small-tablet widths: no sideways scrolling, and no button whose words are cut off.
+  const fit = [];
+  for (const width of [320, 390, 650]) {
+    await send("Emulation.setDeviceMetricsOverride", { width, height: 844, deviceScaleFactor: 2, mobile: true });
+    await wait(300);
+    fit.push(...(await page(`(async () => {
     const out = [];
     for (const view of ["remote", "find", "rules", "cleanup", "tvapp", "phone"]) {
       document.querySelector('#views [data-view="' + view + '"]').click(); await new Promise((r) => setTimeout(r, 400));
-      if (document.documentElement.scrollWidth > innerWidth + 1) out.push(view + ": page scrolls sideways");
+      if (document.documentElement.scrollWidth > innerWidth + 1) out.push(innerWidth + "px " + view + ": page scrolls sideways");
+      const menu = document.querySelector("#views");
+      if (menu.scrollWidth > menu.clientWidth + 1) out.push(innerWidth + "px: the menu scrolls sideways");
       for (const b of document.querySelectorAll("button")) {
-        if (b.offsetParent && b.scrollWidth > b.clientWidth + 1 && getComputedStyle(b).overflow !== "visible") out.push(view + ": " + b.textContent.trim().slice(0, 30));
-        if (b.offsetParent && b.closest("#views, .find-source") && b.scrollWidth > b.clientWidth + 1) out.push(view + ": " + b.textContent.trim().slice(0, 30));
+        if (b.offsetParent && b.scrollWidth > b.clientWidth + 1 && getComputedStyle(b).overflow !== "visible") out.push(innerWidth + "px " + view + ": " + b.textContent.trim().slice(0, 30));
+        if (b.offsetParent && b.closest("#views, .find-source") && b.scrollWidth > b.clientWidth + 1) out.push(innerWidth + "px " + view + ": " + b.textContent.trim().slice(0, 30));
       }
     }
     document.querySelector('#views [data-view="remote"]').click();
-    return [...new Set(out)]; })()`);
+    return [...new Set(out)]; })()`)));
+  }
+  await send("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 2, mobile: true });
   check("every menu fits a phone screen", fit.length === 0, fit.join(" | "));
   const remoteOnly = await page(`(() => { document.querySelector("#remote-only").click();
     const on = getComputedStyle(document.querySelector("main")).display === "none" && getComputedStyle(document.querySelector("#remote")).display !== "none";
@@ -213,6 +223,13 @@ async function main() {
     const dev = await api("/api/device?tv=" + encodeURIComponent(state.tv));
     return { banner, opened, power: dev.device.powerMode }; })()`);
   check("a #do= link waits, then does it", doLink.banner && doLink.opened === "Opening Netflix.", JSON.stringify(doLink));
+  const doUrl = await page(`(async () => {
+    const before = await api("/api/now?tv=" + encodeURIComponent(state.tv));
+    location.hash = "do=" + encodeURIComponent("https://youtu.be/dQw4w9WgXcQ"); await new Promise((r) => setTimeout(r, 2800));
+    const after = await api("/api/now?tv=" + encodeURIComponent(state.tv));
+    history.replaceState(null, "", location.pathname);
+    return { offered: !document.querySelector("#do-banner").hidden, before: before.now.screen.id, after: after.now.screen.id }; })()`);
+  check("a #do= link never plays a link by itself", !doUrl.offered && doUrl.after === doUrl.before, JSON.stringify(doUrl));
   check("Cancel stops a #do= link", doLink.power === "PowerOn", JSON.stringify(doLink));
   const framing = await fetch(`http://127.0.0.1:${PAGE_PORT}/`).then((r) => [r.headers.get("x-frame-options"), r.headers.get("content-security-policy")]);
   check("the page can't be put in another site's frame", framing[0] === "DENY" && /frame-ancestors 'none'/.test(framing[1] || ""), framing.join(" | "));

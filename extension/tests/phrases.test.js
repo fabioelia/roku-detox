@@ -95,3 +95,29 @@ print(json.dumps([rd.do_phrase(("127.0.0.1", 9072), p) for p in json.loads(sys.a
   assert.equal(got[1], `Netflix: 5 minutes left. YouTube: time's up for today. Bedtime is at ${(await import("../engine/phrases.js")).sayClock(setup.bedtime.start)}.`);
   await handleMessage({ type: "api", method: "POST", path: "/api/rules", query: {}, body: { tv: TV, rules: {} } }, { internal: true });
 });
+
+test("links play only for a Shortcuts key, and only YouTube and Netflix (nothing is fetched)", async () => {
+  const { doPhrase } = await import("../engine/phrases.js");
+  const { parseTarget } = await import("../engine/util.js");
+  const links = ["https://youtu.be/dQw4w9WgXcQ", "https://www.netflix.com/title/80057281", "http://127.0.0.1:9072/query/device-info", "https://example.com/video"];
+  const code = `import json, sys, tempfile, os; sys.path.insert(0, ${JSON.stringify(ROOT)}); import roku_detox as rd
+d = tempfile.mkdtemp(); rd.SETTINGS_PATH = os.path.join(d, "s.json"); rd.USAGE_PATH = os.path.join(d, "u.json")
+rd.fetch_page = rd.find_video = None   # a key must never make it load a page
+out = []
+for p in json.loads(sys.argv[1]):
+    for links in (True, False):
+        try: out.append({"done": rd.do_phrase(("127.0.0.1", 9072), p, links=links)})
+        except Exception as err: out.append({"error": str(err)})
+print(json.dumps(out))`;
+  const expected = JSON.parse(execFileSync("python3", ["-c", code, JSON.stringify(links)], { encoding: "utf8" }));
+  const got = [];
+  for (const p of links) {
+    for (const withLinks of [true, false]) {
+      try { got.push({ done: await doPhrase(parseTarget(TV), p, { links: withLinks }) }); } catch (err) { got.push({ error: err.message }); }
+    }
+  }
+  assert.deepEqual(got, expected);
+  assert.equal(got[0].done, "Playing it on the TV in YouTube.");
+  assert.match(got[1].error, /That's a link/);
+  assert.match(got[4].error, /YouTube and Netflix/);
+});

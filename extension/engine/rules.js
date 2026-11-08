@@ -363,6 +363,7 @@ async function check(address, rules) {
     // and start fresh afterwards: a full bedtime warning and a new idle count
     state.bedtimeWarned = state.idleSince = null;
     delete state.said["bedtime-off"];
+    if (state.autopilot !== "pending") state.autopilot = null; // a skip-home under way doesn't pick up an hour later
     return;
   }
 
