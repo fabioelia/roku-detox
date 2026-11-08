@@ -168,6 +168,11 @@ export async function omniboxSuggestions(text) {
     return out;
   }
   const folded = fold(words);
+  if (!folded) { // only punctuation: nothing to match, so don't let every scene and app match ""
+    return [
+      { content: `search:${words}`, description: `Search the TV for <match>${xml(words)}</match>` },
+    ];
+  }
   for (const [names, key, label] of KEY_WORDS) {
     if (names.some((n) => n === folded)) out.push({ content: `key:${key}`, description: `${xml(label)} <dim>on the TV</dim>` });
   }

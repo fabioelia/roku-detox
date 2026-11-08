@@ -737,7 +737,7 @@ async function findTVs({ autoConnect = true } = {}) {
 
 async function connect(address) {
   if (state.job) stopJobs();
-  state.pickerOpen = false;
+  state.tvPickerOpen = false;
   state.tv = address;
   store.set("detox.tv", address);
   state.device = null;
@@ -787,7 +787,7 @@ async function refreshDevice() {
     state.reachable = false;
     state.control = false;
     state.deviceError = err.message;
-    if (state.engine?.kind === "server" && state.wake?.tv !== state.tv) {
+    if (state.engine?.kind === "server" && (state.wake?.tv !== state.tv || !state.wake.known)) {
       const tv = state.tv;
       api(`/api/wake?tv=${enc(tv)}`).then((info) => { state.wake = { tv, ...info }; renderTV(); }, () => {});
     }
@@ -851,10 +851,10 @@ function renderAll() {
 }
 
 // The TV picker folds away behind "Switch TV" once a TV answers.
-state.pickerOpen = false;
+state.tvPickerOpen = false;   // (state.pickerOpen is the episode pickers' open/closed map)
 function renderPickerMode() {
   const connected = Boolean(state.tv && state.reachable);
-  const compact = connected && !state.pickerOpen;
+  const compact = connected && !state.tvPickerOpen;
   $("#picker").dataset.compact = String(compact);
   const toggle = $("#picker-toggle");
   toggle.hidden = !connected;
@@ -862,9 +862,9 @@ function renderPickerMode() {
   toggle.setAttribute("aria-expanded", String(!compact));
 }
 $("#picker-toggle").addEventListener("click", () => {
-  state.pickerOpen = !state.pickerOpen;
+  state.tvPickerOpen = !state.tvPickerOpen;
   renderPickerMode();
-  if (state.pickerOpen) (isLite() ? $("#manual-input") : $("#tv-select")).focus();
+  if (state.tvPickerOpen) (isLite() ? $("#manual-input") : $("#tv-select")).focus();
 });
 
 function renderTV() {
@@ -1275,6 +1275,7 @@ function markStep(step, value) {
 /* ---------- Remote ---------- */
 
 let keyChain = Promise.resolve();
+let keysPending = 0;   // presses queued or on their way (held buttons don't pile up behind a slow TV)
 const COARSE = matchMedia("(pointer: coarse)");
 function pressKey(key) {
   if (!state.tv || !state.control) return;
@@ -1286,9 +1287,11 @@ function pressKey(key) {
   }
   if (COARSE.matches && navigator.vibrate) navigator.vibrate(8);   // a small buzz, like a real remote's click
   // One at a time, so fast presses reach the TV in order.
+  keysPending += 1;
   keyChain = keyChain.then(() => api("/api/key", { tv: state.tv, key }))
     .then(() => setRemoteError(""))
-    .catch((err) => setRemoteError(err.blocked ? "The TV is blocking remote buttons. See the note at the top." : err.message));
+    .catch((err) => setRemoteError(err.blocked ? "The TV is blocking remote buttons. See the note at the top." : err.message))
+    .finally(() => { keysPending -= 1; });
 }
 
 /* Swipe pad: each stretch of a drag sends one arrow, so a long swipe moves several tiles. */
@@ -1456,12 +1459,14 @@ $("#restart-actions").addEventListener("click", (e) => {
 // the first press itself, so the click that follows is ignored; keyboard clicks still work.
 const REPEATS = new Set(["Up", "Down", "Left", "Right", "VolumeUp", "VolumeDown", "Rev", "Fwd"]);
 let holding = null;
+let pressSeq = 0;
 function stopHold() {
   if (!holding) return;
   clearTimeout(holding.timer);
   clearInterval(holding.repeat);
-  const btn = holding.btn;
-  setTimeout(() => { delete btn.dataset.pressed; }, 80);   // after the click that follows a release
+  const { btn, seq } = holding;
+  // After the click that follows a release; a newer press on the same button keeps its own mark.
+  setTimeout(() => { if (btn.dataset.pressed === seq) delete btn.dataset.pressed; }, 80);
   holding = null;
 }
 $("#remote").addEventListener("pointerdown", (e) => {
@@ -1470,8 +1475,13 @@ $("#remote").addEventListener("pointerdown", (e) => {
   stopHold();
   const key = btn.dataset.key;
   pressKey(key);
-  btn.dataset.pressed = "1";
-  holding = { btn, timer: setTimeout(() => { if (holding) holding.repeat = setInterval(() => pressKey(key), 160); }, 450) };
+  const seq = String(++pressSeq);
+  btn.dataset.pressed = seq;
+  // The relay allows about 30 requests a minute, so holding there sends one press.
+  const repeat = state.engine?.kind !== "relay";
+  holding = { btn, seq, timer: repeat ? setTimeout(() => {
+    if (holding) holding.repeat = setInterval(() => { if (keysPending < 2) pressKey(key); }, 160);
+  }, 450) : null };
 });
 for (const type of ["pointerup", "pointercancel", "pointerleave"]) $("#remote").addEventListener(type, stopHold);
 window.addEventListener("pointerup", stopHold);
@@ -1592,7 +1602,7 @@ function favoriteSuggestions(apps, current) {
   const byId = new Map(free.map((a) => [a.id, a]));
   const picks = POPULAR_APPS.map((id) => byId.get(id)).filter(Boolean);
   for (const a of free.slice().sort((x, y) => x.name.localeCompare(y.name))) if (picks.length < 4 && !picks.includes(a)) picks.push(a);
-  const top = picks.slice(0, 4 - current.length);
+  const top = picks.slice(0, Math.max(0, 4 - current.length));
   if (!top.length) return current.length ? "" : `<p class="empty">Pick the apps you open most to keep them up here.</p>`;
   return `<div class="fav-suggest"><p class="empty">${current.length ? "Add more:" : "Pick the apps you open most to keep them up here. One tap to start:"}</p>
     <div class="chips">${top.map((a) => `<button type="button" class="chip" data-fav-add="${esc(a.id)}"><img ${iconAttrs(a.id)} alt="" data-drop-on-error>Add ${esc(plain(a.name))}</button>`).join("")}</div></div>`;

@@ -32,3 +32,12 @@ test("when the alarm goes off, the TV turns off", async () => {
   assert.equal(await power(), "DisplayOff");
   await fetch(`http://${TV}/keypress/PowerOn`, { method: "POST" });
 });
+
+test("a timer that fires long after it was due (the computer slept) is skipped", async () => {
+  await fetch(`http://${TV}/keypress/PowerOn`, { method: "POST" });
+  assert.equal(await onSleepAlarm({ name: `detox-sleep:${TV}`, scheduledTime: Date.now() - 8 * 3600 * 1000 }), true);
+  assert.equal(await power(), "PowerOn", "the TV someone is watching stays on");
+  assert.equal(await onSleepAlarm({ name: `detox-sleep:${TV}`, scheduledTime: Date.now() - 30 * 1000 }), true);
+  assert.equal(await power(), "DisplayOff", "a little late is fine");
+  await fetch(`http://${TV}/keypress/PowerOn`, { method: "POST" });
+});

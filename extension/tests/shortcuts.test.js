@@ -57,3 +57,8 @@ test("scenes you made show up in the address bar", async () => {
   const list = await shortcuts.omniboxSuggestions("game");
   assert.ok(list.some((s) => s.content === `scene:${id}` && s.description.includes("<match>Game time</match>")), JSON.stringify(list));
 });
+
+test("only punctuation doesn't match every scene and app", async () => {
+  const list = await shortcuts.omniboxSuggestions("+");
+  assert.deepEqual(list.map((s) => s.content), ["search:+"]);
+});

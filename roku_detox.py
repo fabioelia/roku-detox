@@ -1176,6 +1176,7 @@ def scheduler():
 SLEEP_LOCK = threading.Lock()
 SLEEP_TIMERS = {}  # "host:port" -> {"until": epoch seconds, "timer": threading.Timer}
 MAX_SLEEP_MINUTES = 240
+SLEEP_LATE_LIMIT = 120  # seconds: a timer that fires later than this (the Mac was asleep) is dropped
 
 
 def sleep_status(target):
@@ -1194,16 +1195,25 @@ def set_sleep(target, minutes):
         if old:
             old["timer"].cancel()
         if minutes:
-            timer = threading.Timer(minutes * 60, sleep_fire, (address,))
-            timer.daemon = True
-            SLEEP_TIMERS[address] = {"until": time.time() + minutes * 60, "timer": timer}
-            timer.start()
+            entry = {"until": time.time() + minutes * 60}
+            entry["timer"] = threading.Timer(minutes * 60, sleep_fire, (address, entry))
+            entry["timer"].daemon = True
+            SLEEP_TIMERS[address] = entry
+            entry["timer"].start()
+    WATCHER.keep_awake_for_sleep(bool(SLEEP_TIMERS))
     return sleep_status(target)
 
 
-def sleep_fire(address):
+def sleep_fire(address, entry):
     with SLEEP_LOCK:
+        if SLEEP_TIMERS.get(address) is not entry:  # replaced or cancelled while this one was starting
+            return
         SLEEP_TIMERS.pop(address, None)
+        late = time.time() - entry["until"]
+    WATCHER.keep_awake_for_sleep(bool(SLEEP_TIMERS))
+    if late > SLEEP_LATE_LIMIT:  # the Mac slept through it: don't turn off a TV someone is watching now
+        WATCHER.event(address, f"Sleep timer skipped: this Mac was asleep when it was due ({int(late // 60)} min ago).", kind="info")
+        return
     try:
         press(parse_target(address), "PowerOff")
         WATCHER.event(address, "Sleep timer: turned the TV off.")
@@ -1380,6 +1390,9 @@ class TVWatch:
 class Watcher:
     def __init__(self):
         self.tvs = {}
+        self.awake_lock = threading.Lock()
+        self.rules_wanted = False   # keep the Mac awake: rules are on
+        self.sleep_wanted = False   # keep the Mac awake: a sleep timer is set
         self.lock = threading.Lock()
         self.events = self.load_events()
         self.awake = None
@@ -1445,17 +1458,23 @@ class Watcher:
 
     # Keeping the Mac awake
 
+    def keep_awake_for_sleep(self, wanted):
+        """A sleep timer is set: keep the Mac from idle-sleeping so it fires on time."""
+        self.sleep_wanted = wanted
+        self.keep_awake(wanted or self.rules_wanted)
+
     def keep_awake(self, wanted):
-        if wanted == (self.awake is not None):
-            return
-        if wanted:
-            try:
-                self.awake = subprocess.Popen(["caffeinate", "-i", "-w", str(os.getpid())])
-            except OSError:
+        with self.awake_lock:   # called from the watcher loop and from sleep timer requests
+            if wanted == (self.awake is not None):
+                return
+            if wanted:
+                try:
+                    self.awake = subprocess.Popen(["caffeinate", "-i", "-w", str(os.getpid())])
+                except OSError:
+                    self.awake = None
+            elif self.awake:
+                self.awake.terminate()
                 self.awake = None
-        elif self.awake:
-            self.awake.terminate()
-            self.awake = None
 
     # The loop
 
@@ -1469,7 +1488,8 @@ class Watcher:
                 rules = tv_rules(address)
                 if rules_active(rules):
                     active[address] = rules
-            self.keep_awake(bool(active))
+            self.rules_wanted = bool(active)
+            self.keep_awake(self.rules_wanted or self.sleep_wanted)
             for address, rules in active.items():
                 try:
                     self.check(address, rules)
@@ -1825,7 +1845,9 @@ PHRASE_KEYS = [
 
 
 def fold_words(text):
-    return " ".join(re.sub(r"[^\w\s+]", " ", unicodedata.normalize("NFKD", str(text)).lower()).split())
+    """Lowercase words without accents or punctuation: "Pokémon TV!" -> "pokemon tv"."""
+    plain = "".join(c for c in unicodedata.normalize("NFKD", str(text)) if not unicodedata.combining(c))
+    return " ".join(re.sub(r"[^\w\s+]", " ", plain.lower()).split())
 
 
 def do_phrase(target, phrase):
@@ -1996,6 +2018,7 @@ class PhoneAccess:
             data["phone"] = False
             if forget:
                 data["phoneTokens"] = []
+                data["shortcutKeys"] = []
         update_settings(change)
         self.stop_listening_if_unused()
 
@@ -2024,8 +2047,17 @@ class PhoneAccess:
         if not self.phone_on:
             raise ValueError("Turn on the phone remote first, so other devices can reach this Mac.")
         token = secrets.token_urlsafe(24)
-        update_settings(lambda data: data.setdefault("phoneTokens", []).append(token_hash(token)))
+        update_settings(lambda data: data.setdefault("shortcutKeys", []).append(token_hash(token)))
         return token
+
+    def is_shortcut_key(self, token):
+        """A Shortcuts key: only good for /api/do, and only while the phone remote is on."""
+        if not token or not self.phone_on:
+            return False
+        with SETTINGS_LOCK:
+            known = read_settings().get("shortcutKeys", [])
+        digest = token_hash(token)
+        return any(hmac.compare_digest(digest, k) for k in known)
 
     def is_paired(self, token):
         if not token or not self.phone_on:
@@ -2943,8 +2975,9 @@ class Handler(BaseHTTPRequestHandler):
             for part in self.headers.get("Cookie", "").split(";")
             if "=" in part
         )
-        token = cookies.get("detox_token") or (self.headers.get("X-Detox-Key") if allow_key else None)
-        return self.server.phone.is_paired(token)
+        if self.server.phone.is_paired(cookies.get("detox_token")):
+            return True
+        return allow_key and self.server.phone.is_shortcut_key(self.headers.get("X-Detox-Key"))
 
     def run(self, fn):
         try:
