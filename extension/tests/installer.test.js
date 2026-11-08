@@ -16,7 +16,7 @@ const TV = "127.0.0.1:9072";
 const call = (path, body, internal = true) => handleMessage({ type: "api", method: "POST", path, query: {}, body }, { internal });
 const status = async () => (await handleMessage({ type: "api", method: "GET", path: "/api/tvapp", query: { tv: TV } }, { internal: true })).data;
 
-test("MD5 and the digest answer match what the TV expects", () => {
+test("MD5 and the digest answer match what the TV expects; other kinds of sign-in are refused", () => {
   for (const text of ["", "rokudev:rokudev:testpass", "POST:/plugin_install", "ü€😀".repeat(30), "x".repeat(200)]) {
     assert.equal(md5(text), createHash("md5").update(text, "utf8").digest("hex"), text.slice(0, 20));
   }
@@ -24,6 +24,8 @@ test("MD5 and the digest answer match what the TV expects", () => {
   const ha1 = md5("rokudev:rokudev:testpass");
   const ha2 = md5("POST:/plugin_install");
   assert.ok(header.includes(`response="${md5(`${ha1}:abc123:00000001:c1:auth:${ha2}`)}"`), header);
+  assert.throws(() => digestHeader('Digest realm="r", nonce="n", qop="auth", algorithm=MD5-sess', "POST", "/x", "u", "p"), /kind of sign-in/);
+  assert.throws(() => digestHeader('Digest realm="r", nonce="n"', "POST", "/x", "u", "p"), /kind of sign-in/);
 });
 
 test("the extension installs, updates and removes Detox Home itself (no installer page)", async () => {
@@ -37,8 +39,11 @@ test("the extension installs, updates and removes Detox Home itself (no installe
   assert.equal(installed.data.outdated, false, "the copy in the extension runs on its own");
   const again = await call("/api/tvapp/install", { tv: TV, password: "testpass" });
   assert.equal(again.status, 200, "installing again updates it");
-  // Phones (the relay) and web pages can't install.
+  // Phones (the relay) and web pages can't install, and their TV app menu says so (no password form).
   assert.equal((await call("/api/tvapp/install", { tv: "127.0.0.1", password: "testpass" }, false)).status, 501);
+  const fromPhone = await handleMessage({ type: "api", method: "GET", path: "/api/tvapp", query: { tv: "127.0.0.1" } }, { internal: false });
+  assert.equal(fromPhone.data.canInstall, false);
+  assert.equal(fromPhone.data.engine, "extension");
   const removed = await call("/api/tvapp/remove", { tv: TV, password: "testpass" });
   assert.equal(removed.status, 200, JSON.stringify(removed.data));
   assert.equal(removed.data.installed, false);

@@ -46,10 +46,14 @@ export function md5(text) {
 
 /** The Authorization header answering a Digest challenge (RFC 2617, qop=auth, like urllib's handler). */
 export function digestHeader(challenge, method, uri, user, password, cnonce = randomHex(8)) {
-  const fields = Object.fromEntries([...challenge.matchAll(/(\w+)=(?:"([^"]*)"|([^\s,]+))/g)].map((m) => [m[1].toLowerCase(), m[2] ?? m[3]]));
+  const first = challenge.split(/,\s*(?=Digest\s)/i)[0]; // several challenges: answer the first
+  const fields = Object.fromEntries([...first.matchAll(/(\w+)=(?:"([^"]*)"|([^\s,]+))/g)].map((m) => [m[1].toLowerCase(), m[2] ?? m[3]]));
+  // Only what Roku's installer asks for (MD5 with qop=auth); anything else would just look like a wrong password.
+  if (fields.algorithm && fields.algorithm.toUpperCase() !== "MD5") throw new TVError("The TV's installer asked for a kind of sign-in this can't do.");
   const realm = fields.realm || "";
   const nonce = fields.nonce || "";
   const qop = (fields.qop || "").split(",").map((q) => q.trim()).includes("auth") ? "auth" : "";
+  if (!qop) throw new TVError("The TV's installer asked for a kind of sign-in this can't do.");
   const nc = "00000001";
   const ha1 = md5(`${user}:${realm}:${password}`);
   const ha2 = md5(`${method}:${uri}`);
@@ -89,7 +93,7 @@ export async function sendToInstaller(target, password, packageBytes) {
   const post = (headers) => fetch(url, {
     method: "POST", body: formBody(boundary, action, packageBytes), credentials: "omit", cache: "no-store",
     headers: { "Content-Type": `multipart/form-data; boundary=${boundary}`, ...headers },
-    signal: AbortSignal.timeout(90000),
+    signal: AbortSignal.timeout(90000), redirect: "error", // the password's answer goes to the TV only
   });
   let resp;
   try {

@@ -70,7 +70,7 @@ async function tvAppOptions(address) {
   return { simpleMode: Boolean(options.simpleMode), clock24: Boolean(options.clock24) };
 }
 
-async function tvAppStatus(target) {
+async function tvAppStatus(target, internal = true) {
   let dev = null;
   let installed;
   try {
@@ -94,7 +94,7 @@ async function tvAppStatus(target) {
     ytdlp: false,
     appReady: true,
     engine: "extension",
-    canInstall: true, // installer.js: from the extension's own pages
+    canInstall: internal, // installer.js: only from the extension's own pages
     installPage: installerPage(displayAddress(target)),
   };
 }
@@ -130,7 +130,7 @@ const GET_ROUTES = {
   "/api/find/history": async (c) => findHistory(c.address()),
   "/api/rules": async (c) => rulesStatus(c.address()),
   "/api/doctor": async (c) => doctor(c.target()),
-  "/api/tvapp": async (c) => tvAppStatus(c.target()),
+  "/api/tvapp": async (c) => tvAppStatus(c.target(), c.internal),
   "/api/sites": async () => ({ sites: await siteList() }),
   "/api/sleep": async (c) => sleepStatus(c.address()),
   "/api/usage": async (c) => usageSummary(c.address()),
@@ -250,6 +250,12 @@ const POST_ROUTES = {
     const password = pyStr(c.body.password ?? "");
     if (!password || password.length > 200) throw new ValueError("Type the developer password you chose on the TV.");
     await sendToInstaller(target, password, await detoxHomePackage());
+    // The new copy starts with this TV's favorites and options, like the program's install (they're
+    // delivered when it opens, which it does after installing).
+    const address = displayAddress(target);
+    const { favorites } = await tvSettings(address);
+    await pushToTvApp(target, "settings", settingsLink(await tvAppOptions(address)));
+    await pushToTvApp(target, "favorites", favoritesLink(favorites));
     await sleep(4000); // the TV restarts the app; give it a moment before asking what's installed
     return tvAppStatus(target);
   },

@@ -4634,13 +4634,17 @@ function renderScreenTime() {
 
 // Every day on record, one row per app or input: date, name, minutes (the home screen left out).
 function screenTimeCsv(u) {
-  const cell = (v) => (/[",\n]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : String(v));
+  const cell = (v) => {
+    let text = String(v);
+    if (/^[=+\-@\t\r]/.test(text) && typeof v !== "number") text = `'${text}`;   // never read as a formula
+    return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+  };
   const rows = [["Date", "App or input", "Minutes"]];
   for (const day of Object.keys(u.byDay || {}).sort()) {
     const apps = Object.entries(u.byDay[day]).filter(([id, s]) => id !== "home" && s >= 30).sort((a, b) => b[1] - a[1]);
     for (const [id, seconds] of apps) rows.push([day, usageLabel(id), Math.round(seconds / 60)]);
   }
-  return rows.map((r) => r.map(cell).join(",")).join("\r\n") + "\r\n";
+  return "\ufeff" + rows.map((r) => r.map(cell).join(",")).join("\r\n") + "\r\n";   // the mark tells Excel it's UTF-8
 }
 $("#screen-time-csv").addEventListener("click", () => {
   const u = state.usage && state.usage.tv === state.tv ? state.usage : null;
@@ -5134,7 +5138,8 @@ function bookmarkletHref() {
 // The lite page (a phone, no program or extension): it can't see the TV's apps, so it gives the by-hand steps,
 // which work from the phone itself.
 function renderLiteTvApp() {
-  const tv = state.tv ? `http://${state.tv.split(":")[0]}` : "http://<your TV's address>";
+  const [host, port] = (state.tv || "").split(":");
+  const tv = host ? `http://${host}${port && port !== "8060" ? `:${port}` : ""}` : "http://<your TV's address>";   // a pretend TV answers on its own port
   $("#app-status").dataset.state = "off";
   $("#app-status").textContent = "Install or update Detox Home from this phone.";
   $("#app-body").innerHTML = `<ol class="app-steps">
@@ -5168,13 +5173,13 @@ function renderTvApp() {
       <li>Choose "Enable installer and restart," accept the terms, and pick a password.</li>
       <li>Wait for the TV to restart, then come back here.</li>
     </ol>`;
-  if (state.engine?.kind === "extension" || app.canInstall === false) {   // the extension: it installs through the TV's installer itself
+  if (app.engine === "extension" || app.canInstall === false) {   // the extension (and phones on its relay): no program at home
     const messageForm = `<h3 class="subhead">Send a message to the TV</h3>
       <form class="install-form" id="message-form">
         <input type="text" id="message-input" maxlength="200" placeholder="Dinner's ready!" aria-label="Message">
         <button class="btn primary" type="submit">Show on TV</button>
       </form>`;
-    const canInstall = app.canInstall !== false && state.engine?.kind === "extension";
+    const canInstall = app.canInstall === true;   // only the extension's own pages can install
     // By hand, from any browser on the Wi-Fi (a phone too): the file, then the TV's installer page.
     const byHand = `<details class="by-hand"><summary>Or install it by hand</summary><ol class="app-steps">
         <li>${state.engine?.kind === "extension" ? `<a href="detox-home.zip" download="detox-home.zip">Download Detox Home</a>` : `<a href="${esc(DETOX_HOME_DOWNLOAD)}" target="_blank" rel="noopener">Download Detox Home</a>`} (on a phone: <a href="${esc(DETOX_HOME_DOWNLOAD)}" target="_blank" rel="noopener">from GitHub</a>).</li>
