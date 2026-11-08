@@ -108,6 +108,8 @@
   .btn.danger { background: var(--remove); border-color: var(--remove); color: var(--on-remove); }
   .btn.quiet { background: transparent; border-color: transparent; text-decoration: underline; text-underline-offset: 3px; padding-inline: 8px; }
   .btn:disabled { opacity: .55; cursor: not-allowed; }
+  a.btn { display: inline-flex; align-items: center; color: var(--ink); text-decoration: none; }   /* a link that looks like a button */
+  a.btn.quiet { text-decoration: underline; }
   .picker-note { width: 100%; color: var(--muted); font-size: 15px; text-align: right; }
   .picker-tools { display: contents; }
   /* Connected: the TV picker waits behind "Switch TV", and background searching stays quiet. */
@@ -296,10 +298,13 @@
   .site-group .subhead { margin: 0 0 4px; }
   .site-thumb { width: 160px; aspect-ratio: 16 / 9; border-radius: 8px; overflow: hidden; background: var(--line); }
   .site-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
-  .site-result { grid-template-columns: 160px minmax(0, 1fr); }
-  .site-result h3 { font-size: 18px; }
-  .site-result .meta { overflow-wrap: anywhere; }
-  @media (max-width: 600px) { .site-result { grid-template-columns: 112px minmax(0, 1fr); } .site-thumb { width: 112px; } }
+  /* (.result.site-result: more specific than .result further down, which would otherwise win) */
+  .result.site-result { grid-template-columns: 160px minmax(0, 1fr); align-items: start; }
+  .result.site-result h3 { font-size: 18px; line-height: 1.3; }
+  .result.site-result .meta { overflow-wrap: anywhere; }
+  .result.site-result .watch-row { margin-top: 10px; }
+  .site-group + .site-group { margin-top: 28px; }
+  @media (max-width: 600px) { .result.site-result { grid-template-columns: 112px minmax(0, 1fr); } .site-thumb { width: 112px; } }
 
   /* Find a show */
   .find-form { display: flex; gap: 8px; max-width: 560px; }
