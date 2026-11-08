@@ -27,7 +27,7 @@ Newest first. The extension's version is in `extension/manifest.json`; after pul
   "time left". The answer is a sentence ("Netflix is on, playing, 12 minutes in, 36 minutes to go.").
 - **Share sheet**: with a Shortcuts key, a YouTube or Netflix link sent as `do` plays on the TV, so a
   shortcut in the iPhone share sheet sends those links straight to the TV.
-- **Keyboard**: press `?` on the page for every shortcut (and Chrome's, in the extension). Holding an
+- **Keyboard**: 1 to 9 open your favorites (the numbers show on them); press `?` on the page for every shortcut (and Chrome's, in the extension). Holding an
   arrow key no longer keeps the TV moving after you let go.
 - **The popup** shows today's TV time under what's on ("TV today: 1 h 5 min of 2 h") while rules count it.
 - **Screen time** compares the past week with the week before. Activity shows "Today / 2:08 AM".

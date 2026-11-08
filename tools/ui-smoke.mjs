@@ -138,6 +138,16 @@ async function main() {
     await new Promise((r) => setTimeout(r, 200)); api = real;
     return { opened, sent: sent.length }; })()`);
   check("? lists the keys, and keys wait while it's open", keysHelp.opened && keysHelp.sent > 0, JSON.stringify(keysHelp));
+  const numbered = await page(`(async () => {
+    const asked = []; const real = api;
+    api = (path, body) => { if (path === "/api/launch") asked.push(body.id); return real(path, body); };
+    const before = state.favorites; state.favorites = ["837", "12"]; renderShortcuts();
+    const favs = [...document.querySelectorAll("#fav-row .shortcut[data-launch]")].map((b) => b.dataset.launch);
+    document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "2", bubbles: true, cancelable: true }));
+    await new Promise((r) => setTimeout(r, 600)); api = real;
+    state.favorites = before; renderShortcuts();
+    return { favs, asked }; })()`);
+  check("1 to 9 open the favorites", numbered.favs.join() === "837,12" && numbered.asked[0] === "12", JSON.stringify(numbered));
   check("a held key doesn't pile up presses", keysHelp.sent <= 3, JSON.stringify(keysHelp));
 
   // Phrases in the search box, the sleep timer, favorites suggestions.

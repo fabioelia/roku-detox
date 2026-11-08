@@ -665,6 +665,13 @@
   }
   .shortcut:hover:not(:disabled) { border-color: var(--line); }
   .shortcut .tile-art { border-radius: 7px; }
+  .shortcut { position: relative; }
+  .shortcut-key {
+    position: absolute; bottom: 8px; right: 6px; min-width: 18px; height: 18px; padding: 0 4px; border-radius: 5px;
+    border: 1px solid var(--line); background: var(--surface); color: var(--muted); font-size: 11px; font-weight: 700;
+    line-height: 16px; text-align: center; display: none;
+  }
+  @media (hover: hover) and (pointer: fine) { .shortcut-key { display: block; } .shortcut:has(.shortcut-key) .shortcut-name { padding-right: 22px; } }   /* keyboards only */
   .shortcut .tile-art::before { font-size: 20px; }
   .shortcut-name { padding: 0 2px; font-size: 14px; font-weight: 600; line-height: 1.25; overflow-wrap: anywhere; }
   .shortcut-port { padding: 0 2px; font-size: 12px; color: var(--muted); }
@@ -1102,7 +1109,7 @@
         </div>
       </section>
       <p class="remote-error" id="remote-error" aria-live="assertive" hidden></p>
-      <p class="remote-note">Your keyboard works too: arrow keys to move, Enter for OK, Backspace for Back. <button class="btn quiet" type="button" data-keys-help>All the keys (press ?)</button></p>
+      <p class="remote-note">Your keyboard works too: arrow keys to move, Enter for OK, Backspace for Back, 1 to 9 for favorites. <button class="btn quiet" type="button" data-keys-help>All the keys (press ?)</button></p>
       <form class="smart" id="smart-form">
         <label for="smart-input">Search, say what to do, or paste a link</label>
         <div class="smart-field">
@@ -1158,6 +1165,7 @@
     <dt><kbd>+</kbd> <kbd>−</kbd></dt><dd>Volume up, down</dd>
     <dt><kbd>M</kbd></dt><dd>Mute</dd>
     <dt><kbd>Page Up</kbd> <kbd>Page Down</kbd></dt><dd>Channel up, down (Live TV)</dd>
+    <dt><kbd>1</kbd> … <kbd>9</kbd></dt><dd>Open a favorite (the numbers on them)</dd>
     <dt><kbd>/</kbd></dt><dd>Jump to the search box</dd>
     <dt><kbd>?</kbd></dt><dd>This list</dd>
   </dl>
@@ -2819,6 +2827,12 @@ document.addEventListener("keydown", (e) => {
     box.select();
     return;
   }
+  // 1 to 9 open the favorites in order, like a remote's number buttons.
+  if (/^[1-9]$/.test(e.key) && !target.closest("button, a, label")) {
+    const fav = document.querySelectorAll("#fav-row .shortcut[data-launch]")[Number(e.key) - 1];
+    if (fav) { e.preventDefault(); launchApp(fav.dataset.launch, fav); }
+    return;
+  }
   let key = KEYBOARD[e.key];
   if (e.key === "Enter" || e.key === " ") {
     if (target.closest("button, a, label")) return;   // let focused controls work normally
@@ -3067,7 +3081,7 @@ function renderShortcuts() {
   $("#fav-row").hidden = editing;
   $("#fav-edit").hidden = editing;
   $("#fav-edit").textContent = favorites.length ? "Change favorites" : "Choose favorites";
-  $("#fav-row").innerHTML = favorites.map((a) => `<button type="button" class="shortcut" data-launch="${esc(a.id)}">${artHTML(a)}<span class="shortcut-name">${esc(plain(a.name))}</span></button>`).join("")
+  $("#fav-row").innerHTML = favorites.map((a, i) => `<button type="button" class="shortcut" data-launch="${esc(a.id)}">${artHTML(a)}<span class="shortcut-name">${esc(plain(a.name))}</span>${i < 9 ? `<span class="shortcut-key" aria-hidden="true" title="Press ${i + 1}">${i + 1}</span>` : ""}</button>`).join("")
     + favoriteSuggestions(apps, favorites);
   $("#app-grid").innerHTML = apps.slice().sort((a, b) => a.name.localeCompare(b.name)).map((a) =>
     `<button type="button" class="tile" data-launch="${esc(a.id)}" aria-label="Open ${esc(plain(a.name))}">${artHTML(a)}<span class="tile-name">${esc(plain(a.name))}</span></button>`

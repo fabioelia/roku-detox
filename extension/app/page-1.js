@@ -1626,6 +1626,12 @@ document.addEventListener("keydown", (e) => {
     box.select();
     return;
   }
+  // 1 to 9 open the favorites in order, like a remote's number buttons.
+  if (/^[1-9]$/.test(e.key) && !target.closest("button, a, label")) {
+    const fav = document.querySelectorAll("#fav-row .shortcut[data-launch]")[Number(e.key) - 1];
+    if (fav) { e.preventDefault(); launchApp(fav.dataset.launch, fav); }
+    return;
+  }
   let key = KEYBOARD[e.key];
   if (e.key === "Enter" || e.key === " ") {
     if (target.closest("button, a, label")) return;   // let focused controls work normally
@@ -1874,7 +1880,7 @@ function renderShortcuts() {
   $("#fav-row").hidden = editing;
   $("#fav-edit").hidden = editing;
   $("#fav-edit").textContent = favorites.length ? "Change favorites" : "Choose favorites";
-  $("#fav-row").innerHTML = favorites.map((a) => `<button type="button" class="shortcut" data-launch="${esc(a.id)}">${artHTML(a)}<span class="shortcut-name">${esc(plain(a.name))}</span></button>`).join("")
+  $("#fav-row").innerHTML = favorites.map((a, i) => `<button type="button" class="shortcut" data-launch="${esc(a.id)}">${artHTML(a)}<span class="shortcut-name">${esc(plain(a.name))}</span>${i < 9 ? `<span class="shortcut-key" aria-hidden="true" title="Press ${i + 1}">${i + 1}</span>` : ""}</button>`).join("")
     + favoriteSuggestions(apps, favorites);
   $("#app-grid").innerHTML = apps.slice().sort((a, b) => a.name.localeCompare(b.name)).map((a) =>
     `<button type="button" class="tile" data-launch="${esc(a.id)}" aria-label="Open ${esc(plain(a.name))}">${artHTML(a)}<span class="tile-name">${esc(plain(a.name))}</span></button>`
