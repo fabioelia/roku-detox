@@ -1180,6 +1180,16 @@ function formatTime(iso) {
   return Number.isNaN(date.getTime()) ? iso : date.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
+// The Activity list's time, on two short lines: "Today" / "2:08 AM", "Yesterday", "Nov 6".
+function eventWhen(iso) {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return esc(iso);
+  const start = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const daysAgo = Math.round((start(new Date()) - start(date)) / 86400000);
+  const day = daysAgo === 0 ? "Today" : daysAgo === 1 ? "Yesterday" : date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  return `<span>${esc(day)}</span><span>${esc(date.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }))}</span>`;
+}
+
 function renderLog() {
   const removed = currentlyRemoved();
   $("#copy-btn").hidden = !removed.length;
@@ -3372,7 +3382,7 @@ function renderRules() {
     ? "How long the TV spent on each app or input today, counted while rules are on."
     : "How long the TV spent on each app or input today. Turn on a rule or the viewing log to start counting.";
   $("#activity-list").innerHTML = status.events.length
-    ? status.events.slice(0, 25).map((e) => `<li class="${e.kind === "alert" ? "alert" : ""}"><time datetime="${esc(e.time)}">${esc(formatTime(e.time))}</time><span>${esc(e.message)}</span></li>`).join("")
+    ? status.events.slice(0, 25).map((e) => `<li class="${e.kind === "alert" ? "alert" : ""}"><time datetime="${esc(e.time)}" title="${esc(formatTime(e.time))}">${eventWhen(e.time)}</time><span>${esc(e.message)}</span></li>`).join("")
     : `<li><span class="note">Nothing yet.</span></li>`;
 }
 
