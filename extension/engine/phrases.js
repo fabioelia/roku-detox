@@ -105,7 +105,7 @@ export function foldWords(text) {
  * a number phrase ("sleep 30", "volume up 5", "hdmi 2"), or an app or scene's exact name.
  * Anything else, single button words like "home" included, is a search.
  */
-export async function doPhrase(target, phrase, { strict = false, links = false } = {}) {
+export async function doPhrase(target, phrase, { strict = false, links = false, fromLink = false } = {}) {
   if (/^\s*https?:\/\/\S+\s*$/i.test(phrase)) {
     // links: only for a Shortcuts key (do_phrase), and only YouTube and Netflix, which open in their apps.
     if (!links) throw new ValueError("That's a link. Send it with the box under the remote instead.");
@@ -143,6 +143,9 @@ export async function doPhrase(target, phrase, { strict = false, links = false }
   if (["cancel sleep", "sleep off", "stop sleep timer", "cancel sleep timer"].includes(words)) {
     await setSleep(target, 0);
     return "Sleep timer off.";
+  }
+  if (fromLink && ["pause rules", "pause the rules", "rules off", "resume rules", "rules on", "unpause rules"].includes(words)) {
+    throw new ValueError("Rules can't be paused or resumed from a link. Use the Rules menu."); // any site could open a #do= link
   }
   if (["pause rules", "pause the rules", "rules off"].includes(words)) {
     const rules = await tvRules(displayAddress(target));

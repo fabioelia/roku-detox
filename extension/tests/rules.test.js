@@ -10,7 +10,7 @@ const rules = await import("../engine/rules.js");
 const TV = "127.0.0.1:9072";
 const ok = async (method, path, data) => {
   const reply = await handleMessage(method === "GET"
-    ? { type: "api", method, path, query: data } : { type: "api", method, path, body: data });
+    ? { type: "api", method, path, query: data } : { type: "api", method, path, body: data }, { internal: true });
   assert.equal(reply.status, 200, `${method} ${path}: ${JSON.stringify(reply.data)}`);
   return reply.data;
 };

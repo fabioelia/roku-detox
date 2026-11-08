@@ -125,7 +125,8 @@ const ServerEngine = {
   },
   async request(path, body) {
     const options = { headers: { "X-Detox": "1" } };
-    const pin = body !== undefined ? pinGet() : "";   // only changes need it
+    // Only the changes that need it carry it (and renew its hour): rules, the TV app, sites, phone settings.
+    const pin = body !== undefined && /^\/api\/(rules|tvapp|sites|phone|household|do)\b/.test(path) ? pinGet() : "";
     if (pin) options.headers["X-Detox-Pin"] = pin;
     if (body !== undefined) {
       options.method = "POST";
@@ -3508,12 +3509,12 @@ function nightsText(days) {
   if (set.size === 6) return `Every night except ${NIGHT_NAMES.find(([k]) => !set.has(k))[2]}.`;
   return `Only ${NIGHT_NAMES.filter(([k]) => set.has(k)).map(([, , long]) => long).join(", ").replace(/, ([^,]*)$/, " and $1")} nights.`;
 }
-function nightsHTML(days) {
+function nightsHTML(days, start = "21:00") {
   return `<div class="line nights" role="group" aria-label="Which nights">
       ${NIGHT_NAMES.map(([key, short, long]) => `<button type="button" class="night-chip" data-night="${key}" aria-pressed="${days.includes(key)}" aria-label="${long}">${short}</button>`).join("")}
     </div>
     <div class="line nights-presets">
-      <span class="note" id="nights-note">${esc(nightsText(days))}</span>
+      <span class="note" id="nights-note">${esc(nightsText(days))}</span>${start < "12:00" ? `<span class="note">It starts after midnight or in the morning, so each counts as the night before: Sunday night is early Monday.</span>` : ""}
       <button class="btn quiet" type="button" data-nights="school">School nights</button>
       <button class="btn quiet" type="button" data-nights="all">Every night</button>
     </div>`;
@@ -3561,7 +3562,7 @@ function renderRuleList() {
     "Turns the TV off during these hours on the nights you pick, after a 1-minute grace period. If someone turns it back on, it goes off again after 15 seconds.",
     r.bedtime.enabled,
     `<div class="line"><span>From</span>${time("bedtime", "start")}<span>until</span>${time("bedtime", "end")}</div>
-     ${nightsHTML(r.bedtime.days || ALL_NIGHTS)}
+     ${nightsHTML(r.bedtime.days || ALL_NIGHTS, r.bedtime.start)}
      <div class="line"><button class="btn" type="button" id="bedtime-extend" data-action="extend" ${state.rulesStatus.bedtimeNow && !((state.rulesStatus.rules?.pausedUntil || 0) * 1000 > Date.now()) ? "" : "hidden"}>Give 15 more minutes</button></div>`);
 
   const limitRows = Object.entries(r.limits).map(([id, minutes]) => `<div class="line" data-limit="${esc(id)}">
@@ -4077,7 +4078,7 @@ async function runPendingDo() {
   state.pendingDo = null;
   if (!state.tv || !state.control) { toast("Couldn't reach the TV to do that."); return; }
   try {
-    const { done } = await api("/api/do", { tv: state.tv, do: phrase });
+    const { done } = await api("/api/do", { tv: state.tv, do: phrase, fromLink: true });
     toast(done);
     setTimeout(pollNow, 2500);
     if (/sleep|off in/i.test(phrase) || done.startsWith("Running")) setTimeout(loadSleep, 1500);

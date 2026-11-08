@@ -141,7 +141,7 @@ test("input checks and unsupported routes", async () => {
   assert.equal(install.status, 501);
   assert.equal(install.data.error, "Install Detox Home from the TV's own installer page: open http://127.0.0.1:9072 in your browser.");
   // The page's own path?query form works too.
-  assert.equal((await handleMessage({ type: "api", method: "GET", path: `/api/active?tv=${TV}` })).status, 200);
+  assert.equal((await handleMessage({ type: "api", method: "GET", path: `/api/active?tv=${TV}` }, { internal: true })).status, 200);
 });
 
 test("Limited mode answers 409 with blocked: true", async () => {

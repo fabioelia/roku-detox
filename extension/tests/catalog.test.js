@@ -24,7 +24,7 @@ except ValueError as err:
   return JSON.parse(execFileSync("python3", ["-c", code], { encoding: "utf-8", maxBuffer: 1 << 26 }));
 }
 
-const get = (p, query) => handleMessage({ type: "api", method: "GET", path: p, query });
+const get = (p, query) => handleMessage({ type: "api", method: "GET", path: p, query }, { internal: true });
 
 /** Every key path in a JSON value, like "results[].offers[].appId", so shapes can be compared too. */
 function shape(value, prefix = "", out = new Set()) {

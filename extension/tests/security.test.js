@@ -8,17 +8,19 @@ import { installFakeChrome } from "./fake-chrome.js";
 
 installFakeChrome();
 const { handleMessage } = await import("../engine/router.js");
-const { isLocalHost } = await import("../engine/video.js");
+const { findVideo, isLocalHost } = await import("../engine/video.js");
 const { parseTarget } = await import("../engine/util.js");
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const TV = "127.0.0.1:9072";
 
-test("web pages can't add sites or open pages in hidden tabs, even when allowed", async () => {
-  const web = (method, path, body) => handleMessage({ type: "api", method, path, query: {}, body }, { internal: false, web: true });
-  assert.equal((await web("POST", "/api/sites", { sites: [{ name: "x", url: "https://example.com/?q={q}", deep: true }] })).status, 403);
-  assert.equal((await web("POST", "/api/sites/look", { siteId: "x", q: "a" })).status, 403);
-  assert.equal((await web("GET", "/api/sites/search?q=a")).status, 403);
-  assert.equal((await web("GET", "/api/sites")).status, 200, "listing them is fine");
+test("web pages and relay phones can't add or search sites, or open pages in hidden tabs", async () => {
+  for (const opts of [{ internal: false, web: true }, { internal: false }]) {
+    const call = (method, path, body) => handleMessage({ type: "api", method, path, query: {}, body }, opts);
+    assert.equal((await call("POST", "/api/sites", { sites: [{ name: "x", url: "https://example.com/?q={q}", deep: true }] })).status, 403);
+    assert.equal((await call("POST", "/api/sites/look", { siteId: "x", q: "a" })).status, 403);
+    assert.equal((await call("GET", "/api/sites/search?q=a")).status, 403);
+    assert.equal((await call("GET", "/api/sites")).status, 200, "listing them is fine");
+  }
 });
 
 test("links from a phone or a web page can't reach this computer or the home network", async () => {
@@ -26,9 +28,29 @@ test("links from a phone or a web page can't reach this computer or the home net
     assert.equal(isLocalHost(host), true, host);
   }
   for (const host of ["example.com", "8.8.8.8", "172.32.0.1", "www.youtube.com"]) assert.equal(isLocalHost(host), false, host);
-  const relay = await handleMessage({ type: "api", method: "POST", path: "/api/link", query: {}, body: { tv: TV, url: "http://192.168.1.9/admin" } }, { internal: false });
+  // From outside, the browser opens no pages at all (it can't see where a name or a redirect leads).
+  await assert.rejects(findVideo("http://192.168.1.9/admin", null, [], { publicOnly: true }), /home network/);
+  await assert.rejects(findVideo("http://127.0.0.1.nip.io/x", null, [], { publicOnly: true }), /YouTube or Netflix links, or a direct link/);
+  await assert.rejects(findVideo("https://example.com/v.mp4", "http://10.0.0.2/v.mp4", [], { publicOnly: true }), /home network/);
+  const direct = await findVideo("https://cdn.example.com/v.mp4", null, [], { publicOnly: true });
+  assert.equal(direct.how, "a direct video link", "a video file on the internet is handed to the TV, not opened here");
+  // And the pretend TV's port is for this computer's own pages only.
+  const relay = await handleMessage({ type: "api", method: "POST", path: "/api/key", query: {}, body: { tv: TV, key: "Home" } }, { internal: false });
   assert.equal(relay.status, 400);
-  assert.match(relay.data.error, /home network/);
+  assert.match(relay.data.error, /8060/);
+});
+
+test("rules can't be paused or resumed from a #do= link, however it's written", async () => {
+  const { doPhrase } = await import("../engine/phrases.js");
+  for (const p of ["pause rules", "Pause rules.", "pause-rules", "Páuse, RULES", "rules off?", "resume rules"]) {
+    await assert.rejects(doPhrase(parseTarget(TV), p, { fromLink: true }), /from a link/, p);
+  }
+  const code = `import sys; sys.path.insert(0, ${JSON.stringify(ROOT)}); import roku_detox as rd
+for p in ["pause rules", "Pause rules.", "pause-rules", "Páuse, RULES", "rules off?", "resume rules"]:
+    try: rd.do_phrase(("127.0.0.1", 9072), p, from_link=True); print("ran")
+    except ValueError as err: print(err)`;
+  const lines = execFileSync("python3", ["-c", code], { encoding: "utf8" }).trim().split("\n");
+  assert.deepEqual(lines, Array(6).fill("Rules can't be paused or resumed from a link. Use the Rules menu."));
 });
 
 test("TV addresses on the home network use Roku's port", () => {
@@ -44,8 +66,13 @@ for url in ["http://127.0.0.1:9072/query/device-info", "http://localhost:9072/",
     try: rd.fetch_page(url, public_only=True); out.append("opened")
     except ValueError as err: out.append(str(err))
 print(out[0]); print(out[1]); print(out[2])
-print("opened" if rd.fetch_page("http://127.0.0.1:9072/query/device-info")[1] else "nothing")`;
+print("opened" if rd.fetch_page("http://127.0.0.1:9072/query/device-info")[1] else "nothing")
+# A name that looked public but connects to a local address (DNS tricks, redirects): stopped at the connection.
+rd.is_public_host = lambda host: True
+try: rd.fetch_page("http://127.0.0.1:9072/query/device-info", public_only=True); print("opened")
+except rd.TVError: print("stopped")`;
   const lines = execFileSync("python3", ["-c", code], { encoding: "utf8" }).trim().split("\n");
   assert.deepEqual(lines.slice(0, 3), Array(3).fill("Links to addresses on your home network can only be sent from this computer."));
   assert.equal(lines[3], "opened", "from the Mac itself, local addresses still work");
+  assert.equal(lines[4], "stopped");
 });

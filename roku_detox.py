@@ -2021,7 +2021,7 @@ def say_time_left(target):
 LINK_PHRASE_RE = r"^\s*https?://\S+\s*$"
 
 
-def do_phrase(target, phrase, strict=False, links=False):
+def do_phrase(target, phrase, strict=False, links=False, from_link=False):
     """Do what a short phrase says on the TV. Returns a sentence saying what happened.
 
     strict (the page's search box): only clear commands act, meaning a verb ("open ...", "watch ..."),
@@ -2066,6 +2066,8 @@ def do_phrase(target, phrase, strict=False, links=False):
     if words in ("cancel sleep", "sleep off", "stop sleep timer", "cancel sleep timer"):
         set_sleep(target, 0)
         return "Sleep timer off."
+    if from_link and words in PAUSE_RULE_PHRASES + RESUME_RULE_PHRASES:  # any site could open a #do= link
+        raise ValueError("Rules can't be paused or resumed from a link. Use the Rules menu.")
     if words in PAUSE_RULE_PHRASES:
         rules = tv_rules(display_address(target))
         if not rules_enforcing(rules):
@@ -2646,6 +2648,37 @@ def is_public_host(host):
         return False
 
 
+def check_peer(sock):
+    """The connection really went to an internet address (whatever the name looked up to, and after any
+    redirect): checked after connecting, before anything is sent."""
+    peer = sock.getpeername()[0]
+    if not ipaddress.ip_address(peer.split("%")[0]).is_global:
+        sock.close()
+        raise OSError("not an internet address")
+
+
+class PublicHTTPConnection(http.client.HTTPConnection):
+    def connect(self):
+        super().connect()
+        check_peer(self.sock)
+
+
+class PublicHTTPSConnection(http.client.HTTPSConnection):
+    def connect(self):
+        super().connect()
+        check_peer(self.sock)
+
+
+class PublicHTTPHandler(urllib.request.HTTPHandler):
+    def http_open(self, req):
+        return self.do_open(PublicHTTPConnection, req)
+
+
+class PublicHTTPSHandler(urllib.request.HTTPSHandler):
+    def https_open(self, req):
+        return self.do_open(PublicHTTPSConnection, req, context=self._context)
+
+
 class PublicRedirects(urllib.request.HTTPRedirectHandler):
     """Follow redirects only to internet addresses (for links sent from other devices)."""
 
@@ -2669,7 +2702,8 @@ def fetch_page(url, referer=None, limit=3_000_000, public_only=False):
     if public_only and not is_public_host(urllib.parse.urlparse(url).hostname or ""):
         raise ValueError(LOCAL_LINK_ERROR)
     req = urllib.request.Request(url, headers=headers)
-    opener = urllib.request.build_opener(PublicRedirects()) if public_only else urllib.request.build_opener()
+    opener = (urllib.request.build_opener(PublicHTTPHandler(), PublicHTTPSHandler(), PublicRedirects()) if public_only
+              else urllib.request.build_opener())
     try:
         with opener.open(req, timeout=12) as resp:
             ctype = resp.headers.get("Content-Type", "")
@@ -2735,6 +2769,11 @@ def pick_video(candidates):
 
 def find_video(page_url, direct=None, public_only=False):
     """Find a playable video file for a web page. Returns {url, title, format, how, referer}."""
+    if public_only:
+        for link in (page_url, direct):
+            host = urllib.parse.urlparse(link).hostname if link else None
+            if link and (not host or not is_public_host(host)):
+                raise ValueError(LOCAL_LINK_ERROR)
     if direct and direct.startswith(("http://", "https://")) and len(direct) < 4000 and not is_ad_url(direct):
         return {"url": direct, "title": "", "format": stream_format(direct), "how": "the page's video player", "referer": page_url}
     url = urllib.parse.urlparse(page_url)
@@ -2772,7 +2811,7 @@ def find_video(page_url, direct=None, public_only=False):
             return {**found, "title": title, "how": "the page's video player", "referer": frame_url}
 
     ytdlp = shutil.which("yt-dlp")
-    if ytdlp:
+    if ytdlp and not public_only:  # it looks names up and follows redirects itself, out of reach of the checks
         try:
             result = subprocess.run([ytdlp, "-J", "--no-playlist", "--no-warnings", "-f", YTDLP_FORMAT, page_url],
                                     capture_output=True, text=True, timeout=60)
@@ -3123,23 +3162,23 @@ def read_results(final_url, page, query):
     return results[:MAX_RESULTS]
 
 
-def search_site(site, query):
+def search_site(site, query, public_only=False):
     """Read a site's search results page and pick out the results."""
     url = site["search"].replace("{q}", urllib.parse.quote_plus(query))
-    final_url, page = fetch_page(url, limit=3_000_000)[:2]
+    final_url, page = fetch_page(url, limit=3_000_000, public_only=public_only)[:2]
     if page is None:
         return []
     return read_results(final_url, page, query)
 
 
-def search_sites(query):
+def search_sites(query, public_only=False):
     sites = site_list()
     if not sites:
         return []
 
     def one(site):
         try:
-            return {"site": site["name"], "siteId": site["id"], "results": search_site(site, query)}
+            return {"site": site["name"], "siteId": site["id"], "results": search_site(site, query, public_only)}
         except (TVError, ValueError) as err:
             return {"site": site["name"], "siteId": site["id"], "results": [], "error": str(err)}
 
@@ -3257,6 +3296,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.run(lambda: self.from_tv_app(url.path, query, None))
         if not self.paired():
             return self.fail(401, "Enter the code from your Mac first.", pair=True)
+        if not self.port_ok(query.get("tv")):
+            return self.fail(400, "Roku TVs answer on port 8060. Leave the port off.")
         if url.path == "/api/icon":  # loaded by <img>, which can't send headers
             return self.run(lambda: self.icon(query))
         if not self.from_our_page():
@@ -3330,6 +3371,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.fail(403, "Enter the household PIN to pause the rules." if pausing
                                  else "Enter the household PIN to change this.", pin=True)
         key_ok = bool(shortcut) and self.server.phone.is_shortcut_key(shortcut)
+        if not self.port_ok(body.get("tv")):
+            return self.fail(400, "Roku TVs answer on port 8060. Leave the port off.")
 
         def target():
             return parse_target(body.get("tv"))
@@ -3357,7 +3400,7 @@ class Handler(BaseHTTPRequestHandler):
             "/api/wake": lambda: self.send(200, wake_tv(target())),
             "/api/do": lambda: self.send(200, {"done": do_phrase(
                 parse_target(body["tv"]) if body.get("tv") else default_tv(), str(body.get("do", "")),
-                strict=body.get("strict") is True, links=key_ok)}),
+                strict=body.get("strict") is True, links=key_ok, from_link=body.get("fromLink") is True)}),
             "/api/phone/key": lambda: self.mac_only(lambda: self.send(200, {
                 "key": self.server.phone.new_key(), "url": f"{self.server.phone.url}/api/do"})),
             "/api/rules": lambda: self.save_rules(body),
@@ -3464,12 +3507,26 @@ class Handler(BaseHTTPRequestHandler):
         words = str(query.get("q", "")).strip()
         if not 0 < len(words) <= 100:
             raise ValueError("Type something to search for.")
-        self.send(200, {"groups": search_sites(words)})
+        self.send(200, {"groups": search_sites(words, public_only=self.on_lan)})
 
     def save_sites(self, body):
         sites = clean_sites(body.get("sites"))
+        if self.on_lan:  # from a phone: only sites on the internet (the computer searches them)
+            known = {s["search"] for s in site_list()}
+            for site in sites:
+                if site["search"] not in known and not is_public_host(urllib.parse.urlparse(site["search"]).hostname or ""):
+                    raise ValueError(LOCAL_LINK_ERROR)
         update_settings(lambda data: data.update(sites=sites))
         self.send(200, {"sites": sites})
+
+    def port_ok(self, tv):
+        """A pretend TV on another port is for testing on this computer; other devices get port 8060 only."""
+        if not self.on_lan or not isinstance(tv, str) or not tv:
+            return True
+        try:
+            return parse_target(tv)[1] == ECP_PORT
+        except ValueError:
+            return True  # the route says what's wrong with it
 
     def pin_check(self):
         """"ok", "missing", "wrong" or "locked". The Mac itself never needs the PIN; others do when one is

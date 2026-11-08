@@ -242,6 +242,7 @@ function basename(path) {
  * that page, a direct link, the page's HTML, one level of embedded frames.
  */
 const LOCAL_LINK_ERROR = "Links to addresses on your home network can only be sent from this computer.";
+const OUTSIDE_LINK_ERROR = "From a phone, send YouTube or Netflix links, or a direct link to a video file. For other pages, use Send to TV in this browser on the computer.";
 
 /**
  * A name or address on this computer or the home network (localhost, *.local, 10.x, 192.168.x, ...).
@@ -262,6 +263,8 @@ export function isLocalHost(host) {
 }
 
 export async function findVideo(pageUrl, direct = null, sniffed = [], { publicOnly = false } = {}) {
+  if (publicOnly) sniffed = []; // videos this browser played are its own business
+  if (direct && publicOnly && isLocalHost(urlParts(direct).host)) throw new ValueError(LOCAL_LINK_ERROR);
   if (direct && /^https?:\/\//.test(direct) && direct.length < 4000 && !isAdUrl(direct)) {
     return { url: direct, title: "", format: streamFormat(direct), how: "the page's video player", referer: pageUrl };
   }
@@ -273,13 +276,15 @@ export async function findVideo(pageUrl, direct = null, sniffed = [], { publicOn
   if (!parsed.ok || !["http:", "https:"].includes(parsed.url.protocol) || !parsed.host) {
     throw new ValueError("Paste the whole link, starting with https://");
   }
+  if (publicOnly && isLocalHost(parsed.host)) throw new ValueError(LOCAL_LINK_ERROR);
   if (PLAYABLE_RE.test(parsed.path)) {
     return { url: pageUrl, title: basename(parsed.path), format: streamFormat(pageUrl), how: "a direct video link", referer: "" };
   }
-  if (publicOnly && isLocalHost(parsed.host)) throw new ValueError(LOCAL_LINK_ERROR);
+  // From a phone or a web page, this browser doesn't open the page: it can't tell where a name points or
+  // where a redirect goes before it's too late. (The program on a computer can, and does.)
+  if (publicOnly) throw new ValueError(OUTSIDE_LINK_ERROR);
 
   const fetched = await fetchPage(pageUrl);
-  if (publicOnly && isLocalHost(urlParts(fetched.finalUrl).host)) throw new ValueError(LOCAL_LINK_ERROR);
   const { finalUrl, page } = fetched;
   if (page === null) {
     return { url: finalUrl, title: "", format: fetched.ctype.includes("mpegurl") ? "hls" : "mp4", how: "a direct video link", referer: "" };
@@ -295,7 +300,6 @@ export async function findVideo(pageUrl, direct = null, sniffed = [], { publicOn
     if (absolute && /^https?:\/\//.test(absolute) && !isAdUrl(absolute) && !frames.includes(absolute)) frames.push(absolute);
   }
   for (const frame of frames.slice(0, 3)) {
-    if (publicOnly && isLocalHost(urlParts(frame).host)) continue;
     let framed;
     try {
       framed = await fetchPage(frame, { referer: finalUrl });

@@ -36,7 +36,7 @@ def with_tv(answers, fn):
 def read_results(final_url, page, query):
     """search_site() on a results page passed in, instead of fetched."""
     real = rd.fetch_page
-    rd.fetch_page = lambda url, referer=None, limit=3_000_000: (final_url, page, "text/html")
+    rd.fetch_page = lambda url, referer=None, limit=3_000_000, public_only=False: (final_url, page, "text/html")
     try:
         return rd.search_site({"search": "https://example.com/?q={q}"}, query)
     finally:

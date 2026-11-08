@@ -248,7 +248,7 @@ const POST_ROUTES = {
   "/api/sleep": async (c) => setSleep(c.target(), c.body.minutes),
   "/api/do": async (c) => {
     const target = c.body.tv ? c.target() : parseTarget(await preferredTv() || "");
-    return { done: await doPhrase(target, pyStr(c.body.do ?? ""), { strict: c.body.strict === true }) };
+    return { done: await doPhrase(target, pyStr(c.body.do ?? ""), { strict: c.body.strict === true, fromLink: c.body.fromLink === true }) };
   },
   "/api/sites/look": async (c) => ({ group: await lookCloser(String(c.body.siteId ?? ""), words(c.body.q, "Type something to search for.")) }),
   "/api/phone": async () => { throw new NotSupported(PHONE); },
@@ -308,6 +308,8 @@ export async function apiRequest({ method = "GET", path, query, body } = {}, { i
     let used = null;
     const target = () => {
       const t = parseTarget(method === "GET" ? q.tv : b.tv);
+      // A pretend TV on another port is for testing here; outside callers get the real TV's port only.
+      if (!internal && t.port !== 8060) throw new ValueError("Roku TVs answer on port 8060. Leave the port off.");
       used = displayAddress(t);
       return t;
     };
@@ -338,8 +340,8 @@ async function iconMessage(msg) {
  * Every message the extension answers. internal = from this extension's own pages
  * (popup, options, side panel, app tab); external = from an allowed web page.
  */
-// What a web page (onMessageExternal) may not do even when allowed: save sites or open pages in hidden tabs
-// ("Look closer" reads pages with your sign-ins, and a saved "deep" site would do it on every search).
+// What outside callers (phones through the relay, allowed web pages) may not do: save sites or search them
+// (a site's search page is fetched by this browser, and "Look closer" reads pages with your sign-ins).
 function isNotForWebPages(msg) {
   const route = String(msg.path || "").split("?")[0];
   return route === "/api/sites/look" || route === "/api/sites/search" || (route === "/api/sites" && msg.method === "POST");
@@ -351,8 +353,8 @@ export async function handleMessage(msg, { internal = false, web = false } = {})
     case "ping":
       return { ok: true, version: VERSION, engine: "extension" };
     case "api":
-      if (web && isNotForWebPages(msg)) {
-        return { status: 403, data: { error: "Do this in the extension's own page." } };
+      if (!internal && isNotForWebPages(msg)) {
+        return { status: 403, data: { error: "Do this on the computer, in the extension's own page." } };
       }
       return apiRequest(msg, { internal });
     case "icon":
