@@ -763,6 +763,7 @@ async function connect(address) {
   await refreshDevice();
   await loadSettings();
   loadSleep();
+  if (state.view === "cleanup") loadUsage();
   loadHistory();
   pollNow();
   if (state.view === "rules") loadRules();
@@ -924,9 +925,40 @@ function initials(name) {
 
 const TAGS = { free: "Free with ads", roku: "Made by Roku", input: "TV input", system: "Part of the TV" };
 
+// Viewing time from the viewing log (kept while a rule or the log is on): helps pick what to remove.
+const UNUSED_AFTER_DAYS = 7;
+state.usage = null;
+async function loadUsage() {
+  if (!state.tv || !state.control || isLite()) return;
+  try {
+    const usage = await api(`/api/usage?tv=${enc(state.tv)}`);
+    state.usage = { tv: state.tv, ...usage };
+  } catch {
+    state.usage = null;
+  }
+  renderApps();
+}
+function usageNote(app) {
+  const u = state.usage;
+  if (!u || u.tv !== state.tv || !u.days) return "";
+  const seconds = u.totals[app.id] || 0;
+  if (seconds >= 60) {
+    const h = Math.floor(seconds / 3600);
+    const m = Math.round((seconds % 3600) / 60);
+    return `Watched ${h ? `${h} h ` : ""}${m || !h ? `${m} min` : ""}`.trim() + ` in ${u.days} ${u.days === 1 ? "day" : "days"}`;
+  }
+  return u.days >= UNUSED_AFTER_DAYS ? `Not opened in ${u.days} days` : "";
+}
+function unusedApps() {
+  const u = state.usage;
+  if (!u || u.tv !== state.tv || u.days < UNUSED_AFTER_DAYS) return [];
+  return state.apps.filter((a) => removable(a) && (u.totals[a.id] || 0) < 60);
+}
+
 function tileHTML(app, fixed) {
   const art = `<span class="tile-art" data-initials="${esc(initials(app.name))}"><img ${iconAttrs(app.id)} alt="" loading="lazy" data-drop-on-error></span>`;
-  const text = `<span class="tile-name">${esc(app.name)}</span>${TAGS[app.group] ? `<span class="tile-tag">${TAGS[app.group]}</span>` : ""}`;
+  const used = fixed ? "" : usageNote(app);
+  const text = `<span class="tile-name">${esc(app.name)}</span>${TAGS[app.group] ? `<span class="tile-tag">${TAGS[app.group]}</span>` : ""}${used ? `<span class="tile-tag tile-usage">${esc(used)}</span>` : ""}`;
   if (fixed) return `<div class="tile fixed">${art}${text}</div>`;
   const current = state.job && state.job.app.id === app.id ? " is-current" : "";
   return `<button type="button" class="tile${current}" data-id="${esc(app.id)}" aria-pressed="${state.selected.has(app.id)}" ${state.job ? "disabled" : ""}>${art}${text}</button>`;
@@ -943,6 +975,13 @@ function renderApps() {
     : `<p class="empty">No channels left to remove.</p>`;
   $("#builtin-grid").innerHTML = builtIn.map((a) => tileHTML(a, true)).join("");
   $("#select-free").hidden = !channels.some((a) => a.group === "free");
+  $("#select-unused").hidden = !unusedApps().length;
+  const u = state.usage && state.usage.tv === state.tv ? state.usage : null;
+  const hint = $("#usage-hint");
+  hint.hidden = !u || u.days >= UNUSED_AFTER_DAYS;
+  if (u) hint.textContent = u.days
+    ? `Viewing time so far covers ${u.days} ${u.days === 1 ? "day" : "days"}. After a week, Roku Detox points out the channels you never open.`
+    : "Tip: turn on the viewing log under Rules. After a week, this shows which channels you never open.";
   renderSelectionBar();
 }
 
@@ -1375,6 +1414,10 @@ $("#select-free").addEventListener("click", () => {
   renderApps();
 });
 $("#clear-btn").addEventListener("click", () => { state.selected.clear(); renderApps(); });
+$("#select-unused").addEventListener("click", () => {
+  for (const app of unusedApps()) state.selected.add(app.id);
+  renderApps();
+});
 $("#remove-btn").addEventListener("click", startRemovals);
 
 $("#job").addEventListener("click", (e) => {
@@ -3324,6 +3367,7 @@ $("#views").addEventListener("click", (e) => {
   if (view === "rules") loadRules();
   if (view === "tvapp") loadTvApp();
   if (view === "find") loadHistory();
+  if (view === "cleanup") loadUsage();
 });
 
 /* ---------- Engine badge, and what this engine can't do ---------- */

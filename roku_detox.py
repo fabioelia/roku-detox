@@ -1211,6 +1211,24 @@ def sleep_fire(address):
         print(f"Sleep timer couldn't turn off {address}: {err}")
 
 
+def usage_summary(target):
+    """Seconds on each app over the days the viewing log has (up to two weeks), for Clean up."""
+    with SETTINGS_LOCK:
+        try:
+            with open(USAGE_PATH, encoding="utf-8") as f:
+                days = json.load(f).get(display_address(target), {})
+        except (FileNotFoundError, json.JSONDecodeError, AttributeError):
+            days = {}
+    totals = {}
+    for usage in days.values():
+        if isinstance(usage, dict):
+            for app_id, seconds in usage.items():
+                if isinstance(seconds, (int, float)):
+                    totals[app_id] = totals.get(app_id, 0) + int(seconds)
+    tracked = sorted(day for day in days if isinstance(days[day], dict))
+    return {"days": len(tracked), "since": tracked[0] if tracked else None, "totals": totals}
+
+
 def run_scheduled(address, scene):
     try:
         run_scene(parse_target(address), scene)
@@ -2983,6 +3001,7 @@ class Handler(BaseHTTPRequestHandler):
             "/api/rules": lambda: self.send(200, WATCHER.status(display_address(target()))),
             "/api/sleep": lambda: self.send(200, sleep_status(target())),
             "/api/wake": lambda: self.send(200, wake_info(target())),
+            "/api/usage": lambda: self.send(200, usage_summary(target())),
             "/api/doctor": lambda: self.send(200, doctor(target())),
             "/api/tvapp": lambda: self.send(200, tv_app_status(target())),
             "/api/sites": lambda: self.send(200, {"sites": site_list()}),

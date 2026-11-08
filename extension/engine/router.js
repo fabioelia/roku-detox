@@ -19,7 +19,7 @@ import {
 import { cast, lookCloser, searchSites, sniffedForTab, tvMessage } from "./video.js";
 import { setSleep, sleepStatus } from "./sleep.js";
 import { discoverReport } from "./discover.js";
-import { cleanRules, doctor, extendBedtime, rulesStatus, saveRules, skipAutopilot } from "./rules.js";
+import { cleanRules, doctor, extendBedtime, rulesStatus, saveRules, skipAutopilot, usageSummary } from "./rules.js";
 
 export const VERSION = (() => {
   try { return chrome.runtime.getManifest().version; } catch { return "1.0.0"; }
@@ -131,6 +131,7 @@ const GET_ROUTES = {
   "/api/tvapp": async (c) => tvAppStatus(c.target()),
   "/api/sites": async () => ({ sites: await siteList() }),
   "/api/sleep": async (c) => sleepStatus(c.address()),
+  "/api/usage": async (c) => usageSummary(c.address()),
   "/api/sites/search": async (c) => ({ groups: await searchSites(words(c.query.q, "Type something to search for.")) }),
   "/api/log": async () => ({ entries: await readLog() }),
   "/api/settings": async (c) => tvSettings(c.address()),

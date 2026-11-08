@@ -778,8 +778,10 @@
         <div class="section-head">
           <h2>Channels</h2>
           <button class="btn quiet" id="select-free" type="button">Select all free-with-ads channels</button>
+          <button class="btn quiet" id="select-unused" type="button" hidden>Select the ones not opened lately</button>
         </div>
         <p class="intro">Pick the ones you don't use. Removing a channel is safe: you can add it back from the Streaming Store anytime, and this page keeps an undo list.</p>
+        <p class="note" id="usage-hint" hidden></p>
         <div class="grid" id="channel-grid"></div>
 
         <div class="select-bar" id="select-bar" hidden>

@@ -214,6 +214,20 @@ async function loadUsage(address, day) {
   return isPlainObject(days[day]) ? { ...days[day] } : {};
 }
 
+/** Seconds on each app over the days on record (up to two weeks), for Clean up. Same as usage_summary(). */
+export async function usageSummary(address) {
+  const data = await getLocal("usage", {});
+  const days = isPlainObject(data) && isPlainObject(data[address]) ? data[address] : {};
+  const totals = {};
+  const tracked = Object.keys(days).filter((day) => isPlainObject(days[day])).sort();
+  for (const day of tracked) {
+    for (const [appId, seconds] of Object.entries(days[day])) {
+      if (typeof seconds === "number" && Number.isFinite(seconds)) totals[appId] = (totals[appId] || 0) + Math.trunc(seconds);
+    }
+  }
+  return { days: tracked.length, since: tracked[0] || null, totals };
+}
+
 async function saveUsage(address, day, usage) {
   await locked(async () => {
     const data = await getLocal("usage", {});
