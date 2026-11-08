@@ -157,6 +157,20 @@ async function main() {
     const onFind = top(document.querySelector(".side")) > top(document.querySelector("main"));
     document.querySelector('#views [data-view="remote"]').click(); return onRemote && onFind; })()`);
   check("on phones the remote leads only on Remote", order);
+  // Every menu at phone width: no sideways scrolling, and no button whose words are cut off.
+  const fit = await page(`(async () => {
+    const out = [];
+    for (const view of ["remote", "find", "rules", "cleanup", "tvapp", "phone"]) {
+      document.querySelector('#views [data-view="' + view + '"]').click(); await new Promise((r) => setTimeout(r, 400));
+      if (document.documentElement.scrollWidth > innerWidth + 1) out.push(view + ": page scrolls sideways");
+      for (const b of document.querySelectorAll("button")) {
+        if (b.offsetParent && b.scrollWidth > b.clientWidth + 1 && getComputedStyle(b).overflow !== "visible") out.push(view + ": " + b.textContent.trim().slice(0, 30));
+        if (b.offsetParent && b.closest("#views, .find-source") && b.scrollWidth > b.clientWidth + 1) out.push(view + ": " + b.textContent.trim().slice(0, 30));
+      }
+    }
+    document.querySelector('#views [data-view="remote"]').click();
+    return [...new Set(out)]; })()`);
+  check("every menu fits a phone screen", fit.length === 0, fit.join(" | "));
   const remoteOnly = await page(`(() => { document.querySelector("#remote-only").click();
     const on = getComputedStyle(document.querySelector("main")).display === "none" && getComputedStyle(document.querySelector("#remote")).display !== "none";
     document.querySelector("#remote-only-exit").click();
