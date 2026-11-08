@@ -1,0 +1,9 @@
+{
+  "name": "roku-detox-extension",
+  "private": true,
+  "description": "Only here so Node treats the engine files as ES modules when running the tests (node --test tests/*.test.js). Chrome ignores it.",
+  "type": "module",
+  "scripts": {
+    "test": "node --test --test-concurrency=1 tests/*.test.js"
+  }
+}

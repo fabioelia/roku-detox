@@ -1,0 +1,868 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="roku-detox-extension" content="">
+<title>Roku Detox</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:wght@400;600;700&family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #E6EBEF;
+    --surface: #F3F6F8;
+    --raised: #FFFFFF;
+    --ink: #17202C;
+    --muted: #556071;
+    --line: #CBD3DC;
+    --keep: #1F6B5B;
+    --keep-soft: #D3EAE3;
+    --remove: #A6364F;
+    --remove-soft: #F6DDE3;
+    --on-remove: #FFFFFF;
+    --warn-soft: #FAE9C3;
+    --warn-ink: #5E4100;
+    --remote: #222A38;
+    --remote-key: #333D50;
+    --remote-key-hi: #434E65;
+    --remote-label: #E9EDF3;
+    --remote-glow: #7CCFBF;
+    --focus: #2C66D0;
+    --radius-s: 8px;
+    --radius-m: 14px;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #10161F;
+      --surface: #172030;
+      --raised: #1E2839;
+      --ink: #E4E9F0;
+      --muted: #9AA5B6;
+      --line: #2A3446;
+      --keep: #66C5B1;
+      --keep-soft: #1B3731;
+      --remove: #EF8FA4;
+      --remove-soft: #40212A;
+      --on-remove: #2A0E16;
+      --warn-soft: #3A2F16;
+      --warn-ink: #F3D58F;
+      --remote: #2A3344;
+      --remote-key: #3A4559;
+      --remote-key-hi: #4B5770;
+      --focus: #7EA9FF;
+      color-scheme: dark;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 400 17px/1.5 "Atkinson Hyperlegible Next", "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  h1, h2, h3 {
+    font-family: "Bricolage Grotesque", "Atkinson Hyperlegible Next", system-ui, sans-serif;
+    line-height: 1.12;
+    margin: 0;
+  }
+  p { margin: 0; }
+  button, input, select { font: inherit; color: inherit; }
+  :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+
+  .shell { max-width: 1160px; margin: 0 auto; padding: 20px 24px 64px; }
+
+  /* Header */
+  .top {
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+    gap: 12px 24px; padding-bottom: 18px; border-bottom: 1px solid var(--line);
+  }
+  .brand { display: flex; align-items: center; gap: 10px; font-size: 22px; font-weight: 800; letter-spacing: -0.01em; }
+  .brand svg { width: 30px; height: 30px; flex: none; }
+  .picker { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .picker label { color: var(--muted); font-size: 15px; }
+  select, input[type="text"] {
+    min-height: 42px; padding: 8px 12px; border-radius: var(--radius-s);
+    border: 1px solid var(--line); background: var(--raised);
+  }
+  select { max-width: 260px; }
+  .manual { display: flex; gap: 8px; }
+  .manual input { width: 170px; }
+
+  .btn {
+    min-height: 42px; padding: 8px 18px; border-radius: 999px; cursor: pointer;
+    border: 1px solid var(--line); background: var(--raised); font-weight: 600; white-space: nowrap;
+  }
+  .btn:hover:not(:disabled) { border-color: var(--muted); }
+  .btn.primary { background: var(--ink); border-color: var(--ink); color: var(--bg); }
+  .btn.danger { background: var(--remove); border-color: var(--remove); color: var(--on-remove); }
+  .btn.quiet { background: transparent; border-color: transparent; text-decoration: underline; text-underline-offset: 3px; padding-inline: 8px; }
+  .btn:disabled { opacity: .55; cursor: not-allowed; }
+  .picker-note { width: 100%; color: var(--muted); font-size: 15px; text-align: right; }
+
+  /* The TV you're connected to */
+  .tv { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 22px; align-items: center; padding: 30px 0 26px; }
+  .tv-glyph { width: 104px; }
+  .tv-glyph .screen {
+    aspect-ratio: 16 / 10; border: 4px solid var(--ink); border-radius: 9px;
+    background: var(--surface); display: grid; place-items: center; transition: background .3s;
+  }
+  .tv-glyph .screen span { width: 14px; height: 14px; border-radius: 50%; background: var(--line); transition: background .3s; }
+  .tv-glyph .stand { width: 40%; height: 7px; margin: 0 auto; border-radius: 0 0 6px 6px; background: var(--ink); }
+  .tv[data-state="ready"] .screen { background: var(--keep-soft); }
+  .tv[data-state="ready"] .screen span { background: var(--keep); }
+  .tv[data-state="limited"] .screen { background: var(--warn-soft); }
+  .tv[data-state="limited"] .screen span { background: var(--warn-ink); }
+  .tv[data-state="offline"] .screen span { background: var(--remove); }
+  .tv-name { font-size: clamp(28px, 4.4vw, 42px); font-weight: 800; letter-spacing: -0.02em; overflow-wrap: anywhere; }
+  .tv-status { margin-top: 6px; font-weight: 600; }
+  .tv-facts { display: flex; flex-wrap: wrap; gap: 4px 26px; margin: 10px 0 0; font-size: 15px; }
+  .tv-facts div { display: flex; gap: 6px; }
+  .tv-facts dt { color: var(--muted); }
+  .tv-facts dd { margin: 0; font-weight: 600; }
+
+  /* How this page reaches the TV (see ENGINE.md) */
+  .engine-badge {
+    display: inline-block; margin-top: 10px; padding: 2px 12px; border: 1px solid var(--line); border-radius: 999px;
+    background: var(--surface); color: var(--muted); font-size: 14px; font-weight: 600;
+  }
+  .engine-warn {
+    max-width: 74ch; margin-top: 10px; padding: 8px 14px; border-radius: var(--radius-s);
+    background: var(--warn-soft); color: var(--warn-ink); font-size: 15px;
+  }
+  [data-engine="lite"] .needs-engine { display: none !important; }
+  .engine-note.section { padding-top: 0; border-top: 0; }
+  .engine-note .note { max-width: 64ch; }
+  .empty.wide { grid-column: 1 / -1; max-width: 64ch; }
+
+  .notice {
+    background: var(--warn-soft); color: var(--warn-ink); border-radius: var(--radius-m);
+    padding: 18px 22px; margin-bottom: 30px; max-width: 74ch;
+  }
+  .notice h2 { font-size: 20px; margin-bottom: 6px; }
+  .notice ol { margin: 8px 0 14px; padding-left: 1.3em; }
+  .notice li + li { margin-top: 2px; }
+  .notice .fine { font-size: 15px; margin-top: 12px; }
+  .notice .btn { border-color: currentColor; background: transparent; }
+
+  /* Menus */
+  .views {
+    display: flex; gap: 4px; width: fit-content; max-width: 100%; margin: 0 0 30px; padding: 4px;
+    overflow-x: auto; border: 1px solid var(--line); border-radius: 999px; background: var(--surface);
+  }
+  .views button {
+    min-height: 40px; padding: 6px 22px; border: 0; border-radius: 999px; background: transparent;
+    color: var(--muted); font-weight: 600; white-space: nowrap; cursor: pointer;
+  }
+  .views button:hover { color: var(--ink); }
+  .views button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+  .tile.busy { border-color: var(--keep); }
+
+  /* Rules */
+  .rules-status { display: flex; align-items: center; gap: 10px; margin: -6px 0 18px; font-weight: 600; }
+  .rules-status::before { content: ""; width: 10px; height: 10px; border-radius: 50%; background: var(--line); flex: none; }
+  .rules-status[data-state="on"]::before { background: var(--keep); }
+  .rules-status[data-state="problem"]::before { background: var(--remove); }
+  .rule-list { list-style: none; padding: 0; margin: 0; max-width: 74ch; }
+  .rule { padding: 18px 0; border-bottom: 1px solid var(--line); }
+  .rule:last-child { border-bottom: 0; }
+  .rule-head { display: flex; align-items: center; gap: 12px; cursor: pointer; }
+  .rule-head input { width: 22px; height: 22px; accent-color: var(--keep); flex: none; }
+  .rule-head strong { font-size: 18px; font-weight: 700; }
+  .rule > .note { margin: 4px 0 0 34px; }
+  .rule-body { margin: 12px 0 0 34px; display: grid; gap: 10px; }
+  .rule-body .line { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
+  .rule-body select { max-width: 240px; }
+  .rule-body input[type="time"], .rule-body input[type="number"] {
+    min-height: 42px; padding: 6px 10px; border-radius: var(--radius-s); border: 1px solid var(--line); background: var(--raised);
+  }
+  .rule-body input[type="number"] { width: 84px; }
+  .rule-body .used { font-size: 14px; color: var(--muted); }
+  .rule .chips .chip { padding-left: 14px; }
+  .rule .chip[aria-pressed="true"] { border-color: var(--remove); background: var(--remove-soft); text-decoration: none; color: var(--ink); }
+  .rule .chip[aria-pressed="false"] { text-decoration: none; }
+  .usage, .activity, .checks { list-style: none; padding: 0; margin: 0; max-width: 74ch; }
+  .usage li, .activity li, .checks li { display: flex; gap: 14px; padding: 9px 0; border-bottom: 1px solid var(--line); }
+  .usage li:last-child, .activity li:last-child, .checks li:last-child { border-bottom: 0; }
+  .usage li span:first-child { flex: 1; }
+  .usage li span:last-child { font-weight: 600; font-variant-numeric: tabular-nums; }
+  .activity time { flex: none; width: 92px; color: var(--muted); font-size: 14px; padding-top: 2px; }
+  .activity li.alert span { color: var(--remove); font-weight: 600; }
+  .checks .mark { flex: none; width: 22px; font-weight: 800; color: var(--keep); }
+  .checks .mark.bad { color: var(--remove); }
+  .checks p { font-size: 15px; color: var(--muted); }
+
+  /* TV app */
+  .app-steps { max-width: 74ch; margin: 0 0 18px; padding-left: 1.3em; }
+  .app-steps li + li { margin-top: 4px; }
+  .install-form { display: flex; flex-wrap: wrap; gap: 8px; max-width: 560px; }
+  .install-form input { flex: 1; min-width: 200px; min-height: 46px; padding: 8px 14px; border-radius: var(--radius-s); border: 1px solid var(--line); background: var(--raised); }
+  .app-status { display: flex; align-items: center; gap: 10px; margin: 0 0 18px; font-weight: 600; }
+  .app-status::before { content: ""; width: 10px; height: 10px; border-radius: 50%; background: var(--line); flex: none; }
+  .app-status[data-state="on"]::before { background: var(--keep); }
+  .app-status[data-state="problem"]::before { background: var(--remove); }
+  .option-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; cursor: pointer; }
+  .option-row input { width: 20px; height: 20px; accent-color: var(--keep); }
+  .bookmarklet { display: inline-flex; align-items: center; min-height: 42px; padding: 8px 18px; border-radius: 999px; background: var(--keep); color: var(--raised); font-weight: 700; text-decoration: none; cursor: grab; }
+  .cast-banner {
+    position: fixed; left: 50%; bottom: 20px; z-index: 25; transform: translateX(-50%); width: min(560px, calc(100vw - 32px));
+    display: grid; gap: 10px; padding: 16px 18px; border-radius: var(--radius-m); background: var(--ink); color: var(--bg);
+    box-shadow: 0 16px 40px -16px rgba(0, 0, 0, .6);
+  }
+  .cast-banner .row { display: flex; flex-wrap: wrap; gap: 8px; }
+  .cast-banner .btn.quiet { color: var(--bg); }
+
+  /* My sites */
+  .find-source { margin: 0 0 16px; }
+  .site-group + .site-group { margin-top: 26px; }
+  .site-group .subhead { margin: 0 0 4px; }
+  .site-thumb { width: 160px; aspect-ratio: 16 / 9; border-radius: 8px; overflow: hidden; background: var(--line); }
+  .site-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .site-result { grid-template-columns: 160px minmax(0, 1fr); }
+  .site-result h3 { font-size: 18px; }
+  .site-result .meta { overflow-wrap: anywhere; }
+  @media (max-width: 600px) { .site-result { grid-template-columns: 112px minmax(0, 1fr); } .site-thumb { width: 112px; } }
+
+  /* Find a show */
+  .find-form { display: flex; gap: 8px; max-width: 560px; }
+  .find-form input { flex: 1; min-width: 0; min-height: 46px; padding: 8px 14px; border-radius: var(--radius-s); border: 1px solid var(--line); background: var(--raised); font-size: 18px; }
+  .services { margin: 18px 0 8px; max-width: 74ch; }
+  .services summary { cursor: pointer; font-weight: 600; }
+  .services summary span { color: var(--muted); font-weight: 400; }
+  .services .note { margin: 8px 0 12px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 8px; min-height: 38px; padding: 4px 14px 4px 6px;
+    border: 1px solid var(--line); border-radius: 999px; background: var(--raised); cursor: pointer; font-size: 15px;
+  }
+  .chip img { width: 36px; height: 27px; border-radius: 5px; object-fit: cover; }
+  .chip[aria-pressed="true"] { border-color: var(--keep); background: var(--keep-soft); font-weight: 600; }
+  .chip[aria-pressed="false"] { color: var(--muted); text-decoration: line-through; }
+  .results { list-style: none; padding: 0; margin: 22px 0 0; max-width: 80ch; }
+  .result { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 16px; padding: 18px 0; border-bottom: 1px solid var(--line); }
+  .result:last-child { border-bottom: 0; }
+  .poster { width: 92px; aspect-ratio: 2 / 3; border-radius: 8px; overflow: hidden; background: var(--line); }
+  .poster img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .result h3 { font-size: 21px; font-weight: 800; letter-spacing: -0.01em; }
+  .result .meta { color: var(--muted); font-size: 14px; margin-top: 2px; }
+  .result .desc { font-size: 15px; margin-top: 6px; max-width: 64ch; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .watch-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  .watch-btn { display: inline-flex; align-items: center; gap: 8px; padding-left: 6px; }
+  .watch-btn img { width: 36px; height: 27px; border-radius: 5px; object-fit: cover; }
+  .watch-btn small { font-weight: 400; color: inherit; opacity: .8; }
+  .elsewhere { margin-top: 10px; font-size: 14px; color: var(--muted); }
+  .btn[aria-disabled="true"] { opacity: .55; cursor: progress; }
+  .sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+  .tag { display: inline-block; padding: 1px 10px; border-radius: 999px; background: var(--keep); color: var(--raised); font-size: 13px; font-weight: 700; line-height: 1.5; white-space: nowrap; }
+  /* Continue watching */
+  .continue { margin-top: 26px; max-width: 80ch; }
+  .continue .subhead { margin: 0; }
+  .continue .results { margin-top: 2px; }
+  .continue > .btn.quiet { margin: 4px 0 0 -8px; }
+  .cw-head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
+  .cw-app { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 14px; color: var(--muted); }
+  .cw-app img { width: 32px; height: 24px; border-radius: 4px; object-fit: cover; }
+  /* Season and episode picker */
+  .result > .episodes { grid-column: 2; }
+  .episodes { margin-top: -2px; padding: 12px 14px 4px; border: 1px solid var(--line); border-radius: var(--radius-m); background: var(--surface); }
+  .episodes > .note { padding-bottom: 8px; }
+  .season-chips, .season-select { margin-bottom: 8px; }
+  .season-chips .chip { padding: 4px 14px; }
+  .season-chips .chip[aria-pressed="false"] { color: var(--ink); text-decoration: none; }
+  .ep-list { position: relative; list-style: none; padding: 0; margin: 0 -8px; max-height: min(30rem, 70vh); overflow-y: auto; overscroll-behavior: contain; }
+  .episode { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 10px; padding: 12px 8px; border-top: 1px solid var(--line); }
+  .episode:first-child { border-top: 0; }
+  .episode.current { border-top-color: transparent; border-radius: var(--radius-s); background: var(--keep-soft); }
+  .episode.current + .episode { border-top-color: transparent; }
+  .ep-mark { padding-top: 3px; color: var(--keep); }
+  .ep-mark svg { display: block; width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+  .ep-title { font-weight: 600; line-height: 1.35; }
+  .ep-title .tag { margin-left: 4px; vertical-align: 1px; }
+  .episode.watched .ep-title { color: var(--muted); }
+  .ep-n { font-variant-numeric: tabular-nums; }
+  .ep-time { margin-left: 4px; color: var(--muted); font-size: 14px; font-weight: 400; white-space: nowrap; }
+  .ep-desc { margin-top: 2px; font-size: 14px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .episode .watch-row { gap: 6px; margin-top: 8px; }
+  .episode .btn { min-height: 38px; padding-block: 4px; font-size: 15px; }
+  .episode .watch-btn img { width: 32px; height: 24px; }
+  .episode .note { margin-top: 6px; }
+  @media (max-width: 600px) {
+    .result { grid-template-columns: 72px minmax(0, 1fr); } .poster { width: 72px; }
+    .result > .episodes { grid-column: 1 / -1; }
+  }
+
+  /* Main layout */
+  .layout { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 44px; align-items: start; }
+  .side {
+    position: sticky; top: 20px; max-height: calc(100vh - 40px); overflow-y: auto;
+    display: grid; gap: 18px; justify-items: center; padding: 4px 4px 12px; margin: -4px;
+  }
+  @media (max-width: 880px) {
+    .layout { grid-template-columns: minmax(0, 1fr); gap: 28px; }
+    .side { position: static; order: -1; max-height: none; overflow: visible; }
+  }
+  @media (max-width: 600px) {
+    .shell { padding: 16px 16px 48px; }
+    .picker-note { text-align: left; }
+    .tv { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+    .tv-glyph { width: 76px; }
+  }
+
+  .section { padding: 30px 0; border-top: 1px solid var(--line); }
+  .section:first-child { padding-top: 0; border-top: 0; }
+  .section-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 16px; }
+  .section h2 { font-size: 27px; font-weight: 800; letter-spacing: -0.01em; }
+  .intro { color: var(--muted); max-width: 64ch; margin: 8px 0 20px; }
+  .subhead { font-family: inherit; font-size: 18px; font-weight: 600; line-height: 1.3; margin: 32px 0 12px; }
+
+  /* Channel tiles */
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(148px, 1fr)); gap: 14px; }
+  .tile {
+    position: relative; display: grid; align-content: start; gap: 6px; padding: 7px 7px 12px;
+    text-align: left; border-radius: var(--radius-m); background: var(--surface);
+    border: 2px solid transparent; cursor: pointer;
+  }
+  .tile:hover { border-color: var(--line); }
+  .tile:disabled { cursor: default; }
+  .tile-art {
+    position: relative; display: grid; place-items: center; aspect-ratio: 290 / 218;
+    border-radius: 9px; overflow: hidden; background: var(--line);
+  }
+  .tile-art::before {
+    content: attr(data-initials); color: var(--muted);
+    font: 800 26px/1 "Bricolage Grotesque", system-ui, sans-serif;
+  }
+  .tile-art:has(img)::before { content: none; }
+  .tile-art img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transition: opacity .2s, filter .2s; }
+  .tile-name { padding: 0 4px; font-size: 15px; font-weight: 600; line-height: 1.3; overflow-wrap: anywhere; }
+  .tile-tag { padding: 0 4px; font-size: 13px; color: var(--muted); }
+  .tile[aria-pressed="true"] { border-color: var(--remove); background: var(--remove-soft); }
+  .tile[aria-pressed="true"] img { opacity: .4; filter: grayscale(1); }
+  .tile[aria-pressed="true"]::after {
+    content: "Remove"; position: absolute; top: 13px; right: 13px; padding: 1px 10px;
+    border-radius: 999px; background: var(--remove); color: var(--on-remove); font-size: 13px; font-weight: 700;
+  }
+  .tile.is-current { outline: 3px solid var(--remove); outline-offset: 2px; }
+  .tile.fixed { background: transparent; border: 1px dashed var(--line); cursor: default; padding: 8px 8px 12px; }
+  .empty { color: var(--muted); }
+
+  .select-bar {
+    position: sticky; bottom: 16px; z-index: 5; display: flex; align-items: center; gap: 10px;
+    margin-top: 22px; padding: 8px 8px 8px 22px; border-radius: 999px;
+    background: var(--ink); color: var(--bg); box-shadow: 0 14px 32px -14px rgba(0, 0, 0, .5);
+  }
+  .select-bar p { margin-right: auto; }
+  .select-bar .btn.quiet { color: var(--bg); }
+
+  /* Finish-up checklist (in order) */
+  .steps { list-style: none; padding: 0; margin: 0; max-width: 74ch; }
+  .steps li { display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 2px 14px; padding: 16px 0; border-bottom: 1px solid var(--line); }
+  .steps li:last-child { border-bottom: 0; }
+  .steps input[type="checkbox"] { width: 22px; height: 22px; margin: 3px 0 0; accent-color: var(--keep); }
+  .steps label { cursor: pointer; }
+  .steps strong { display: block; font-weight: 600; }
+  .steps .path { display: block; color: var(--muted); font-size: 15px; margin-top: 2px; }
+  .steps li.done strong { color: var(--muted); text-decoration: line-through; }
+  .steps .actions { grid-column: 2; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 10px; }
+  .restart-msg { font-weight: 600; }
+  .restart-msg.good { color: var(--keep); }
+  .restart-msg.bad { color: var(--remove); }
+
+  /* Undo list */
+  .undo { list-style: none; padding: 0; margin: 0; max-width: 74ch; }
+  .undo li { display: flex; align-items: center; gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+  .undo li > div { flex: 1; min-width: 0; }
+  .undo strong { font-weight: 600; }
+  .undo .meta { display: block; color: var(--muted); font-size: 14px; }
+
+  /* Removal in progress */
+  .job { width: 100%; padding: 16px 18px 14px; border: 2px solid var(--remove); border-radius: var(--radius-m); background: var(--raised); }
+  .job[data-mode="reinstall"] { border-color: var(--keep); }
+  .job h3 { font-size: 20px; font-weight: 800; overflow-wrap: anywhere; }
+  .job-count { display: block; margin-top: 2px; color: var(--muted); font-size: 14px; }
+  .job ol { list-style: none; padding: 0; margin: 14px 0 10px; display: grid; gap: 9px; }
+  .job li { display: grid; grid-template-columns: 20px 1fr; gap: 10px; color: var(--muted); font-size: 15px; line-height: 1.35; }
+  .job li .mark { width: 16px; height: 16px; margin-top: 2px; border-radius: 50%; border: 2px solid var(--line); }
+  .job li.now { color: var(--ink); font-weight: 600; }
+  .job li.now .mark { border-color: var(--remove); background: var(--remove); animation: pulse 1.2s ease-in-out infinite; }
+  .job[data-mode="reinstall"] li.now .mark { border-color: var(--keep); background: var(--keep); }
+  .job li.ok { color: var(--ink); }
+  .job li.ok .mark { position: relative; border: 0; background: var(--keep); }
+  .job li.ok .mark::after {
+    content: ""; position: absolute; left: 5.5px; top: 2.5px; width: 5px; height: 9px;
+    border: solid var(--raised); border-width: 0 2px 2px 0; transform: rotate(45deg);
+  }
+  .job .hint { font-size: 14px; color: var(--muted); }
+  .job .error { color: var(--remove); font-weight: 600; font-size: 15px; }
+  .job .row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  .job .btn { min-height: 36px; padding: 5px 14px; font-size: 15px; }
+  @keyframes pulse { 50% { transform: scale(.7); opacity: .6; } }
+
+  /* The remote */
+  .remote {
+    width: 236px; display: grid; justify-items: center; gap: 18px;
+    padding: 26px 24px 32px; border-radius: 52px 52px 64px 64px;
+    background: var(--remote); color: var(--remote-label);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08), inset 0 -3px 0 rgba(0, 0, 0, .25), 0 26px 50px -26px rgba(10, 18, 34, .65);
+  }
+  .remote[aria-disabled="true"] { opacity: .5; }
+  .r-row { display: flex; justify-content: center; gap: 14px; width: 100%; }
+  .r-row.ends { justify-content: space-between; }
+  .rk {
+    display: grid; place-items: center; width: 52px; height: 40px; padding: 0;
+    border: 0; border-radius: 14px; background: var(--remote-key); color: var(--remote-label);
+    cursor: pointer; transition: background .12s, box-shadow .25s, transform .06s;
+  }
+  .rk svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .rk svg.solid { fill: currentColor; stroke: none; }
+  .rk:hover:not(:disabled) { background: var(--remote-key-hi); }
+  .rk:active:not(:disabled) { transform: translateY(1px); }
+  .rk:disabled { cursor: not-allowed; }
+  .rk:focus-visible { outline: 3px solid var(--remote-glow); outline-offset: 2px; }
+  .rk.sent { box-shadow: 0 0 0 3px var(--remote-glow); }
+  .rk.power { width: 42px; height: 42px; border-radius: 50%; color: #FFA3B5; }
+  .dpad { position: relative; width: 178px; height: 178px; border-radius: 50%; background: var(--remote-key); }
+  .dpad .rk { position: absolute; width: 56px; height: 56px; border-radius: 50%; background: transparent; }
+  .dpad .rk:hover:not(:disabled) { background: rgba(255, 255, 255, .08); }
+  .dpad .up { top: 3px; left: 61px; }
+  .dpad .down { bottom: 3px; left: 61px; }
+  .dpad .left { left: 3px; top: 61px; }
+  .dpad .right { right: 3px; top: 61px; }
+  .dpad .ok { left: 50px; top: 50px; width: 78px; height: 78px; background: var(--remote); font-weight: 700; font-size: 17px; }
+  .dpad .ok:hover:not(:disabled) { background: #1A212D; }
+  .r-label { margin-top: -10px; font-size: 12px; opacity: .7; }
+  .remote-note { max-width: 280px; text-align: center; font-size: 14px; color: var(--muted); }
+  .remote-error { max-width: 280px; text-align: center; font-size: 15px; font-weight: 600; color: var(--remove); }
+  .smart { width: 100%; max-width: 300px; display: grid; gap: 8px; }
+  .smart label { font-size: 14px; color: var(--muted); }
+  .smart-actions { display: flex; gap: 8px; }
+  .smart-actions .btn { flex: 1; padding-inline: 10px; }
+
+  /* Now playing */
+  .now { width: 100%; display: grid; grid-template-columns: 72px minmax(0, 1fr); gap: 12px; align-items: center; }
+  .now-art::before { font-size: 18px; }
+  .now-app { font-weight: 700; line-height: 1.25; overflow-wrap: anywhere; }
+  .now-state { font-size: 14px; color: var(--muted); }
+  .now-bar { height: 4px; margin-top: 6px; border-radius: 2px; overflow: hidden; background: var(--line); }
+  .now-bar span { display: block; height: 100%; background: var(--keep); }
+
+  /* Shortcuts */
+  .shortcut-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 26px 0 12px; }
+  .shortcut-head .subhead { margin: 0; }
+  .shortcuts { display: flex; flex-wrap: wrap; gap: 10px; }
+  .shortcut {
+    display: grid; align-content: start; gap: 6px; width: 116px; padding: 6px 6px 10px; text-align: left;
+    border: 2px solid transparent; border-radius: var(--radius-m); background: var(--surface); cursor: pointer;
+  }
+  .shortcut:hover:not(:disabled) { border-color: var(--line); }
+  .shortcut .tile-art { border-radius: 7px; }
+  .shortcut .tile-art::before { font-size: 20px; }
+  .shortcut-name { padding: 0 2px; font-size: 14px; font-weight: 600; line-height: 1.25; overflow-wrap: anywhere; }
+  .shortcut-port { padding: 0 2px; font-size: 12px; color: var(--muted); }
+  .shortcut.input { width: auto; min-width: 116px; padding: 12px 16px; align-content: center; }
+  .shortcut.busy { border-color: var(--keep); }
+  .fav-editor .grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+  .fav-editor .tile[aria-pressed="true"] { border-color: var(--keep); background: var(--keep-soft); }
+  .fav-editor .tile[aria-pressed="true"] img { opacity: 1; filter: none; }
+  .fav-editor .tile[aria-pressed="true"]::after { content: "Shortcut"; background: var(--keep); color: var(--raised); }
+  .row-gap { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+  .note { font-size: 14px; color: var(--muted); }
+  .scene-editor .error, #phone-body .error { color: var(--remove); font-weight: 600; }
+
+  .scenes { list-style: none; padding: 0; margin: 0; max-width: 74ch; }
+  .scenes li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+  .scenes li:last-child { border-bottom: 0; }
+  .scenes li > div { flex: 1; min-width: 200px; }
+  .scenes strong { font-weight: 700; }
+  .scenes .meta { display: block; font-size: 14px; color: var(--muted); }
+  .scene-editor {
+    display: grid; gap: 16px; max-width: 74ch; margin-top: 14px; padding: 18px 20px;
+    border-radius: var(--radius-m); background: var(--surface);
+  }
+  .scene-editor .field { display: grid; gap: 4px; font-size: 15px; font-weight: 600; }
+  .field-label { margin-bottom: 8px; font-size: 15px; font-weight: 600; }
+  .scene-steps { padding-left: 1.4em; margin: 0 0 8px; display: grid; gap: 8px; }
+  .scene-steps li { padding-left: 4px; }
+  .scene-steps .step { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .scene-steps select { max-width: 230px; }
+  .scene-editor input[type="number"], .scene-editor input[type="time"] {
+    min-height: 42px; padding: 6px 10px; border-radius: var(--radius-s); border: 1px solid var(--line); background: var(--raised);
+  }
+  .scene-editor input[type="number"] { width: 80px; }
+  .scene-time { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+  .scene-time label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+  .scene-time input[type="checkbox"] { width: 20px; height: 20px; accent-color: var(--keep); }
+  .scene-editor .row { display: flex; flex-wrap: wrap; gap: 8px; }
+
+  /* Phone remote */
+  .phone-box { display: flex; flex-wrap: wrap; align-items: center; gap: 20px 28px; max-width: 74ch; }
+  .qr { width: 168px; height: 168px; padding: 8px; border-radius: var(--radius-s); background: #FFFFFF; }
+  .qr img, .qr canvas { display: block; width: 100%; height: 100%; }
+  .phone-url { font-weight: 600; overflow-wrap: anywhere; }
+  .phone-code { margin-top: 4px; font: 800 36px/1 "Bricolage Grotesque", system-ui, sans-serif; letter-spacing: .14em; }
+
+  .pair { position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; padding: 24px 16px; background: var(--bg); }
+  .pair-card { display: grid; gap: 14px; width: 100%; max-width: 380px; }
+  .pair h2 { font-size: 30px; font-weight: 800; letter-spacing: -0.01em; }
+  .pair form { display: flex; gap: 8px; }
+  .pair input { flex: 1; min-width: 0; font-size: 26px; letter-spacing: .2em; text-align: center; }
+  .pair .error { color: var(--remove); font-weight: 600; }
+  @media (hover: none) { .remote-note { display: none; } }
+
+  .toast {
+    position: fixed; top: 16px; left: 50%; z-index: 20; transform: translateX(-50%);
+    max-width: calc(100vw - 32px); padding: 10px 20px; border-radius: 999px;
+    background: var(--ink); color: var(--bg); font-weight: 600; box-shadow: 0 12px 30px -12px rgba(0, 0, 0, .5);
+  }
+  footer { margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--line); color: var(--muted); font-size: 14px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { transition: none !important; animation: none !important; }
+  }
+</style>
+</head>
+<body>
+<div class="shell">
+  <header class="top">
+    <h1 class="brand">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><rect x="3" y="6" width="26" height="17" rx="3" fill="none" stroke="currentColor" stroke-width="2.5"/><path d="M11 27h10" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/><path d="m11.5 14.5 3 3 6-6" fill="none" stroke="var(--keep)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Roku Detox
+    </h1>
+    <div class="picker">
+      <label for="tv-select" id="picker-label">TV</label>
+      <select id="tv-select" class="needs-engine" disabled><option>Looking…</option></select>
+      <button class="btn needs-engine" id="find-btn" type="button">Find TVs</button>
+      <form class="manual" id="manual-form">
+        <input type="text" id="manual-input" placeholder="Or type its IP address" aria-label="TV IP address" inputmode="decimal" autocomplete="off">
+        <button class="btn" type="submit">Connect</button>
+      </form>
+      <p class="picker-note" id="picker-note" aria-live="polite"></p>
+    </div>
+  </header>
+
+  <section class="tv" id="tv" data-state="none">
+    <div class="tv-glyph" aria-hidden="true"><div class="screen"><span></span></div><div class="stand"></div></div>
+    <div>
+      <h2 class="tv-name" id="tv-name">No TV connected yet</h2>
+      <p class="tv-status" id="tv-status" role="status">Looking for Roku TVs on your Wi-Fi.</p>
+      <p class="engine-badge" id="engine-badge" hidden></p>
+      <dl class="tv-facts" id="tv-facts"></dl>
+      <p class="engine-warn" id="https-note" hidden>This page is secure (https), so your browser may block it from talking to the TV. Use the http:// link instead.</p>
+    </div>
+  </section>
+
+  <section class="notice" id="notice" hidden>
+    <h2>Let this page use your TV</h2>
+    <p>Right now the TV only shares basic info. To see your channels and use the remote here:</p>
+    <ol>
+      <li>On the TV, press Home and open Settings.</li>
+      <li>Go to System, then Advanced system settings, then Control by mobile apps, then Network access.</li>
+      <li>Choose Default. Some TVs call it Enabled.</li>
+    </ol>
+    <button class="btn" id="recheck-btn" type="button">Check again</button>
+    <p class="fine">While this is on, any device on your Wi-Fi can control the TV. Set it back to Limited when you're done. It's the last step on this page.</p>
+  </section>
+
+  <nav class="views" id="views" aria-label="Menu">
+    <button type="button" data-view="remote" aria-pressed="true">Remote</button>
+    <button type="button" data-view="find" aria-pressed="false">Find a show</button>
+    <button type="button" data-view="rules" aria-pressed="false">Rules</button>
+    <button type="button" data-view="cleanup" aria-pressed="false">Clean up</button>
+    <button type="button" data-view="tvapp" aria-pressed="false">TV app</button>
+    <button type="button" data-view="phone" aria-pressed="false">Phone</button>
+  </nav>
+
+  <div class="layout">
+    <main>
+      <div class="view" data-view="remote">
+      <section class="section" id="shortcuts" hidden>
+        <h2>Open on the TV</h2>
+        <p class="intro">Tap an app or input to open it. Scenes run a few steps at once.</p>
+
+        <div class="shortcut-head">
+          <h3 class="subhead">Favorites</h3>
+          <button class="btn quiet" id="fav-edit" type="button">Choose favorites</button>
+        </div>
+        <div class="shortcuts" id="fav-row"></div>
+        <div class="fav-editor" id="fav-editor" hidden>
+          <p class="intro">Tap the apps you want at the top.</p>
+          <div class="grid" id="fav-grid"></div>
+          <div class="row-gap">
+            <button class="btn primary" id="fav-save" type="button">Save favorites</button>
+            <button class="btn" id="fav-cancel" type="button">Cancel</button>
+          </div>
+        </div>
+
+        <div class="shortcut-head"><h3 class="subhead">Inputs</h3></div>
+        <div class="shortcuts" id="input-row"></div>
+
+        <div class="shortcut-head">
+          <h3 class="subhead">Scenes</h3>
+          <button class="btn quiet" id="scene-new" type="button">New scene</button>
+        </div>
+        <ul class="scenes" id="scene-list"></ul>
+        <div class="scene-editor" id="scene-editor" hidden></div>
+
+        <div class="shortcut-head">
+          <h3 class="subhead">All apps</h3>
+          <button class="btn quiet" id="apps-refresh" type="button" hidden>Refresh apps</button>
+        </div>
+        <p class="note" id="apps-note" style="margin:-4px 0 12px" hidden></p>
+        <div class="grid" id="app-grid"></div>
+      </section>
+      </div>
+
+      <div class="view" data-view="find" hidden>
+      <section class="section needs-engine" id="find">
+        <h2>Find something to watch</h2>
+        <p class="intro" id="find-intro">Search for any show or movie. You'll see which of your apps has it, and can start it on the TV.</p>
+        <div class="views find-source" id="find-source" role="group" aria-label="Search in">
+          <button type="button" data-source="catalog" aria-pressed="true">Streaming services</button>
+          <button type="button" data-source="sites" aria-pressed="false">My sites</button>
+        </div>
+        <form class="find-form" id="find-form" role="search">
+          <input type="search" id="find-input" placeholder="Show or movie name" aria-label="Show or movie name" autocomplete="off" maxlength="100">
+          <button class="btn primary" type="submit" id="find-go">Search</button>
+        </form>
+        <div class="continue" id="continue" hidden>
+          <h3 class="subhead" id="continue-head" tabindex="-1">Continue watching</h3>
+          <ul class="results" id="continue-list" aria-labelledby="continue-head"></ul>
+          <button class="btn quiet" type="button" id="continue-more" aria-controls="continue-list" hidden></button>
+        </div>
+        <details class="services" id="services-box">
+          <summary>My services <span id="services-summary"></span></summary>
+          <p class="note">Roku can tell which apps are on the TV, but not which ones you pay for. Tap a service to mark it as one you don't subscribe to, so it moves to "other ways to watch."</p>
+          <div class="chips" id="service-chips"></div>
+        </details>
+        <div id="find-status" class="note" role="status"></div>
+        <ul class="results" id="find-results"></ul>
+        <p class="note" id="jw-note" style="margin-top:18px">Show and movie listings come from <a href="https://www.justwatch.com" target="_blank" rel="noopener">JustWatch</a>. Listings can be a day or two out of date.</p>
+        <div id="sites-area" hidden>
+          <details class="services" id="sites-box">
+            <summary>Your sites <span id="sites-summary"></span></summary>
+            <p class="note">To add one, search the site in your browser, copy the address of its results page, and replace your search words with {q}. For example: https://example.com/search?q={q}</p>
+            <ul class="undo" id="sites-list"></ul>
+            <form class="install-form" id="site-form" style="margin-top:10px">
+              <input type="text" id="site-name" placeholder="Name" aria-label="Site name" maxlength="40" style="flex:0 1 160px;min-width:120px">
+              <input type="text" id="site-search" placeholder="https://example.com/search?q={q}" aria-label="Search address, with {q} where the search words go" maxlength="500" autocomplete="off">
+              <button class="btn" type="submit">Add site</button>
+            </form>
+          </details>
+          <div id="sites-status" class="note" role="status"></div>
+          <div id="site-results"></div>
+          <p class="note" style="margin-top:18px">Roku Detox reads only the text of each page to find the video, so the site's ads, pop-ups and scripts never load, and videos from ad networks are skipped. Sites that build their pages with scripts, or lock their videos, may not work. Playing needs Detox Home on the TV.</p>
+        </div>
+      </section>
+      <section class="section engine-note" hidden>
+        <h2>Find something to watch</h2>
+        <p class="intro">Find a show and My sites need the Roku Detox extension on a computer, or the Roku Detox program at home.</p>
+        <p class="note">You can still search on the TV: type a name in the box under the remote and press Search on TV.</p>
+      </section>
+      </div>
+
+      <div class="view" data-view="rules" hidden>
+      <section class="section needs-engine">
+        <h2>Rules</h2>
+        <p class="intro" id="rules-intro">Rules run in the background while Roku Detox is open on your Mac. It checks the TV every few seconds and keeps your Mac from going to sleep while any rule is on.</p>
+        <p class="rules-status" id="rules-status" role="status"></p>
+        <ul class="rule-list" id="rule-list"></ul>
+      </section>
+      <section class="section needs-engine">
+        <h2>Today</h2>
+        <p class="intro" id="usage-intro">How long the TV spent on each app or input today. Turn on a rule or the viewing log to start counting.</p>
+        <ul class="usage" id="usage-list"></ul>
+      </section>
+      <section class="section needs-engine">
+        <h2>Activity</h2>
+        <p class="intro">Everything the rules did, newest first.</p>
+        <ul class="activity" id="activity-list"></ul>
+      </section>
+      <section class="section needs-engine">
+        <h2>Connection check</h2>
+        <p class="intro">If the remote or the rules stop working, this explains why and how to fix it.</p>
+        <button class="btn" type="button" id="doctor-btn">Check connection</button>
+        <ul class="checks" id="doctor-list" style="margin-top:14px"></ul>
+      </section>
+      <section class="section engine-note" hidden>
+        <h2>Rules</h2>
+        <p class="intro">Rules need the Roku Detox extension on a computer, or the Roku Detox program at home. They keep an eye on the TV in the background, and a page on a phone can't do that.</p>
+      </section>
+      </div>
+
+      <div class="view" data-view="cleanup" hidden>
+      <section class="section needs-engine" id="channels" hidden>
+        <div class="section-head">
+          <h2>Channels</h2>
+          <button class="btn quiet" id="select-free" type="button">Select all free-with-ads channels</button>
+        </div>
+        <p class="intro">Pick the ones you don't use. Removing a channel is safe: you can add it back from the Streaming Store anytime, and this page keeps an undo list.</p>
+        <div class="grid" id="channel-grid"></div>
+
+        <div class="select-bar" id="select-bar" hidden>
+          <p><strong id="select-count">0</strong> <span id="select-word">channels</span> selected</p>
+          <button class="btn quiet" id="clear-btn" type="button">Clear</button>
+          <button class="btn danger" id="remove-btn" type="button">Remove selected</button>
+        </div>
+
+        <h3 class="subhead">Part of the TV</h3>
+        <p class="intro">Inputs and built-in screens. These stay.</p>
+        <div class="grid" id="builtin-grid"></div>
+      </section>
+      <section class="section engine-note" hidden>
+        <h2>Channels</h2>
+        <p class="intro">Removing channels and the undo list need the Roku Detox extension on a computer, or the Roku Detox program at home. The finish-up steps below work from here.</p>
+      </section>
+
+      <section class="section" id="finish" hidden>
+        <h2>Finish up on the TV</h2>
+        <p class="intro">Roku doesn't let other devices change these settings, so do them with your remote. Tick each one off as you go.</p>
+        <ol class="steps" id="steps">
+          <li data-step="acr">
+            <input type="checkbox" id="step-acr">
+            <label for="step-acr"><strong>Stop the TV from tracking what you watch</strong>
+              <span class="path">Settings, Privacy, Smart TV experience. Uncheck "Use info from TV inputs."</span></label>
+          </li>
+          <li data-step="ads">
+            <input type="checkbox" id="step-ads">
+            <label for="step-ads"><strong>Limit ad tracking</strong>
+              <span class="path">Settings, Privacy, Advertising. Check "Limit ad tracking."</span></label>
+          </li>
+          <li data-step="home">
+            <input type="checkbox" id="step-home">
+            <label for="step-home"><strong>Hide home screen rows you don't want</strong>
+              <span class="path">Settings, Home screen. Not every Roku has this menu.</span></label>
+          </li>
+          <li data-step="sleep">
+            <input type="checkbox" id="step-sleep">
+            <label for="step-sleep"><strong>Make the TV sleep when nobody's watching</strong>
+              <span class="path">Settings, System, Power, Auto power savings. Pick the shortest time it offers.</span></label>
+          </li>
+          <li data-step="saver">
+            <input type="checkbox" id="step-saver">
+            <label for="step-saver"><strong>Check the screensaver</strong>
+              <span class="path">Settings, Theme, Screensavers. Keep it on if your TV is OLED. Most Roku TVs, including onn, use LCD screens, so it's your choice.</span></label>
+          </li>
+          <li data-step="restart">
+            <input type="checkbox" id="step-restart">
+            <label for="step-restart"><strong>Restart the TV</strong>
+              <span class="path" id="restart-path">Clears out memory. This page sends Roku's restart shortcut and waits for the TV to come back.</span></label>
+            <div class="actions" id="restart-actions">
+              <button class="btn" id="restart-btn" type="button">Restart TV</button>
+            </div>
+          </li>
+          <li data-step="lock">
+            <input type="checkbox" id="step-lock">
+            <label for="step-lock"><strong>Lock remote access again</strong>
+              <span class="path">Settings, System, Advanced system settings, Control by mobile apps, Network access. Choose Limited. Do this last: afterwards this page can't control the TV.</span></label>
+          </li>
+        </ol>
+      </section>
+
+      <section class="section needs-engine" id="undo-section">
+        <div class="section-head">
+          <h2>Undo list</h2>
+          <button class="btn quiet" id="copy-btn" type="button" hidden>Copy list</button>
+        </div>
+        <p class="intro" id="undo-intro">Channels you remove show up here, with a button to add each one back.</p>
+        <ul class="undo" id="undo-list"></ul>
+      </section>
+
+      </div>
+
+      <div class="view" data-view="tvapp" hidden>
+      <section class="section">
+        <h2>Detox Home on your TV</h2>
+        <p class="intro">A calm home screen for the TV: a big clock, your favorite apps and inputs, and no ads. It also shows rule notices like "Time's up," messages you send, videos from web links, and an ad-free clock screensaver.</p>
+        <p class="app-status" id="app-status" role="status">Checking the TV…</p>
+        <div id="app-body"></div>
+      </section>
+      </div>
+
+      <div class="view" data-view="phone" hidden>
+      <section class="section" id="phone" hidden>
+        <h2>Use your phone as the remote</h2>
+        <p class="intro">Opens this page on your phone over your home Wi-Fi. A phone needs a one-time code from this screen to get in.</p>
+        <div id="phone-body"></div>
+      </section>
+      </div>
+
+      <footer id="footer">Not made by Roku. The undo list is also saved in undo-list.json next to this program.</footer>
+    </main>
+
+    <aside class="side" aria-label="Remote control">
+      <section class="job" id="job" hidden aria-live="polite"></section>
+      <section class="now" id="now" hidden aria-label="Now on the TV"></section>
+
+      <div class="remote" id="remote" role="group" aria-label="TV remote" aria-disabled="true">
+        <div class="r-row ends">
+          <button class="rk" data-key="Back" type="button" aria-label="Back"><svg viewBox="0 0 24 24"><path d="M9 6 3 12l6 6"/><path d="M3 12h11a6 6 0 0 1 6 6"/></svg></button>
+          <button class="rk power" data-key="Power" type="button" aria-label="Power"><svg viewBox="0 0 24 24"><path d="M12 3v8"/><path d="M6.4 7.4a8 8 0 1 0 11.2 0"/></svg></button>
+          <button class="rk" data-key="Home" type="button" aria-label="Home"><svg viewBox="0 0 24 24"><path d="M4 11 12 4l8 7"/><path d="M6 9.5V20h12V9.5"/></svg></button>
+        </div>
+        <div class="dpad">
+          <button class="rk up" data-key="Up" type="button" aria-label="Up"><svg viewBox="0 0 24 24"><path d="m6 15 6-6 6 6"/></svg></button>
+          <button class="rk left" data-key="Left" type="button" aria-label="Left"><svg viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></svg></button>
+          <button class="rk ok" data-key="Select" type="button">OK</button>
+          <button class="rk right" data-key="Right" type="button" aria-label="Right"><svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg></button>
+          <button class="rk down" data-key="Down" type="button" aria-label="Down"><svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></button>
+        </div>
+        <div class="r-row">
+          <button class="rk" data-key="InstantReplay" type="button" aria-label="Replay"><svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.4-5.7"/><path d="M4 4v4.5h4.5"/></svg></button>
+          <button class="rk" data-key="Info" type="button" aria-label="Options (star button)"><svg viewBox="0 0 24 24"><path d="M12 4.5v15M5.5 8.25l13 7.5M18.5 8.25l-13 7.5"/></svg></button>
+        </div>
+        <div class="r-row">
+          <button class="rk" data-key="Rev" type="button" aria-label="Rewind"><svg class="solid" viewBox="0 0 24 24"><path d="M11 6v12l-8-6zM21 6v12l-8-6z"/></svg></button>
+          <button class="rk" data-key="Play" type="button" aria-label="Play or pause"><svg class="solid" viewBox="0 0 24 24"><path d="M4 5.5v13l8.5-6.5zM15 6h2.5v12H15zM19.5 6H22v12h-2.5z"/></svg></button>
+          <button class="rk" data-key="Fwd" type="button" aria-label="Fast forward"><svg class="solid" viewBox="0 0 24 24"><path d="M3 6v12l8-6zM13 6v12l8-6z"/></svg></button>
+        </div>
+        <div class="r-row">
+          <button class="rk" data-key="VolumeDown" type="button" aria-label="Volume down"><svg viewBox="0 0 24 24"><path d="M3 10v4h4l5 4V6L7 10z"/><path d="M16 12h5"/></svg></button>
+          <button class="rk" data-key="VolumeMute" type="button" aria-label="Mute"><svg viewBox="0 0 24 24"><path d="M3 10v4h4l5 4V6L7 10z"/><path d="m16 9.5 5 5M21 9.5l-5 5"/></svg></button>
+          <button class="rk" data-key="VolumeUp" type="button" aria-label="Volume up"><svg viewBox="0 0 24 24"><path d="M3 10v4h4l5 4V6L7 10z"/><path d="M16 12h5M18.5 9.5v5"/></svg></button>
+        </div>
+      </div>
+
+      <p class="remote-error" id="remote-error" aria-live="assertive" hidden></p>
+      <p class="remote-note">Your keyboard works too: arrow keys to move, Enter for OK, Backspace for Back, H for Home.</p>
+      <form class="smart" id="smart-form">
+        <label for="smart-input">Search, paste a link, or type on the TV</label>
+        <input type="text" id="smart-input" placeholder="Show name or a video link" autocomplete="off" maxlength="2000">
+        <div class="smart-actions">
+          <button class="btn primary" type="submit" id="smart-go">Search on TV</button>
+          <button class="btn" type="button" id="smart-type">Type it</button>
+        </div>
+      </form>
+    </aside>
+  </div>
+</div>
+
+<div class="pair" id="pair" hidden>
+  <div class="pair-card">
+    <h2>Enter the code from your Mac</h2>
+    <p>On your Mac, open Roku Detox. The 6-digit code is under "Use your phone as the remote."</p>
+    <form id="pair-form">
+      <input type="text" id="pair-input" inputmode="numeric" autocomplete="one-time-code" maxlength="6" aria-label="6-digit code">
+      <button class="btn primary" type="submit">Connect</button>
+    </form>
+    <p class="error" id="pair-error" role="alert"></p>
+  </div>
+</div>
+
+<div class="cast-banner" id="cast-banner" hidden role="dialog" aria-label="Send a video to the TV">
+  <p id="cast-text"></p>
+  <div class="row">
+    <button class="btn primary" type="button" id="cast-send" style="background:var(--bg);color:var(--ink)">Send to TV</button>
+    <button class="btn quiet" type="button" id="cast-cancel">Cancel</button>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status" hidden></div>
+<!-- left out of the extension (remote script): https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js -->
+
+<script src="page-1.js"></script>
+</body>
+</html>

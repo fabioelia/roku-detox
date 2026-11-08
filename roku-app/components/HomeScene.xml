@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Detox Home main scene (FHD 1920x1080).
+  Fields set by source/main.brs:
+    config        = {mac, token, tv}             (from pkg:/config.json)
+    configMissing = true                         (config.json missing / unreadable)
+    deepLink      = {contentId, mediaType, seq}  (launch args or roInputEvent)
+-->
+<component name="HomeScene" extends="Scene">
+  <interface>
+    <field id="config" type="assocarray" onChange="onConfigSet"/>
+    <field id="configMissing" type="boolean" onChange="onConfigMissing"/>
+    <field id="deepLink" type="assocarray" alwaysNotify="true" onChange="onDeepLink"/>
+  </interface>
+  <script type="text/brightscript" uri="pkg:/components/HomeScene.brs"/>
+  <script type="text/brightscript" uri="pkg:/components/DetoxUtils.brs"/>
+  <children>
+    <Rectangle id="bg" width="1920" height="1080" color="0x10161FFF"/>
+
+    <!-- Home screen -->
+    <Group id="homeGroup">
+      <Label id="clockLabel" translation="[120,60]" width="1000" color="0xEEF2F6FF" font="font:LargeBoldSystemFont"/>
+      <Label id="dateLabel" translation="[124,210]" width="1000" color="0x8D9AA8FF" font="font:LargeSystemFont"/>
+      <Label id="tvNameLabel" translation="[1000,80]" width="800" horizAlign="right" color="0x5F6D7CFF" font="font:LargeSystemFont"/>
+
+      <Label id="appsTitle" translation="[120,330]" text="Your apps" color="0xC9D3DDFF" font="font:LargeBoldSystemFont"/>
+      <Label id="statusLabel" translation="[120,410]" width="1680" wrap="true" color="0x8D9AA8FF" text="Connecting to Roku Detox on your Mac…" font="font:LargeSystemFont"/>
+      <Label id="emptyLabel" translation="[120,410]" width="1680" wrap="true" visible="false" color="0xC9D3DDFF" text="Pick favorites in Roku Detox on your Mac (Remote menu > Choose favorites)." font="font:LargeSystemFont"/>
+      <Group id="appsArea" translation="[0,395]"/>
+
+      <Label id="inputsTitle" translation="[120,715]" text="Inputs" visible="false" color="0xC9D3DDFF" font="font:LargeBoldSystemFont"/>
+      <Group id="inputsArea" translation="[0,780]"/>
+    </Group>
+
+    <!-- "Can't reach Roku Detox on your Mac" -->
+    <Rectangle id="banner" translation="[1040,140]" width="760" height="64" color="0x4A3420FF" visible="false">
+      <Label id="bannerLabel" width="760" height="64" horizAlign="center" vertAlign="center" color="0xFFE2B8FF" text="Can't reach Roku Detox on your Mac" font="font:LargeSystemFont"/>
+    </Rectangle>
+
+    <MessageView id="messageView" visible="false"/>
+    <VideoView id="videoView" visible="false"/>
+
+    <!-- While fetching a deep-linked item -->
+    <Group id="loadingGroup" visible="false">
+      <Rectangle width="1920" height="1080" color="0x10161FFF"/>
+      <Label id="loadingLabel" width="1920" height="1080" horizAlign="center" vertAlign="center" color="0x8D9AA8FF" text="Loading…" font="font:LargeSystemFont"/>
+    </Group>
+
+    <!-- "Opening Netflix…" -->
+    <Group id="overlay" visible="false">
+      <Rectangle width="1920" height="1080" color="0x0A0E14E6"/>
+      <Label id="overlayTitle" translation="[160,430]" width="1600" horizAlign="center" color="0xFFFFFFFF" font="font:LargeBoldSystemFont"/>
+      <Label id="overlayText" translation="[160,550]" width="1600" horizAlign="center" wrap="true" color="0xC9D3DDFF" font="font:LargeSystemFont"/>
+    </Group>
+
+    <!-- config.json missing -->
+    <Group id="setupGroup" visible="false">
+      <Rectangle width="1920" height="1080" color="0x10161FFF"/>
+      <Label id="homeSceneText1" translation="[160,360]" width="1600" horizAlign="center" color="0x66C5B1FF" text="Almost ready" font="font:LargeBoldSystemFont"/>
+      <Label id="homeSceneText2" translation="[160,490]" width="1600" horizAlign="center" wrap="true" color="0xF2F5F8FF" text="Open Roku Detox on your Mac and press Install on TV again." font="font:LargeSystemFont"/>
+    </Group>
+
+    <Timer id="clockTimer" duration="1" repeat="true"/>
+    <Timer id="retryTimer" duration="30" repeat="true"/>
+    <Timer id="overlayTimer" duration="15" repeat="false"/>
+  </children>
+</component>

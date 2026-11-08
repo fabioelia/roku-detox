@@ -1,0 +1,37 @@
+# Roku Detox relay: Cloudflare Worker + one Durable Object class (both on the free plan).
+# Nothing is deployed from this repo automatically. Deploying needs the owner's OK and their own
+# Cloudflare account: `npx wrangler deploy` from this folder (see README.md).
+
+name = "roku-detox-relay"
+main = "src/worker.js"
+compatibility_date = "2026-10-01"
+
+# One Durable Object per household ("room"), addressed by the room id.
+[[durable_objects.bindings]]
+name = "ROOM"
+class_name = "Room"
+
+# SQLite-backed class: the only kind the free plan offers. The relay never writes to storage;
+# it only keeps the computer's WebSocket (hibernatable) and in-flight requests in memory.
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Room"]
+
+[vars]
+# Requests per rolling minute per household (each batch of calls made together counts once).
+RATE_LIMIT_PER_MINUTE = "120"
+
+# --- Optional: serve the phone page from this same Worker ------------------------------------------
+# Then the phone link https://<relay host>/#k=<key> opens the page itself, and the page calls
+# /room/<roomId>/request on its own origin. Workers static assets are free and don't run the Worker.
+#
+# Never point `directory` at the project folder: it holds logs and settings that must not be uploaded.
+# Copy just the page and the two client modules into ./public first, for example:
+#   mkdir -p public/relay && cp ../index.html public/ && cp client/relay-crypto.js client/relay-client.js public/relay/
+# then uncomment:
+#
+# [assets]
+# directory = "./public"
+# binding = "ASSETS"
+# not_found_handling = "none"
+# run_worker_first = ["/room/*"]

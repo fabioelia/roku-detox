@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  One tile on the home screen.
+    tileData = {kind: "app"|"input", name, icon (url, apps), port (inputs), w, h, nameSize}
+    highlighted = true draws the bright focus outline.
+  Focus itself stays on HomeScene; it just flips "highlighted".
+-->
+<component name="DetoxTile" extends="Group">
+  <interface>
+    <field id="tileData" type="assocarray" onChange="onTileDataChanged"/>
+    <field id="highlighted" type="boolean" onChange="onHighlightChanged"/>
+  </interface>
+  <script type="text/brightscript" uri="pkg:/components/DetoxTile.brs"/>
+  <script type="text/brightscript" uri="pkg:/components/DetoxUtils.brs"/>
+  <children>
+    <Rectangle id="outline" visible="false" color="0xF4F7FAFF"/>
+    <Rectangle id="boxRect" color="0x1B2430FF"/>
+    <Label id="boxTitle" horizAlign="center" vertAlign="center" wrap="true" color="0xD5DEE7FF"/>
+    <Label id="boxSub" horizAlign="center" vertAlign="top" color="0x8D9AA8FF"/>
+    <Poster id="poster" loadDisplayMode="scaleToFit"/>
+    <Label id="nameLabel" horizAlign="center" color="0x8D9AA8FF"/>
+  </children>
+</component>

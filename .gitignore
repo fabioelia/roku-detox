@@ -1,0 +1,16 @@
+# Your own data: settings, paired phones, undo list, rule activity and viewing log
+remote-settings.json
+remote-settings.json.*
+undo-list.json
+undo-list.json.*
+activity-log.json
+viewing-log.json
+*.damaged-*
+*.tmp
+
+__pycache__/
+*.pyc
+.DS_Store
+node_modules/
+.wrangler/
+deploy/data/

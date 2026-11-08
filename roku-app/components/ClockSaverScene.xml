@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  "Detox Clock" screensaver: black screen, soft gray clock + date that jumps to a
+  new random spot every 60 seconds (avoids burn-in). No network.
+-->
+<component name="ClockSaverScene" extends="Scene">
+  <interface>
+    <field id="clock24" type="boolean" onChange="onClock24Changed"/>
+  </interface>
+  <script type="text/brightscript" uri="pkg:/components/ClockSaverScene.brs"/>
+  <script type="text/brightscript" uri="pkg:/components/DetoxUtils.brs"/>
+  <children>
+    <Rectangle id="bg" width="1920" height="1080" color="0x000000FF"/>
+    <Group id="clockGroup" translation="[200,300]">
+      <Label id="timeLabel" width="820" horizAlign="left" color="0x8A9097FF" font="font:LargeSystemFont"/>
+      <Label id="dateLabel" translation="[8,215]" width="820" horizAlign="left" color="0x5C6168FF" font="font:LargeSystemFont"/>
+    </Group>
+    <Timer id="tickTimer" duration="1" repeat="true"/>
+    <Timer id="moveTimer" duration="60" repeat="true"/>
+  </children>
+</component>

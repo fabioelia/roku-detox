@@ -1,0 +1,105 @@
+/* Shared look for the popup and the options page (same colors as the app page). */
+:root {
+  --bg: #E6EBEF;
+  --surface: #F3F6F8;
+  --raised: #FFFFFF;
+  --ink: #17202C;
+  --muted: #556071;
+  --line: #CBD3DC;
+  --keep: #1F6B5B;
+  --keep-soft: #D3EAE3;
+  --on-keep: #FFFFFF;
+  --remove: #A6364F;
+  --remove-soft: #F6DDE3;
+  --focus: #2C66D0;
+  --radius-s: 8px;
+  --radius-m: 12px;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #10161F;
+    --surface: #172030;
+    --raised: #1E2839;
+    --ink: #E4E9F0;
+    --muted: #9AA5B6;
+    --line: #2A3446;
+    --keep: #66C5B1;
+    --keep-soft: #1B3731;
+    --on-keep: #0D1B17;
+    --remove: #EF8FA4;
+    --remove-soft: #40212A;
+    --focus: #7EA9FF;
+    color-scheme: dark;
+  }
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+h1, h2 { margin: 0; line-height: 1.2; }
+h1 { font-size: 16px; font-weight: 700; }
+h2 { font-size: 13px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+p { margin: 0; }
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-s);
+  background: var(--raised);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.btn:hover { border-color: var(--muted); }
+.btn.primary { background: var(--keep); border-color: var(--keep); color: var(--on-keep); }
+.btn.primary:hover { filter: brightness(1.06); }
+.btn:disabled { opacity: .5; cursor: default; filter: none; }
+.btn.wide { width: 100%; }
+.btn:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+a { color: var(--keep); }
+
+input[type="text"], select {
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-s);
+  background: var(--raised);
+  color: var(--ink);
+  font: inherit;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-m);
+  padding: 14px;
+}
+
+.muted { color: var(--muted); }
+.small { font-size: 12.5px; }
+.status { min-height: 1.45em; font-size: 13px; }
+.status[data-state="ok"] { color: var(--keep); }
+.status[data-state="problem"] { color: var(--remove); }
+code {
+  font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 1px 5px;
+  overflow-wrap: anywhere;
+}

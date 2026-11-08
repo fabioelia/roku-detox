@@ -1,0 +1,4040 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="roku-detox-extension" content="">
+<title>Roku Detox</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:wght@400;600;700&family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #E6EBEF;
+    --surface: #F3F6F8;
+    --raised: #FFFFFF;
+    --ink: #17202C;
+    --muted: #556071;
+    --line: #CBD3DC;
+    --keep: #1F6B5B;
+    --keep-soft: #D3EAE3;
+    --remove: #A6364F;
+    --remove-soft: #F6DDE3;
+    --on-remove: #FFFFFF;
+    --warn-soft: #FAE9C3;
+    --warn-ink: #5E4100;
+    --remote: #222A38;
+    --remote-key: #333D50;
+    --remote-key-hi: #434E65;
+    --remote-label: #E9EDF3;
+    --remote-glow: #7CCFBF;
+    --focus: #2C66D0;
+    --radius-s: 8px;
+    --radius-m: 14px;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #10161F;
+      --surface: #172030;
+      --raised: #1E2839;
+      --ink: #E4E9F0;
+      --muted: #9AA5B6;
+      --line: #2A3446;
+      --keep: #66C5B1;
+      --keep-soft: #1B3731;
+      --remove: #EF8FA4;
+      --remove-soft: #40212A;
+      --on-remove: #2A0E16;
+      --warn-soft: #3A2F16;
+      --warn-ink: #F3D58F;
+      --remote: #2A3344;
+      --remote-key: #3A4559;
+      --remote-key-hi: #4B5770;
+      --focus: #7EA9FF;
+      color-scheme: dark;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 400 17px/1.5 "Atkinson Hyperlegible Next", "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  h1, h2, h3 {
+    font-family: "Bricolage Grotesque", "Atkinson Hyperlegible Next", system-ui, sans-serif;
+    line-height: 1.12;
+    margin: 0;
+  }
+  p { margin: 0; }
+  button, input, select { font: inherit; color: inherit; }
+  :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+
+  .shell { max-width: 1160px; margin: 0 auto; padding: 20px 24px 64px; }
+
+  /* Header */
+  .top {
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+    gap: 12px 24px; padding-bottom: 18px; border-bottom: 1px solid var(--line);
+  }
+  .brand { display: flex; align-items: center; gap: 10px; font-size: 22px; font-weight: 800; letter-spacing: -0.01em; }
+  .brand svg { width: 30px; height: 30px; flex: none; }
+  .picker { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .picker label { color: var(--muted); font-size: 15px; }
+  select, input[type="text"] {
+    min-height: 42px; padding: 8px 12px; border-radius: var(--radius-s);
+    border: 1px solid var(--line); background: var(--raised);
+  }
+  select { max-width: 260px; }
+  .manual { display: flex; gap: 8px; }
+  .manual input { width: 170px; }
+
+  .btn {
+    min-height: 42px; padding: 8px 18px; border-radius: 999px; cursor: pointer;
+    border: 1px solid var(--line); background: var(--raised); font-weight: 600; white-space: nowrap;
+  }
+  .btn:hover:not(:disabled) { border-color: var(--muted); }
+  .btn.primary { background: var(--ink); border-color: var(--ink); color: var(--bg); }
+  .btn.danger { background: var(--remove); border-color: var(--remove); color: var(--on-remove); }
+  .btn.quiet { background: transparent; border-color: transparent; text-decoration: underline; text-underline-offset: 3px; padding-inline: 8px; }
+  .btn:disabled { opacity: .55; cursor: not-allowed; }
+  .picker-note { width: 100%; color: var(--muted); font-size: 15px; text-align: right; }
+
+  /* The TV you're connected to */
+  .tv { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 22px; align-items: center; padding: 30px 0 26px; }
+  .tv-glyph { width: 104px; }
+  .tv-glyph .screen {
+    aspect-ratio: 16 / 10; border: 4px solid var(--ink); border-radius: 9px;
+    background: var(--surface); display: grid; place-items: center; transition: background .3s;
+  }
+  .tv-glyph .screen span { width: 14px; height: 14px; border-radius: 50%; background: var(--line); transition: background .3s; }
+  .tv-glyph .stand { width: 40%; height: 7px; margin: 0 auto; border-radius: 0 0 6px 6px; background: var(--ink); }
+  .tv[data-state="ready"] .screen { background: var(--keep-soft); }
+  .tv[data-state="ready"] .screen span { background: var(--keep); }
+  .tv[data-state="limited"] .screen { background: var(--warn-soft); }
+  .tv[data-state="limited"] .screen span { background: var(--warn-ink); }
+  .tv[data-state="offline"] .screen span { background: var(--remove); }
+  .tv-name { font-size: clamp(28px, 4.4vw, 42px); font-weight: 800; letter-spacing: -0.02em; overflow-wrap: anywhere; }
+  .tv-status { margin-top: 6px; font-weight: 600; }
+  .tv-facts { display: flex; flex-wrap: wrap; gap: 4px 26px; margin: 10px 0 0; font-size: 15px; }
+  .tv-facts div { display: flex; gap: 6px; }
+  .tv-facts dt { color: var(--muted); }
+  .tv-facts dd { margin: 0; font-weight: 600; }
+
+  /* How this page reaches the TV (see ENGINE.md) */
+  .engine-badge {
+    display: inline-block; margin-top: 10px; padding: 2px 12px; border: 1px solid var(--line); border-radius: 999px;
+    background: var(--surface); color: var(--muted); font-size: 14px; font-weight: 600;
+  }
+  .engine-warn {
+    max-width: 74ch; margin-top: 10px; padding: 8px 14px; border-radius: var(--radius-s);
+    background: var(--warn-soft); color: var(--warn-ink); font-size: 15px;
+  }
+  [data-engine="lite"] .needs-engine { display: none !important; }
+  .engine-note.section { padding-top: 0; border-top: 0; }
+  .engine-note .note { max-width: 64ch; }
+  .empty.wide { grid-column: 1 / -1; max-width: 64ch; }
+
+  .notice {
+    background: var(--warn-soft); color: var(--warn-ink); border-radius: var(--radius-m);
+    padding: 18px 22px; margin-bottom: 30px; max-width: 74ch;
+  }
+  .notice h2 { font-size: 20px; margin-bottom: 6px; }
+  .notice ol { margin: 8px 0 14px; padding-left: 1.3em; }
+  .notice li + li { margin-top: 2px; }
+  .notice .fine { font-size: 15px; margin-top: 12px; }
+  .notice .btn { border-color: currentColor; background: transparent; }
+
+  /* Menus */
+  .views {
+    display: flex; gap: 4px; width: fit-content; max-width: 100%; margin: 0 0 30px; padding: 4px;
+    overflow-x: auto; border: 1px solid var(--line); border-radius: 999px; background: var(--surface);
+  }
+  .views button {
+    min-height: 40px; padding: 6px 22px; border: 0; border-radius: 999px; background: transparent;
+    color: var(--muted); font-weight: 600; white-space: nowrap; cursor: pointer;
+  }
+  .views button:hover { color: var(--ink); }
+  .views button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+  .tile.busy { border-color: var(--keep); }
+
+  /* Rules */
+  .rules-status { display: flex; align-items: center; gap: 10px; margin: -6px 0 18px; font-weight: 600; }
+  .rules-status::before { content: ""; width: 10px; height: 10px; border-radius: 50%; background: var(--line); flex: none; }
+  .rules-status[data-state="on"]::before { background: var(--keep); }
+  .rules-status[data-state="problem"]::before { background: var(--remove); }
+  .rule-list { list-style: none; padding: 0; margin: 0; max-width: 74ch; }
+  .rule { padding: 18px 0; border-bottom: 1px solid var(--line); }
+  .rule:last-child { border-bottom: 0; }
+  .rule-head { display: flex; align-items: center; gap: 12px; cursor: pointer; }
+  .rule-head input { width: 22px; height: 22px; accent-color: var(--keep); flex: none; }
+  .rule-head strong { font-size: 18px; font-weight: 700; }
+  .rule > .note { margin: 4px 0 0 34px; }
+  .rule-body { margin: 12px 0 0 34px; display: grid; gap: 10px; }
+  .rule-body .line { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
+  .rule-body select { max-width: 240px; }
+  .rule-body input[type="time"], .rule-body input[type="number"] {
+    min-height: 42px; padding: 6px 10px; border-radius: var(--radius-s); border: 1px solid var(--line); background: var(--raised);
+  }
+  .rule-body input[type="number"] { width: 84px; }
+  .rule-body .used { font-size: 14px; color: var(--muted); }
+  .rule .chips .chip { padding-left: 14px; }
+  .rule .chip[aria-pressed="true"] { border-color: var(--remove); background: var(--remove-soft); text-decoration: none; color: var(--ink); }
+  .rule .chip[aria-pressed="false"] { text-decoration: none; }
+  .usage, .activity, .checks { list-style: none; padding: 0; margin: 0; max-width: 74ch; }
+  .usage li, .activity li, .checks li { display: flex; gap: 14px; padding: 9px 0; border-bottom: 1px solid var(--line); }
+  .usage li:last-child, .activity li:last-child, .checks li:last-child { border-bottom: 0; }
+  .usage li span:first-child { flex: 1; }
+  .usage li span:last-child { font-weight: 600; font-variant-numeric: tabular-nums; }
+  .activity time { flex: none; width: 92px; color: var(--muted); font-size: 14px; padding-top: 2px; }
+  .activity li.alert span { color: var(--remove); font-weight: 600; }
+  .checks .mark { flex: none; width: 22px; font-weight: 800; color: var(--keep); }
+  .checks .mark.bad { color: var(--remove); }
+  .checks p { font-size: 15px; color: var(--muted); }
+
+  /* TV app */
+  .app-steps { max-width: 74ch; margin: 0 0 18px; padding-left: 1.3em; }
+  .app-steps li + li { margin-top: 4px; }
+  .install-form { display: flex; flex-wrap: wrap; gap: 8px; max-width: 560px; }
+  .install-form input { flex: 1; min-width: 200px; min-height: 46px; padding: 8px 14px; border-radius: var(--radius-s); border: 1px solid var(--line); background: var(--raised); }
+  .app-status { display: flex; align-items: center; gap: 10px; margin: 0 0 18px; font-weight: 600; }
+  .app-status::before { content: ""; width: 10px; height: 10px; border-radius: 50%; background: var(--line); flex: none; }
+  .app-status[data-state="on"]::before { background: var(--keep); }
+  .app-status[data-state="problem"]::before { background: var(--remove); }
+  .option-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; cursor: pointer; }
+  .option-row input { width: 20px; height: 20px; accent-color: var(--keep); }
+  .bookmarklet { display: inline-flex; align-items: center; min-height: 42px; padding: 8px 18px; border-radius: 999px; background: var(--keep); color: var(--raised); font-weight: 700; text-decoration: none; cursor: grab; }
+  .cast-banner {
+    position: fixed; left: 50%; bottom: 20px; z-index: 25; transform: translateX(-50%); width: min(560px, calc(100vw - 32px));
+    display: grid; gap: 10px; padding: 16px 18px; border-radius: var(--radius-m); background: var(--ink); color: var(--bg);
+    box-shadow: 0 16px 40px -16px rgba(0, 0, 0, .6);
+  }
+  .cast-banner .row { display: flex; flex-wrap: wrap; gap: 8px; }
+  .cast-banner .btn.quiet { color: var(--bg); }
+
+  /* My sites */
+  .find-source { margin: 0 0 16px; }
+  .site-group + .site-group { margin-top: 26px; }
+  .site-group .subhead { margin: 0 0 4px; }
+  .site-thumb { width: 160px; aspect-ratio: 16 / 9; border-radius: 8px; overflow: hidden; background: var(--line); }
+  .site-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .site-result { grid-template-columns: 160px minmax(0, 1fr); }
+  .site-result h3 { font-size: 18px; }
+  .site-result .meta { overflow-wrap: anywhere; }
+  @media (max-width: 600px) { .site-result { grid-template-columns: 112px minmax(0, 1fr); } .site-thumb { width: 112px; } }
+
+  /* Find a show */
+  .find-form { display: flex; gap: 8px; max-width: 560px; }
+  .find-form input { flex: 1; min-width: 0; min-height: 46px; padding: 8px 14px; border-radius: var(--radius-s); border: 1px solid var(--line); background: var(--raised); font-size: 18px; }
+  .services { margin: 18px 0 8px; max-width: 74ch; }
+  .services summary { cursor: pointer; font-weight: 600; }
+  .services summary span { color: var(--muted); font-weight: 400; }
+  .services .note { margin: 8px 0 12px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 8px; min-height: 38px; padding: 4px 14px 4px 6px;
+    border: 1px solid var(--line); border-radius: 999px; background: var(--raised); cursor: pointer; font-size: 15px;
+  }
+  .chip img { width: 36px; height: 27px; border-radius: 5px; object-fit: cover; }
+  .chip[aria-pressed="true"] { border-color: var(--keep); background: var(--keep-soft); font-weight: 600; }
+  .chip[aria-pressed="false"] { color: var(--muted); text-decoration: line-through; }
+  .results { list-style: none; padding: 0; margin: 22px 0 0; max-width: 80ch; }
+  .result { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 16px; padding: 18px 0; border-bottom: 1px solid var(--line); }
+  .result:last-child { border-bottom: 0; }
+  .poster { width: 92px; aspect-ratio: 2 / 3; border-radius: 8px; overflow: hidden; background: var(--line); }
+  .poster img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .result h3 { font-size: 21px; font-weight: 800; letter-spacing: -0.01em; }
+  .result .meta { color: var(--muted); font-size: 14px; margin-top: 2px; }
+  .result .desc { font-size: 15px; margin-top: 6px; max-width: 64ch; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .watch-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  .watch-btn { display: inline-flex; align-items: center; gap: 8px; padding-left: 6px; }
+  .watch-btn img { width: 36px; height: 27px; border-radius: 5px; object-fit: cover; }
+  .watch-btn small { font-weight: 400; color: inherit; opacity: .8; }
+  .elsewhere { margin-top: 10px; font-size: 14px; color: var(--muted); }
+  .btn[aria-disabled="true"] { opacity: .55; cursor: progress; }
+  .sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+  .tag { display: inline-block; padding: 1px 10px; border-radius: 999px; background: var(--keep); color: var(--raised); font-size: 13px; font-weight: 700; line-height: 1.5; white-space: nowrap; }
+  /* Continue watching */
+  .continue { margin-top: 26px; max-width: 80ch; }
+  .continue .subhead { margin: 0; }
+  .continue .results { margin-top: 2px; }
+  .continue > .btn.quiet { margin: 4px 0 0 -8px; }
+  .cw-head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
+  .cw-app { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 14px; color: var(--muted); }
+  .cw-app img { width: 32px; height: 24px; border-radius: 4px; object-fit: cover; }
+  /* Season and episode picker */
+  .result > .episodes { grid-column: 2; }
+  .episodes { margin-top: -2px; padding: 12px 14px 4px; border: 1px solid var(--line); border-radius: var(--radius-m); background: var(--surface); }
+  .episodes > .note { padding-bottom: 8px; }
+  .season-chips, .season-select { margin-bottom: 8px; }
+  .season-chips .chip { padding: 4px 14px; }
+  .season-chips .chip[aria-pressed="false"] { color: var(--ink); text-decoration: none; }
+  .ep-list { position: relative; list-style: none; padding: 0; margin: 0 -8px; max-height: min(30rem, 70vh); overflow-y: auto; overscroll-behavior: contain; }
+  .episode { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 10px; padding: 12px 8px; border-top: 1px solid var(--line); }
+  .episode:first-child { border-top: 0; }
+  .episode.current { border-top-color: transparent; border-radius: var(--radius-s); background: var(--keep-soft); }
+  .episode.current + .episode { border-top-color: transparent; }
+  .ep-mark { padding-top: 3px; color: var(--keep); }
+  .ep-mark svg { display: block; width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+  .ep-title { font-weight: 600; line-height: 1.35; }
+  .ep-title .tag { margin-left: 4px; vertical-align: 1px; }
+  .episode.watched .ep-title { color: var(--muted); }
+  .ep-n { font-variant-numeric: tabular-nums; }
+  .ep-time { margin-left: 4px; color: var(--muted); font-size: 14px; font-weight: 400; white-space: nowrap; }
+  .ep-desc { margin-top: 2px; font-size: 14px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .episode .watch-row { gap: 6px; margin-top: 8px; }
+  .episode .btn { min-height: 38px; padding-block: 4px; font-size: 15px; }
+  .episode .watch-btn img { width: 32px; height: 24px; }
+  .episode .note { margin-top: 6px; }
+  @media (max-width: 600px) {
+    .result { grid-template-columns: 72px minmax(0, 1fr); } .poster { width: 72px; }
+    .result > .episodes { grid-column: 1 / -1; }
+  }
+
+  /* Main layout */
+  .layout { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 44px; align-items: start; }
+  .side {
+    position: sticky; top: 20px; max-height: calc(100vh - 40px); overflow-y: auto;
+    display: grid; gap: 18px; justify-items: center; padding: 4px 4px 12px; margin: -4px;
+  }
+  @media (max-width: 880px) {
+    .layout { grid-template-columns: minmax(0, 1fr); gap: 28px; }
+    .side { position: static; order: -1; max-height: none; overflow: visible; }
+  }
+  @media (max-width: 600px) {
+    .shell { padding: 16px 16px 48px; }
+    .picker-note { text-align: left; }
+    .tv { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+    .tv-glyph { width: 76px; }
+  }
+
+  .section { padding: 30px 0; border-top: 1px solid var(--line); }
+  .section:first-child { padding-top: 0; border-top: 0; }
+  .section-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 16px; }
+  .section h2 { font-size: 27px; font-weight: 800; letter-spacing: -0.01em; }
+  .intro { color: var(--muted); max-width: 64ch; margin: 8px 0 20px; }
+  .subhead { font-family: inherit; font-size: 18px; font-weight: 600; line-height: 1.3; margin: 32px 0 12px; }
+
+  /* Channel tiles */
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(148px, 1fr)); gap: 14px; }
+  .tile {
+    position: relative; display: grid; align-content: start; gap: 6px; padding: 7px 7px 12px;
+    text-align: left; border-radius: var(--radius-m); background: var(--surface);
+    border: 2px solid transparent; cursor: pointer;
+  }
+  .tile:hover { border-color: var(--line); }
+  .tile:disabled { cursor: default; }
+  .tile-art {
+    position: relative; display: grid; place-items: center; aspect-ratio: 290 / 218;
+    border-radius: 9px; overflow: hidden; background: var(--line);
+  }
+  .tile-art::before {
+    content: attr(data-initials); color: var(--muted);
+    font: 800 26px/1 "Bricolage Grotesque", system-ui, sans-serif;
+  }
+  .tile-art:has(img)::before { content: none; }
+  .tile-art img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transition: opacity .2s, filter .2s; }
+  .tile-name { padding: 0 4px; font-size: 15px; font-weight: 600; line-height: 1.3; overflow-wrap: anywhere; }
+  .tile-tag { padding: 0 4px; font-size: 13px; color: var(--muted); }
+  .tile[aria-pressed="true"] { border-color: var(--remove); background: var(--remove-soft); }
+  .tile[aria-pressed="true"] img { opacity: .4; filter: grayscale(1); }
+  .tile[aria-pressed="true"]::after {
+    content: "Remove"; position: absolute; top: 13px; right: 13px; padding: 1px 10px;
+    border-radius: 999px; background: var(--remove); color: var(--on-remove); font-size: 13px; font-weight: 700;
+  }
+  .tile.is-current { outline: 3px solid var(--remove); outline-offset: 2px; }
+  .tile.fixed { background: transparent; border: 1px dashed var(--line); cursor: default; padding: 8px 8px 12px; }
+  .empty { color: var(--muted); }
+
+  .select-bar {
+    position: sticky; bottom: 16px; z-index: 5; display: flex; align-items: center; gap: 10px;
+    margin-top: 22px; padding: 8px 8px 8px 22px; border-radius: 999px;
+    background: var(--ink); color: var(--bg); box-shadow: 0 14px 32px -14px rgba(0, 0, 0, .5);
+  }
+  .select-bar p { margin-right: auto; }
+  .select-bar .btn.quiet { color: var(--bg); }
+
+  /* Finish-up checklist (in order) */
+  .steps { list-style: none; padding: 0; margin: 0; max-width: 74ch; }
+  .steps li { display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 2px 14px; padding: 16px 0; border-bottom: 1px solid var(--line); }
+  .steps li:last-child { border-bottom: 0; }
+  .steps input[type="checkbox"] { width: 22px; height: 22px; margin: 3px 0 0; accent-color: var(--keep); }
+  .steps label { cursor: pointer; }
+  .steps strong { display: block; font-weight: 600; }
+  .steps .path { display: block; color: var(--muted); font-size: 15px; margin-top: 2px; }
+  .steps li.done strong { color: var(--muted); text-decoration: line-through; }
+  .steps .actions { grid-column: 2; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 10px; }
+  .restart-msg { font-weight: 600; }
+  .restart-msg.good { color: var(--keep); }
+  .restart-msg.bad { color: var(--remove); }
+
+  /* Undo list */
+  .undo { list-style: none; padding: 0; margin: 0; max-width: 74ch; }
+  .undo li { display: flex; align-items: center; gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+  .undo li > div { flex: 1; min-width: 0; }
+  .undo strong { font-weight: 600; }
+  .undo .meta { display: block; color: var(--muted); font-size: 14px; }
+
+  /* Removal in progress */
+  .job { width: 100%; padding: 16px 18px 14px; border: 2px solid var(--remove); border-radius: var(--radius-m); background: var(--raised); }
+  .job[data-mode="reinstall"] { border-color: var(--keep); }
+  .job h3 { font-size: 20px; font-weight: 800; overflow-wrap: anywhere; }
+  .job-count { display: block; margin-top: 2px; color: var(--muted); font-size: 14px; }
+  .job ol { list-style: none; padding: 0; margin: 14px 0 10px; display: grid; gap: 9px; }
+  .job li { display: grid; grid-template-columns: 20px 1fr; gap: 10px; color: var(--muted); font-size: 15px; line-height: 1.35; }
+  .job li .mark { width: 16px; height: 16px; margin-top: 2px; border-radius: 50%; border: 2px solid var(--line); }
+  .job li.now { color: var(--ink); font-weight: 600; }
+  .job li.now .mark { border-color: var(--remove); background: var(--remove); animation: pulse 1.2s ease-in-out infinite; }
+  .job[data-mode="reinstall"] li.now .mark { border-color: var(--keep); background: var(--keep); }
+  .job li.ok { color: var(--ink); }
+  .job li.ok .mark { position: relative; border: 0; background: var(--keep); }
+  .job li.ok .mark::after {
+    content: ""; position: absolute; left: 5.5px; top: 2.5px; width: 5px; height: 9px;
+    border: solid var(--raised); border-width: 0 2px 2px 0; transform: rotate(45deg);
+  }
+  .job .hint { font-size: 14px; color: var(--muted); }
+  .job .error { color: var(--remove); font-weight: 600; font-size: 15px; }
+  .job .row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  .job .btn { min-height: 36px; padding: 5px 14px; font-size: 15px; }
+  @keyframes pulse { 50% { transform: scale(.7); opacity: .6; } }
+
+  /* The remote */
+  .remote {
+    width: 236px; display: grid; justify-items: center; gap: 18px;
+    padding: 26px 24px 32px; border-radius: 52px 52px 64px 64px;
+    background: var(--remote); color: var(--remote-label);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08), inset 0 -3px 0 rgba(0, 0, 0, .25), 0 26px 50px -26px rgba(10, 18, 34, .65);
+  }
+  .remote[aria-disabled="true"] { opacity: .5; }
+  .r-row { display: flex; justify-content: center; gap: 14px; width: 100%; }
+  .r-row.ends { justify-content: space-between; }
+  .rk {
+    display: grid; place-items: center; width: 52px; height: 40px; padding: 0;
+    border: 0; border-radius: 14px; background: var(--remote-key); color: var(--remote-label);
+    cursor: pointer; transition: background .12s, box-shadow .25s, transform .06s;
+  }
+  .rk svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .rk svg.solid { fill: currentColor; stroke: none; }
+  .rk:hover:not(:disabled) { background: var(--remote-key-hi); }
+  .rk:active:not(:disabled) { transform: translateY(1px); }
+  .rk:disabled { cursor: not-allowed; }
+  .rk:focus-visible { outline: 3px solid var(--remote-glow); outline-offset: 2px; }
+  .rk.sent { box-shadow: 0 0 0 3px var(--remote-glow); }
+  .rk.power { width: 42px; height: 42px; border-radius: 50%; color: #FFA3B5; }
+  .dpad { position: relative; width: 178px; height: 178px; border-radius: 50%; background: var(--remote-key); }
+  .dpad .rk { position: absolute; width: 56px; height: 56px; border-radius: 50%; background: transparent; }
+  .dpad .rk:hover:not(:disabled) { background: rgba(255, 255, 255, .08); }
+  .dpad .up { top: 3px; left: 61px; }
+  .dpad .down { bottom: 3px; left: 61px; }
+  .dpad .left { left: 3px; top: 61px; }
+  .dpad .right { right: 3px; top: 61px; }
+  .dpad .ok { left: 50px; top: 50px; width: 78px; height: 78px; background: var(--remote); font-weight: 700; font-size: 17px; }
+  .dpad .ok:hover:not(:disabled) { background: #1A212D; }
+  .r-label { margin-top: -10px; font-size: 12px; opacity: .7; }
+  .remote-note { max-width: 280px; text-align: center; font-size: 14px; color: var(--muted); }
+  .remote-error { max-width: 280px; text-align: center; font-size: 15px; font-weight: 600; color: var(--remove); }
+  .smart { width: 100%; max-width: 300px; display: grid; gap: 8px; }
+  .smart label { font-size: 14px; color: var(--muted); }
+  .smart-actions { display: flex; gap: 8px; }
+  .smart-actions .btn { flex: 1; padding-inline: 10px; }
+
+  /* Now playing */
+  .now { width: 100%; display: grid; grid-template-columns: 72px minmax(0, 1fr); gap: 12px; align-items: center; }
+  .now-art::before { font-size: 18px; }
+  .now-app { font-weight: 700; line-height: 1.25; overflow-wrap: anywhere; }
+  .now-state { font-size: 14px; color: var(--muted); }
+  .now-bar { height: 4px; margin-top: 6px; border-radius: 2px; overflow: hidden; background: var(--line); }
+  .now-bar span { display: block; height: 100%; background: var(--keep); }
+
+  /* Shortcuts */
+  .shortcut-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 26px 0 12px; }
+  .shortcut-head .subhead { margin: 0; }
+  .shortcuts { display: flex; flex-wrap: wrap; gap: 10px; }
+  .shortcut {
+    display: grid; align-content: start; gap: 6px; width: 116px; padding: 6px 6px 10px; text-align: left;
+    border: 2px solid transparent; border-radius: var(--radius-m); background: var(--surface); cursor: pointer;
+  }
+  .shortcut:hover:not(:disabled) { border-color: var(--line); }
+  .shortcut .tile-art { border-radius: 7px; }
+  .shortcut .tile-art::before { font-size: 20px; }
+  .shortcut-name { padding: 0 2px; font-size: 14px; font-weight: 600; line-height: 1.25; overflow-wrap: anywhere; }
+  .shortcut-port { padding: 0 2px; font-size: 12px; color: var(--muted); }
+  .shortcut.input { width: auto; min-width: 116px; padding: 12px 16px; align-content: center; }
+  .shortcut.busy { border-color: var(--keep); }
+  .fav-editor .grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+  .fav-editor .tile[aria-pressed="true"] { border-color: var(--keep); background: var(--keep-soft); }
+  .fav-editor .tile[aria-pressed="true"] img { opacity: 1; filter: none; }
+  .fav-editor .tile[aria-pressed="true"]::after { content: "Shortcut"; background: var(--keep); color: var(--raised); }
+  .row-gap { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+  .note { font-size: 14px; color: var(--muted); }
+  .scene-editor .error, #phone-body .error { color: var(--remove); font-weight: 600; }
+
+  .scenes { list-style: none; padding: 0; margin: 0; max-width: 74ch; }
+  .scenes li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+  .scenes li:last-child { border-bottom: 0; }
+  .scenes li > div { flex: 1; min-width: 200px; }
+  .scenes strong { font-weight: 700; }
+  .scenes .meta { display: block; font-size: 14px; color: var(--muted); }
+  .scene-editor {
+    display: grid; gap: 16px; max-width: 74ch; margin-top: 14px; padding: 18px 20px;
+    border-radius: var(--radius-m); background: var(--surface);
+  }
+  .scene-editor .field { display: grid; gap: 4px; font-size: 15px; font-weight: 600; }
+  .field-label { margin-bottom: 8px; font-size: 15px; font-weight: 600; }
+  .scene-steps { padding-left: 1.4em; margin: 0 0 8px; display: grid; gap: 8px; }
+  .scene-steps li { padding-left: 4px; }
+  .scene-steps .step { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .scene-steps select { max-width: 230px; }
+  .scene-editor input[type="number"], .scene-editor input[type="time"] {
+    min-height: 42px; padding: 6px 10px; border-radius: var(--radius-s); border: 1px solid var(--line); background: var(--raised);
+  }
+  .scene-editor input[type="number"] { width: 80px; }
+  .scene-time { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+  .scene-time label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+  .scene-time input[type="checkbox"] { width: 20px; height: 20px; accent-color: var(--keep); }
+  .scene-editor .row { display: flex; flex-wrap: wrap; gap: 8px; }
+
+  /* Phone remote */
+  .phone-box { display: flex; flex-wrap: wrap; align-items: center; gap: 20px 28px; max-width: 74ch; }
+  .qr { width: 168px; height: 168px; padding: 8px; border-radius: var(--radius-s); background: #FFFFFF; }
+  .qr img, .qr canvas { display: block; width: 100%; height: 100%; }
+  .phone-url { font-weight: 600; overflow-wrap: anywhere; }
+  .phone-code { margin-top: 4px; font: 800 36px/1 "Bricolage Grotesque", system-ui, sans-serif; letter-spacing: .14em; }
+
+  .pair { position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; padding: 24px 16px; background: var(--bg); }
+  .pair-card { display: grid; gap: 14px; width: 100%; max-width: 380px; }
+  .pair h2 { font-size: 30px; font-weight: 800; letter-spacing: -0.01em; }
+  .pair form { display: flex; gap: 8px; }
+  .pair input { flex: 1; min-width: 0; font-size: 26px; letter-spacing: .2em; text-align: center; }
+  .pair .error { color: var(--remove); font-weight: 600; }
+  @media (hover: none) { .remote-note { display: none; } }
+
+  .toast {
+    position: fixed; top: 16px; left: 50%; z-index: 20; transform: translateX(-50%);
+    max-width: calc(100vw - 32px); padding: 10px 20px; border-radius: 999px;
+    background: var(--ink); color: var(--bg); font-weight: 600; box-shadow: 0 12px 30px -12px rgba(0, 0, 0, .5);
+  }
+  footer { margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--line); color: var(--muted); font-size: 14px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { transition: none !important; animation: none !important; }
+  }
+</style>
+</head>
+<body>
+<div class="shell">
+  <header class="top">
+    <h1 class="brand">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><rect x="3" y="6" width="26" height="17" rx="3" fill="none" stroke="currentColor" stroke-width="2.5"/><path d="M11 27h10" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/><path d="m11.5 14.5 3 3 6-6" fill="none" stroke="var(--keep)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Roku Detox
+    </h1>
+    <div class="picker">
+      <label for="tv-select" id="picker-label">TV</label>
+      <select id="tv-select" class="needs-engine" disabled><option>Looking…</option></select>
+      <button class="btn needs-engine" id="find-btn" type="button">Find TVs</button>
+      <form class="manual" id="manual-form">
+        <input type="text" id="manual-input" placeholder="Or type its IP address" aria-label="TV IP address" inputmode="decimal" autocomplete="off">
+        <button class="btn" type="submit">Connect</button>
+      </form>
+      <p class="picker-note" id="picker-note" aria-live="polite"></p>
+    </div>
+  </header>
+
+  <section class="tv" id="tv" data-state="none">
+    <div class="tv-glyph" aria-hidden="true"><div class="screen"><span></span></div><div class="stand"></div></div>
+    <div>
+      <h2 class="tv-name" id="tv-name">No TV connected yet</h2>
+      <p class="tv-status" id="tv-status" role="status">Looking for Roku TVs on your Wi-Fi.</p>
+      <p class="engine-badge" id="engine-badge" hidden></p>
+      <dl class="tv-facts" id="tv-facts"></dl>
+      <p class="engine-warn" id="https-note" hidden>This page is secure (https), so your browser may block it from talking to the TV. Use the http:// link instead.</p>
+    </div>
+  </section>
+
+  <section class="notice" id="notice" hidden>
+    <h2>Let this page use your TV</h2>
+    <p>Right now the TV only shares basic info. To see your channels and use the remote here:</p>
+    <ol>
+      <li>On the TV, press Home and open Settings.</li>
+      <li>Go to System, then Advanced system settings, then Control by mobile apps, then Network access.</li>
+      <li>Choose Default. Some TVs call it Enabled.</li>
+    </ol>
+    <button class="btn" id="recheck-btn" type="button">Check again</button>
+    <p class="fine">While this is on, any device on your Wi-Fi can control the TV. Set it back to Limited when you're done. It's the last step on this page.</p>
+  </section>
+
+  <nav class="views" id="views" aria-label="Menu">
+    <button type="button" data-view="remote" aria-pressed="true">Remote</button>
+    <button type="button" data-view="find" aria-pressed="false">Find a show</button>
+    <button type="button" data-view="rules" aria-pressed="false">Rules</button>
+    <button type="button" data-view="cleanup" aria-pressed="false">Clean up</button>
+    <button type="button" data-view="tvapp" aria-pressed="false">TV app</button>
+    <button type="button" data-view="phone" aria-pressed="false">Phone</button>
+  </nav>
+
+  <div class="layout">
+    <main>
+      <div class="view" data-view="remote">
+      <section class="section" id="shortcuts" hidden>
+        <h2>Open on the TV</h2>
+        <p class="intro">Tap an app or input to open it. Scenes run a few steps at once.</p>
+
+        <div class="shortcut-head">
+          <h3 class="subhead">Favorites</h3>
+          <button class="btn quiet" id="fav-edit" type="button">Choose favorites</button>
+        </div>
+        <div class="shortcuts" id="fav-row"></div>
+        <div class="fav-editor" id="fav-editor" hidden>
+          <p class="intro">Tap the apps you want at the top.</p>
+          <div class="grid" id="fav-grid"></div>
+          <div class="row-gap">
+            <button class="btn primary" id="fav-save" type="button">Save favorites</button>
+            <button class="btn" id="fav-cancel" type="button">Cancel</button>
+          </div>
+        </div>
+
+        <div class="shortcut-head"><h3 class="subhead">Inputs</h3></div>
+        <div class="shortcuts" id="input-row"></div>
+
+        <div class="shortcut-head">
+          <h3 class="subhead">Scenes</h3>
+          <button class="btn quiet" id="scene-new" type="button">New scene</button>
+        </div>
+        <ul class="scenes" id="scene-list"></ul>
+        <div class="scene-editor" id="scene-editor" hidden></div>
+
+        <div class="shortcut-head">
+          <h3 class="subhead">All apps</h3>
+          <button class="btn quiet" id="apps-refresh" type="button" hidden>Refresh apps</button>
+        </div>
+        <p class="note" id="apps-note" style="margin:-4px 0 12px" hidden></p>
+        <div class="grid" id="app-grid"></div>
+      </section>
+      </div>
+
+      <div class="view" data-view="find" hidden>
+      <section class="section needs-engine" id="find">
+        <h2>Find something to watch</h2>
+        <p class="intro" id="find-intro">Search for any show or movie. You'll see which of your apps has it, and can start it on the TV.</p>
+        <div class="views find-source" id="find-source" role="group" aria-label="Search in">
+          <button type="button" data-source="catalog" aria-pressed="true">Streaming services</button>
+          <button type="button" data-source="sites" aria-pressed="false">My sites</button>
+        </div>
+        <form class="find-form" id="find-form" role="search">
+          <input type="search" id="find-input" placeholder="Show or movie name" aria-label="Show or movie name" autocomplete="off" maxlength="100">
+          <button class="btn primary" type="submit" id="find-go">Search</button>
+        </form>
+        <div class="continue" id="continue" hidden>
+          <h3 class="subhead" id="continue-head" tabindex="-1">Continue watching</h3>
+          <ul class="results" id="continue-list" aria-labelledby="continue-head"></ul>
+          <button class="btn quiet" type="button" id="continue-more" aria-controls="continue-list" hidden></button>
+        </div>
+        <details class="services" id="services-box">
+          <summary>My services <span id="services-summary"></span></summary>
+          <p class="note">Roku can tell which apps are on the TV, but not which ones you pay for. Tap a service to mark it as one you don't subscribe to, so it moves to "other ways to watch."</p>
+          <div class="chips" id="service-chips"></div>
+        </details>
+        <div id="find-status" class="note" role="status"></div>
+        <ul class="results" id="find-results"></ul>
+        <p class="note" id="jw-note" style="margin-top:18px">Show and movie listings come from <a href="https://www.justwatch.com" target="_blank" rel="noopener">JustWatch</a>. Listings can be a day or two out of date.</p>
+        <div id="sites-area" hidden>
+          <details class="services" id="sites-box">
+            <summary>Your sites <span id="sites-summary"></span></summary>
+            <p class="note">To add one, search the site in your browser, copy the address of its results page, and replace your search words with {q}. For example: https://example.com/search?q={q}</p>
+            <ul class="undo" id="sites-list"></ul>
+            <form class="install-form" id="site-form" style="margin-top:10px">
+              <input type="text" id="site-name" placeholder="Name" aria-label="Site name" maxlength="40" style="flex:0 1 160px;min-width:120px">
+              <input type="text" id="site-search" placeholder="https://example.com/search?q={q}" aria-label="Search address, with {q} where the search words go" maxlength="500" autocomplete="off">
+              <button class="btn" type="submit">Add site</button>
+            </form>
+          </details>
+          <div id="sites-status" class="note" role="status"></div>
+          <div id="site-results"></div>
+          <p class="note" style="margin-top:18px">Roku Detox reads only the text of each page to find the video, so the site's ads, pop-ups and scripts never load, and videos from ad networks are skipped. Sites that build their pages with scripts, or lock their videos, may not work. Playing needs Detox Home on the TV.</p>
+        </div>
+      </section>
+      <section class="section engine-note" hidden>
+        <h2>Find something to watch</h2>
+        <p class="intro">Find a show and My sites need the Roku Detox extension on a computer, or the Roku Detox program at home.</p>
+        <p class="note">You can still search on the TV: type a name in the box under the remote and press Search on TV.</p>
+      </section>
+      </div>
+
+      <div class="view" data-view="rules" hidden>
+      <section class="section needs-engine">
+        <h2>Rules</h2>
+        <p class="intro" id="rules-intro">Rules run in the background while Roku Detox is open on your Mac. It checks the TV every few seconds and keeps your Mac from going to sleep while any rule is on.</p>
+        <p class="rules-status" id="rules-status" role="status"></p>
+        <ul class="rule-list" id="rule-list"></ul>
+      </section>
+      <section class="section needs-engine">
+        <h2>Today</h2>
+        <p class="intro" id="usage-intro">How long the TV spent on each app or input today. Turn on a rule or the viewing log to start counting.</p>
+        <ul class="usage" id="usage-list"></ul>
+      </section>
+      <section class="section needs-engine">
+        <h2>Activity</h2>
+        <p class="intro">Everything the rules did, newest first.</p>
+        <ul class="activity" id="activity-list"></ul>
+      </section>
+      <section class="section needs-engine">
+        <h2>Connection check</h2>
+        <p class="intro">If the remote or the rules stop working, this explains why and how to fix it.</p>
+        <button class="btn" type="button" id="doctor-btn">Check connection</button>
+        <ul class="checks" id="doctor-list" style="margin-top:14px"></ul>
+      </section>
+      <section class="section engine-note" hidden>
+        <h2>Rules</h2>
+        <p class="intro">Rules need the Roku Detox extension on a computer, or the Roku Detox program at home. They keep an eye on the TV in the background, and a page on a phone can't do that.</p>
+      </section>
+      </div>
+
+      <div class="view" data-view="cleanup" hidden>
+      <section class="section needs-engine" id="channels" hidden>
+        <div class="section-head">
+          <h2>Channels</h2>
+          <button class="btn quiet" id="select-free" type="button">Select all free-with-ads channels</button>
+        </div>
+        <p class="intro">Pick the ones you don't use. Removing a channel is safe: you can add it back from the Streaming Store anytime, and this page keeps an undo list.</p>
+        <div class="grid" id="channel-grid"></div>
+
+        <div class="select-bar" id="select-bar" hidden>
+          <p><strong id="select-count">0</strong> <span id="select-word">channels</span> selected</p>
+          <button class="btn quiet" id="clear-btn" type="button">Clear</button>
+          <button class="btn danger" id="remove-btn" type="button">Remove selected</button>
+        </div>
+
+        <h3 class="subhead">Part of the TV</h3>
+        <p class="intro">Inputs and built-in screens. These stay.</p>
+        <div class="grid" id="builtin-grid"></div>
+      </section>
+      <section class="section engine-note" hidden>
+        <h2>Channels</h2>
+        <p class="intro">Removing channels and the undo list need the Roku Detox extension on a computer, or the Roku Detox program at home. The finish-up steps below work from here.</p>
+      </section>
+
+      <section class="section" id="finish" hidden>
+        <h2>Finish up on the TV</h2>
+        <p class="intro">Roku doesn't let other devices change these settings, so do them with your remote. Tick each one off as you go.</p>
+        <ol class="steps" id="steps">
+          <li data-step="acr">
+            <input type="checkbox" id="step-acr">
+            <label for="step-acr"><strong>Stop the TV from tracking what you watch</strong>
+              <span class="path">Settings, Privacy, Smart TV experience. Uncheck "Use info from TV inputs."</span></label>
+          </li>
+          <li data-step="ads">
+            <input type="checkbox" id="step-ads">
+            <label for="step-ads"><strong>Limit ad tracking</strong>
+              <span class="path">Settings, Privacy, Advertising. Check "Limit ad tracking."</span></label>
+          </li>
+          <li data-step="home">
+            <input type="checkbox" id="step-home">
+            <label for="step-home"><strong>Hide home screen rows you don't want</strong>
+              <span class="path">Settings, Home screen. Not every Roku has this menu.</span></label>
+          </li>
+          <li data-step="sleep">
+            <input type="checkbox" id="step-sleep">
+            <label for="step-sleep"><strong>Make the TV sleep when nobody's watching</strong>
+              <span class="path">Settings, System, Power, Auto power savings. Pick the shortest time it offers.</span></label>
+          </li>
+          <li data-step="saver">
+            <input type="checkbox" id="step-saver">
+            <label for="step-saver"><strong>Check the screensaver</strong>
+              <span class="path">Settings, Theme, Screensavers. Keep it on if your TV is OLED. Most Roku TVs, including onn, use LCD screens, so it's your choice.</span></label>
+          </li>
+          <li data-step="restart">
+            <input type="checkbox" id="step-restart">
+            <label for="step-restart"><strong>Restart the TV</strong>
+              <span class="path" id="restart-path">Clears out memory. This page sends Roku's restart shortcut and waits for the TV to come back.</span></label>
+            <div class="actions" id="restart-actions">
+              <button class="btn" id="restart-btn" type="button">Restart TV</button>
+            </div>
+          </li>
+          <li data-step="lock">
+            <input type="checkbox" id="step-lock">
+            <label for="step-lock"><strong>Lock remote access again</strong>
+              <span class="path">Settings, System, Advanced system settings, Control by mobile apps, Network access. Choose Limited. Do this last: afterwards this page can't control the TV.</span></label>
+          </li>
+        </ol>
+      </section>
+
+      <section class="section needs-engine" id="undo-section">
+        <div class="section-head">
+          <h2>Undo list</h2>
+          <button class="btn quiet" id="copy-btn" type="button" hidden>Copy list</button>
+        </div>
+        <p class="intro" id="undo-intro">Channels you remove show up here, with a button to add each one back.</p>
+        <ul class="undo" id="undo-list"></ul>
+      </section>
+
+      </div>
+
+      <div class="view" data-view="tvapp" hidden>
+      <section class="section">
+        <h2>Detox Home on your TV</h2>
+        <p class="intro">A calm home screen for the TV: a big clock, your favorite apps and inputs, and no ads. It also shows rule notices like "Time's up," messages you send, videos from web links, and an ad-free clock screensaver.</p>
+        <p class="app-status" id="app-status" role="status">Checking the TV…</p>
+        <div id="app-body"></div>
+      </section>
+      </div>
+
+      <div class="view" data-view="phone" hidden>
+      <section class="section" id="phone" hidden>
+        <h2>Use your phone as the remote</h2>
+        <p class="intro">Opens this page on your phone over your home Wi-Fi. A phone needs a one-time code from this screen to get in.</p>
+        <div id="phone-body"></div>
+      </section>
+      </div>
+
+      <footer id="footer">Not made by Roku. The undo list is also saved in undo-list.json next to this program.</footer>
+    </main>
+
+    <aside class="side" aria-label="Remote control">
+      <section class="job" id="job" hidden aria-live="polite"></section>
+      <section class="now" id="now" hidden aria-label="Now on the TV"></section>
+
+      <div class="remote" id="remote" role="group" aria-label="TV remote" aria-disabled="true">
+        <div class="r-row ends">
+          <button class="rk" data-key="Back" type="button" aria-label="Back"><svg viewBox="0 0 24 24"><path d="M9 6 3 12l6 6"/><path d="M3 12h11a6 6 0 0 1 6 6"/></svg></button>
+          <button class="rk power" data-key="Power" type="button" aria-label="Power"><svg viewBox="0 0 24 24"><path d="M12 3v8"/><path d="M6.4 7.4a8 8 0 1 0 11.2 0"/></svg></button>
+          <button class="rk" data-key="Home" type="button" aria-label="Home"><svg viewBox="0 0 24 24"><path d="M4 11 12 4l8 7"/><path d="M6 9.5V20h12V9.5"/></svg></button>
+        </div>
+        <div class="dpad">
+          <button class="rk up" data-key="Up" type="button" aria-label="Up"><svg viewBox="0 0 24 24"><path d="m6 15 6-6 6 6"/></svg></button>
+          <button class="rk left" data-key="Left" type="button" aria-label="Left"><svg viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></svg></button>
+          <button class="rk ok" data-key="Select" type="button">OK</button>
+          <button class="rk right" data-key="Right" type="button" aria-label="Right"><svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg></button>
+          <button class="rk down" data-key="Down" type="button" aria-label="Down"><svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></button>
+        </div>
+        <div class="r-row">
+          <button class="rk" data-key="InstantReplay" type="button" aria-label="Replay"><svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.4-5.7"/><path d="M4 4v4.5h4.5"/></svg></button>
+          <button class="rk" data-key="Info" type="button" aria-label="Options (star button)"><svg viewBox="0 0 24 24"><path d="M12 4.5v15M5.5 8.25l13 7.5M18.5 8.25l-13 7.5"/></svg></button>
+        </div>
+        <div class="r-row">
+          <button class="rk" data-key="Rev" type="button" aria-label="Rewind"><svg class="solid" viewBox="0 0 24 24"><path d="M11 6v12l-8-6zM21 6v12l-8-6z"/></svg></button>
+          <button class="rk" data-key="Play" type="button" aria-label="Play or pause"><svg class="solid" viewBox="0 0 24 24"><path d="M4 5.5v13l8.5-6.5zM15 6h2.5v12H15zM19.5 6H22v12h-2.5z"/></svg></button>
+          <button class="rk" data-key="Fwd" type="button" aria-label="Fast forward"><svg class="solid" viewBox="0 0 24 24"><path d="M3 6v12l8-6zM13 6v12l8-6z"/></svg></button>
+        </div>
+        <div class="r-row">
+          <button class="rk" data-key="VolumeDown" type="button" aria-label="Volume down"><svg viewBox="0 0 24 24"><path d="M3 10v4h4l5 4V6L7 10z"/><path d="M16 12h5"/></svg></button>
+          <button class="rk" data-key="VolumeMute" type="button" aria-label="Mute"><svg viewBox="0 0 24 24"><path d="M3 10v4h4l5 4V6L7 10z"/><path d="m16 9.5 5 5M21 9.5l-5 5"/></svg></button>
+          <button class="rk" data-key="VolumeUp" type="button" aria-label="Volume up"><svg viewBox="0 0 24 24"><path d="M3 10v4h4l5 4V6L7 10z"/><path d="M16 12h5M18.5 9.5v5"/></svg></button>
+        </div>
+      </div>
+
+      <p class="remote-error" id="remote-error" aria-live="assertive" hidden></p>
+      <p class="remote-note">Your keyboard works too: arrow keys to move, Enter for OK, Backspace for Back, H for Home.</p>
+      <form class="smart" id="smart-form">
+        <label for="smart-input">Search, paste a link, or type on the TV</label>
+        <input type="text" id="smart-input" placeholder="Show name or a video link" autocomplete="off" maxlength="2000">
+        <div class="smart-actions">
+          <button class="btn primary" type="submit" id="smart-go">Search on TV</button>
+          <button class="btn" type="button" id="smart-type">Type it</button>
+        </div>
+      </form>
+    </aside>
+  </div>
+</div>
+
+<div class="pair" id="pair" hidden>
+  <div class="pair-card">
+    <h2>Enter the code from your Mac</h2>
+    <p>On your Mac, open Roku Detox. The 6-digit code is under "Use your phone as the remote."</p>
+    <form id="pair-form">
+      <input type="text" id="pair-input" inputmode="numeric" autocomplete="one-time-code" maxlength="6" aria-label="6-digit code">
+      <button class="btn primary" type="submit">Connect</button>
+    </form>
+    <p class="error" id="pair-error" role="alert"></p>
+  </div>
+</div>
+
+<div class="cast-banner" id="cast-banner" hidden role="dialog" aria-label="Send a video to the TV">
+  <p id="cast-text"></p>
+  <div class="row">
+    <button class="btn primary" type="button" id="cast-send" style="background:var(--bg);color:var(--ink)">Send to TV</button>
+    <button class="btn quiet" type="button" id="cast-cancel">Cancel</button>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status" hidden></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+<script>
+const $ = (sel, root = document) => root.querySelector(sel);
+const enc = encodeURIComponent;
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const store = {
+  get(key, fallback) { try { const v = localStorage.getItem(key); return v === null ? fallback : JSON.parse(v); } catch { return fallback; } },
+  set(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* private window */ } },
+};
+
+const state = {
+  tvs: [],
+  tv: store.get("detox.tv", null),   // address like "192.168.1.50"
+  device: null,
+  reachable: null,
+  control: false,
+  apps: [],
+  selected: new Set(),
+  log: [],
+  job: null,        // { mode: "remove" | "reinstall", app, index, total, step: "opening" | "waiting" | "done" | "error", error }
+  queue: [],
+  queueTotal: 0,
+  removedThisRun: 0,
+  restart: null,    // { phase, message }
+  favorites: [],
+  scenes: [],
+  draftFavorites: null,   // set while choosing app shortcuts
+  sceneDraft: null,       // { id?, name, steps, at } while editing a scene
+  sceneError: "",
+  draftVersion: 0,
+  runningScene: null,
+  now: null,              // what's on the TV, from /api/now
+  phone: null,
+  view: store.get("detox.view", "remote"),
+  services: {},          // { appId: false } for subscriptions you don't have
+  find: null,            // { query, country, results }
+  history: null,         // Continue watching items from /api/find/history, null if unavailable
+  showCache: {},         // show id -> { loading, data, error } from /api/find/show
+  seasonCache: {},       // season id -> { loading, data, error } from /api/find/season
+  pickerOpen: {},        // picker key ("r:<show id>" or "c:<show id>") -> open or closed
+  seasonPick: {},        // show id -> season id picked while the page is open
+  continueAll: false,    // Continue watching shows every item, not just the first few
+  rulesStatus: null,     // from /api/rules
+  rules: null,           // the rules being edited
+  rulesVersion: 0,
+  engine: null,          // how this page reaches the TV: ServerEngine, an extension engine, or LiteEngine (see ENGINE.md)
+  appsLoading: null,     // lite: the TV whose apps are being looked for
+  appsGuessed: false,    // lite: the TV answered for every app, so the list may include some it doesn't have
+};
+
+/* ---------- Engines: how this page reaches the TV (see ENGINE.md) ---------- */
+// Every engine answers the same /api/... routes with the same JSON as roku_detox.py.
+
+function apiError(status, data) {
+  const err = new Error(data.error || `Something went wrong (${status}).`);
+  err.blocked = Boolean(data.blocked);
+  err.status = status;
+  err.needs = ["engine", "home"].includes(data.needs) ? data.needs : "";
+  return err;
+}
+
+// server: the page is served by roku_detox.py, which does the talking.
+const ServerEngine = {
+  kind: "server",
+  async api(path, body) {
+    const options = { headers: { "X-Detox": "1" } };
+    if (body !== undefined) {
+      options.method = "POST";
+      options.headers["Content-Type"] = "application/json";
+      options.body = JSON.stringify(body);
+    }
+    let res;
+    try {
+      res = await fetch(path, options);
+    } catch {
+      throw new Error("This page lost touch with the Roku Detox program. Is it still running?");
+    }
+    const data = await res.json().catch(() => ({}));
+    if (res.status === 401 && data.pair) showPair();
+    if (!res.ok) {
+      const err = new Error(data.error || `Something went wrong (${res.status}).`);
+      err.blocked = Boolean(data.blocked);
+      err.status = res.status;
+      err.needs = ["engine", "home"].includes(data.needs) ? data.needs : "";
+      throw err;
+    }
+    return data;
+  },
+  iconSrc(tv, id) { return `/api/icon?tv=${enc(tv)}&id=${enc(id)}`; },
+};
+
+// extension: the Roku Detox extension's service worker answers the same routes as messages.
+function readExtensionId() {
+  const fromPage = document.querySelector('meta[name="roku-detox-extension"]')?.content.trim();
+  if (fromPage) return fromPage;
+  let saved = "";
+  try { saved = localStorage.getItem("detox.extensionId") || ""; } catch { /* private window */ }
+  try { saved = JSON.parse(saved); } catch { /* saved as plain text */ }
+  return typeof saved === "string" ? saved.trim() : "";
+}
+const EXTENSION_ID = readExtensionId();
+
+function extensionMessage(local, msg, timeout = 0) {
+  return new Promise((resolve, reject) => {
+    const runtime = globalThis.chrome?.runtime;
+    if (!runtime?.sendMessage || (!local && !EXTENSION_ID)) { reject(new Error("No extension.")); return; }
+    const timer = timeout ? setTimeout(() => reject(new Error("No answer.")), timeout) : null;
+    const done = (reply) => {
+      clearTimeout(timer);
+      const problem = runtime.lastError;   // reading it also keeps Chrome from logging it
+      if (problem || reply === undefined) reject(new Error(problem?.message || "No answer."));
+      else resolve(reply);
+    };
+    try {
+      if (local) runtime.sendMessage(msg, done); else runtime.sendMessage(EXTENSION_ID, msg, done);
+    } catch (err) {
+      clearTimeout(timer);
+      reject(err);
+    }
+  });
+}
+
+function makeExtensionEngine(local) {
+  const icons = new Map();   // "tv|id" -> data URL ("" when the TV has none), or a promise for one
+  const send = (msg, timeout) => extensionMessage(local, msg, timeout);
+  return {
+    kind: "extension",
+    local,
+    async api(path, body) {
+      const url = new URL(path, location.href);
+      let reply;
+      try {
+        reply = await send({
+          type: "api", method: body === undefined ? "GET" : "POST",
+          path: url.pathname, query: Object.fromEntries(url.searchParams), body: body === undefined ? null : body,
+        });
+      } catch {
+        throw new Error("This page lost touch with the Roku Detox extension. Check that it's still turned on in your browser.");
+      }
+      const status = Number(reply?.status) || 500;
+      const data = reply?.data && typeof reply.data === "object" ? reply.data : {};
+      if (status < 200 || status > 299) throw apiError(status, data);
+      return data;
+    },
+    iconSrc(tv, id) {
+      const known = icons.get(`${tv}|${id}`);
+      return typeof known === "string" ? known : "";
+    },
+    icon(tv, id) {
+      const key = `${tv}|${id}`;
+      if (icons.has(key)) return Promise.resolve(icons.get(key));
+      const pending = send({ type: "icon", tv, id }, 15000).then(
+        (reply) => {
+          const url = typeof reply?.dataUrl === "string" && reply.dataUrl.startsWith("data:image/") ? reply.dataUrl : "";
+          icons.set(key, url);
+          return url;
+        },
+        () => { icons.delete(key); return ""; },   // the extension may be waking up: ask again next time
+      );
+      icons.set(key, pending);
+      return pending;
+    },
+  };
+}
+
+// lite: nothing installed. The page sends ECP commands straight to the TV as no-cors requests,
+// which reach the TV but can't read its answers (send-only).
+const LITE_KEYS = new Set([
+  "Home", "Back", "Select", "Up", "Down", "Left", "Right", "Info",
+  "InstantReplay", "Rev", "Play", "Fwd", "Search", "Backspace", "Enter",
+  "VolumeUp", "VolumeDown", "VolumeMute", "Power", "PowerOn", "PowerOff",
+  "ChannelUp", "ChannelDown", "InputTuner", "InputAV1",
+  "InputHDMI1", "InputHDMI2", "InputHDMI3", "InputHDMI4",
+]);
+const RESTART_SEQUENCE = [...Array(5).fill("Home"), "Up", "Rev", "Rev", "Fwd", "Fwd"];   // Roku's restart shortcut
+const APP_ID_RE = /^[A-Za-z0-9._-]{1,64}$/;
+const SCENE_STEPS = new Set(["power_on", "power_off", "open", "volume_up", "volume_down", "mute", "wait"]);
+const SCENE_ID_RE = /^[a-z0-9]{1,16}$/;
+const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+// Same tile labels as roku_detox.py.
+const FREE_WITH_ADS = [
+  "pluto", "tubi", "xumo", "crackle", "plex", "freevee", "local now",
+  "haystack", "redbox", "filmrise", "popcornflix", "fawesome", "vix",
+  "shout! tv", "freestream", "samsung tv plus", "lg channels",
+];
+const ROKU_OWNED_IDS = new Set(["151908", "2213"]);
+const SUBSCRIPTION_APPS = new Set([
+  "12", "13", "2285", "291097", "61322", "593099", "31440", "551012", "298229", "123132",
+  "46041", "195316", "43465", "196460", "65067", "808732", "34376", "2595",
+]);
+// Well-known US Roku apps. A TV only has icons for apps it has, so the ones whose icon loads are installed.
+// Ids marked "unsure" are from memory; a wrong id just never shows up.
+const LITE_CATALOG = [
+  ["12", "Netflix"], ["13", "Prime Video"], ["837", "YouTube"], ["2285", "Hulu"], ["291097", "Disney Plus"],
+  ["61322", "Max"], ["593099", "Peacock TV"], ["31440", "Paramount Plus"], ["551012", "Apple TV"],
+  ["151908", "The Roku Channel"], ["2213", "Roku Media Player"], ["74519", "Pluto TV"], ["41468", "Tubi"],
+  ["46041", "Sling TV"], ["195316", "YouTube TV"], ["13535", "Plex"], ["22297", "Spotify"], ["28", "Pandora"],
+  ["23353", "PBS"], ["13842", "Fandango at Home"], ["2595", "Crunchyroll"], ["34376", "ESPN"], ["196460", "Philo"],
+  ["43465", "fubo"], ["298229", "Frndly TV"], ["65067", "Starz"], ["14362", "Amazon Music"], ["45437", "FilmRise"],
+  ["635764", "Xumo Play"], ["4314", "Kanopy"], ["87011", "Hoopla"], ["808732", "Fox One"], ["123132", "Xfinity Stream"],
+  ["111255", "BritBox"],             // unsure
+  ["44191", "Emby"],                 // unsure
+  ["592369", "Jellyfin"],            // unsure
+  ["2016", "Crackle"],               // unsure
+  ["23333", "PBS Kids"],             // unsure
+  ["1980", "Vimeo"],                 // unsure
+  ["6119", "iHeartRadio"],           // unsure
+  ["1453", "TuneIn"],                // unsure
+  ["6253", "SiriusXM"],              // unsure
+  ["108843", "Discovery Plus"],      // unsure
+  ["125302", "AMC Plus"],            // unsure
+  ["50025", "Acorn TV"],             // unsure
+  ["33962", "Shudder"],              // unsure
+  ["81128", "MGM Plus"],             // unsure
+  ["197035", "BET Plus"],            // unsure
+  ["35080", "Hallmark Movies Now"],  // unsure
+  ["34318", "Curiosity Stream"],     // unsure
+  ["92009", "Haystack News"],        // unsure
+  ["74517", "Local Now"],            // unsure
+  ["31012", "CBS News"],             // unsure
+  ["68669", "NBC"],                  // unsure
+  ["73376", "ABC"],                  // unsure
+  ["20444", "FOX"],                  // unsure
+  ["95307", "Fox Sports"],           // unsure
+  ["30123", "A&E"],                  // unsure
+  ["2020", "History"],               // unsure
+  ["65978", "CNN"],                  // unsure
+  ["2946", "Fox News"],              // unsure
+  ["158193", "DirecTV"],             // unsure
+  ["74625", "Spectrum TV"],          // unsure
+  ["44856", "NFL"],                  // unsure
+  ["1983", "The Weather Channel"],   // unsure
+  ["7212", "Popcornflix"],           // unsure
+  ["284081", "ViX"],                 // unsure
+  ["56853", "Fawesome"],             // unsure
+  ["252355", "The Criterion Channel"],  // unsure
+  ["61473", "MUBI"],                 // unsure
+  ["286996", "DAZN"],                // unsure
+  ["120039", "Movies Anywhere"],     // unsure
+];
+const LITE_INPUTS = [
+  ["tvinput.dtv", "Live TV"], ["tvinput.hdmi1", "HDMI 1"], ["tvinput.hdmi2", "HDMI 2"],
+  ["tvinput.hdmi3", "HDMI 3"], ["tvinput.hdmi4", "HDMI 4"], ["tvinput.cvbs", "AV"],
+];
+const NOT_AN_APP = "999999";   // made up: if even this has an icon, the TV answers for every id
+const LITE_APPS_FOR = 24 * 60 * 60 * 1000;   // how long the app list is kept per TV
+// What the routes the lite engine can't do are called, for their "needs more" sentence.
+const LITE_NEEDS = [
+  ["/api/find", "Find a show"], ["/api/sites", "Searching your sites"], ["/api/rules", "Setting rules"],
+  ["/api/doctor", "The connection check"], ["/api/store", "Removing channels"], ["/api/log", "The undo list"],
+  ["/api/tvapp", "Setting up Detox Home"], ["/api/tv-message", "Sending a message to the TV"],
+  ["/api/phone", "Phone pairing"], ["/api/pair", "Phone pairing"], ["/api/now", "Seeing what's playing"],
+  ["/api/active", "Seeing what's on the TV"], ["/api/discover", "Finding TVs on your Wi-Fi"],
+];
+
+function liteFail(status, message, extra = {}) {
+  const err = new Error(message);
+  err.reply = { status, data: { error: message, ...extra } };
+  return err;
+}
+
+// Like Python's urllib.parse.quote(text, safe=""), which roku_detox.py uses for ECP paths.
+const quote = (text) => enc(text).replace(/[!'()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
+
+// "192.168.1.20" or "192.168.1.20:8060". Like roku_detox.py, only home-network addresses.
+function liteTarget(value) {
+  const text = String(value ?? "").trim();
+  if (!text) throw liteFail(400, "No TV address given.");
+  const match = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})(?::(\d{1,5}))?$/.exec(text);
+  const parts = match ? match.slice(1, 5).map(Number) : [];
+  if (!match || parts.some((n) => n > 255)) throw liteFail(400, "Enter the TV's IP address, like 192.168.1.20.");
+  const [a, b] = parts;
+  const home = a === 10 || a === 127 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 169 && b === 254);
+  if (!home) throw liteFail(400, "That address isn't on your home network.");
+  const port = match[5] ? Number(match[5]) : 8060;
+  if (!(port > 0 && port < 65536)) throw liteFail(400, "That port number isn't valid.");
+  const host = parts.join(".");
+  return { address: port === 8060 ? host : `${host}:${port}`, base: `http://${host}:${port}/` };
+}
+
+// Reaches the TV, but the answer can't be read. It only fails when nothing answers at all.
+async function liteSend(target, path, method = "POST") {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 4000);
+  try {
+    await fetch(target.base + path, {
+      method, mode: "no-cors", cache: "no-store", credentials: "omit", referrerPolicy: "no-referrer", signal: controller.signal,
+    });
+  } catch {
+    throw liteFail(502, location.protocol === "https:"
+      ? "Your browser blocked this secure (https) page from reaching the TV."
+      : "The TV didn't answer. Check it's turned on and on the same Wi-Fi, and that the address is right.");
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function litePress(target, key) {
+  const chars = [...key];
+  if (key.startsWith("Lit_") && chars.length === 5) return liteSend(target, `keypress/Lit_${quote(chars[4])}`);
+  if (LITE_KEYS.has(key)) return liteSend(target, `keypress/${key}`);
+  throw liteFail(400, "Unknown remote button.");
+}
+
+async function litePressAll(target, keys, delay) {
+  for (const key of keys) {
+    await litePress(target, key);
+    await sleep(delay);
+  }
+}
+
+async function liteLaunch(target, appId, params) {
+  if (!APP_ID_RE.test(appId)) throw liteFail(400, "Bad channel id.");
+  return liteSend(target, `launch/${quote(appId)}${params ? `?${new URLSearchParams(params)}` : ""}`);
+}
+
+async function liteDevice(target) {
+  await liteSend(target, "query/device-info", "GET");   // only checks that something answers there
+  return {
+    device: {
+      address: target.address, name: "Roku TV", model: "", modelNumber: "", vendor: "", software: "", isTv: false,
+      screenSize: "", uptime: 0, powerMode: "", accessMode: "", country: "", serial: "",
+    },
+    control: true,
+  };
+}
+
+function probeIcon(src) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    let timer;
+    const finish = (found) => { clearTimeout(timer); img.onload = img.onerror = null; resolve(found); };
+    timer = setTimeout(() => finish(false), 3000);
+    img.onload = () => finish(true);
+    img.onerror = () => finish(false);
+    img.referrerPolicy = "no-referrer";
+    img.src = src;
+  });
+}
+
+async function eachLimited(items, limit, task) {
+  const results = new Array(items.length);
+  let next = 0;
+  const worker = async () => {
+    while (next < items.length) {
+      const i = next++;
+      results[i] = await task(items[i]);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
+}
+
+function liteGroup(app) {
+  const name = app.name.toLowerCase();
+  if (app.type === "tvin") return "input";
+  if (ROKU_OWNED_IDS.has(app.id) || name.startsWith("roku ") || name.startsWith("the roku ") || name.includes("roku channel")) return "roku";
+  if (FREE_WITH_ADS.some((fragment) => name.includes(fragment))) return "free";
+  return "app";
+}
+
+async function liteApps(target, refresh) {
+  const key = `detox.lite.apps.${target.address}`;
+  const saved = store.get(key, null);
+  if (!refresh && saved && Array.isArray(saved.apps) && saved.apps.length && Date.now() - saved.at < LITE_APPS_FOR) {
+    return { apps: saved.apps, guessed: Boolean(saved.guessed) };
+  }
+  const candidates = [
+    ...LITE_INPUTS.map(([id, name]) => ({ id, type: "tvin", name })),
+    ...LITE_CATALOG.map(([id, name]) => ({ id, type: "appl", name })),
+  ];
+  const [guessed, ...found] = await eachLimited([NOT_AN_APP, ...candidates.map((c) => c.id)], 8,
+    (id) => probeIcon(`${target.base}query/icon/${quote(id)}`));
+  const apps = candidates.filter((_, i) => found[i]).map((c) => ({
+    id: c.id, type: c.type, name: c.name, version: "", group: liteGroup(c), subscription: SUBSCRIPTION_APPS.has(c.id),
+  }));
+  if (apps.length) store.set(key, { at: Date.now(), apps, guessed });   // finding nothing is worth asking again
+  return { apps, guessed };
+}
+
+const bounded = (value, low, high) => {
+  const n = Math.trunc(Number(value));
+  return Number.isFinite(n) ? Math.max(low, Math.min(n, high)) : low;
+};
+const randomId = () => Array.from(crypto.getRandomValues(new Uint8Array(4)), (b) => b.toString(16).padStart(2, "0")).join("");
+
+// The same checks roku_detox.py makes before saving settings.
+function cleanFavorites(raw) {
+  if (!Array.isArray(raw)) throw liteFail(400, "Bad shortcut list.");
+  const favorites = [];
+  for (const item of raw.slice(0, 24)) {
+    const id = String(item);
+    if (!APP_ID_RE.test(id)) throw liteFail(400, "Bad channel id.");
+    if (!favorites.includes(id)) favorites.push(id);
+  }
+  return favorites;
+}
+
+function cleanServices(raw) {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw) || Object.keys(raw).length > 100) throw liteFail(400, "Bad services list.");
+  const services = {};
+  for (const [id, has] of Object.entries(raw)) {
+    if (!APP_ID_RE.test(id)) throw liteFail(400, "Bad channel id.");
+    services[id] = Boolean(has);
+  }
+  return services;
+}
+
+function cleanScenes(raw) {
+  if (!Array.isArray(raw) || raw.length > 20) throw liteFail(400, "Bad scene list.");
+  return raw.map((item) => {
+    if (!item || typeof item !== "object") throw liteFail(400, "Bad scene.");
+    const name = String(item.name ?? "").trim().slice(0, 40);
+    if (!name) throw liteFail(400, "Give each scene a name.");
+    const steps = (Array.isArray(item.steps) ? item.steps : []).slice(0, 20).map((step) => {
+      const action = step && typeof step === "object" ? step.do : null;
+      if (!SCENE_STEPS.has(action)) throw liteFail(400, "Unknown scene step.");
+      const clean = { do: action };
+      if (action === "open") {
+        const target = String(step.target ?? "");
+        if (!APP_ID_RE.test(target)) throw liteFail(400, `Pick what to open in "${name}".`);
+        clean.target = target;
+      } else if (action === "volume_up" || action === "volume_down") {
+        clean.n = bounded(step.n, 1, 50);
+      } else if (action === "wait") {
+        clean.n = bounded(step.n, 1, 30);
+      }
+      return clean;
+    });
+    if (!steps.length) throw liteFail(400, `"${name}" needs at least one step.`);
+    const at = item.at || null;
+    if (at !== null && !TIME_RE.test(String(at))) throw liteFail(400, "Write times like 22:30.");
+    const id = SCENE_ID_RE.test(String(item.id || "")) ? String(item.id) : randomId();
+    return { id, name, steps, at };
+  });
+}
+
+function liteSettings(target) {
+  const saved = store.get(`detox.lite.settings.${target.address}`, null) || {};
+  return {
+    favorites: Array.isArray(saved.favorites) ? saved.favorites : [],
+    scenes: Array.isArray(saved.scenes) ? saved.scenes : [],
+    services: saved.services && typeof saved.services === "object" && !Array.isArray(saved.services) ? saved.services : {},
+  };
+}
+
+function liteSaveSettings(target, body) {
+  const settings = liteSettings(target);
+  if ("favorites" in body) settings.favorites = cleanFavorites(body.favorites);
+  if ("scenes" in body) settings.scenes = cleanScenes(body.scenes);
+  if ("services" in body) settings.services = cleanServices(body.services);
+  store.set(`detox.lite.settings.${target.address}`, settings);
+  return settings;
+}
+
+async function liteRunScene(target, scene) {
+  for (const step of scene.steps) {
+    if (step.do === "power_on") {
+      await litePress(target, "PowerOn");
+      await sleep(4000);   // give the TV time to wake up
+    } else if (step.do === "power_off") {
+      await litePress(target, "PowerOff");
+    } else if (step.do === "open") {
+      await liteLaunch(target, step.target);
+      await sleep(2000);
+    } else if (step.do === "volume_up" || step.do === "volume_down") {
+      await litePressAll(target, Array(step.n).fill(step.do === "volume_up" ? "VolumeUp" : "VolumeDown"), 150);
+    } else if (step.do === "mute") {
+      await litePress(target, "VolumeMute");
+    } else if (step.do === "wait") {
+      await sleep(step.n * 1000);
+    }
+  }
+}
+
+// A YouTube or Netflix link -> the app and deep-link parameters to open it (same rules as parse_link in roku_detox.py).
+const YOUTUBE_HOSTS = new Set(["youtube.com", "youtu.be", "music.youtube.com", "youtube-nocookie.com"]);
+function parseLink(link) {
+  let url;
+  try { url = new URL(String(link).trim()); } catch { url = null; }
+  if (!url || !["http:", "https:"].includes(url.protocol)) throw liteFail(400, "Paste the whole link, starting with https://");
+  let host = url.hostname.toLowerCase();
+  for (const prefix of ["www.", "m."]) if (host.startsWith(prefix)) host = host.slice(prefix.length);
+  const parts = url.pathname.split("/").filter(Boolean);
+  if (YOUTUBE_HOSTS.has(host)) {
+    let video = null;
+    if (host === "youtu.be" && parts.length) video = parts[0];
+    else if (parts[0] === "watch") video = url.searchParams.get("v") || "";
+    else if (parts.length >= 2 && ["shorts", "live", "embed", "v"].includes(parts[0])) video = parts[1];
+    if (video && /^[A-Za-z0-9_-]{11}$/.test(video)) return { app: "YouTube", appId: "837", params: { contentId: video, mediaType: "live" } };
+    throw liteFail(400, "That YouTube link doesn't point to a single video.");
+  }
+  if (host === "netflix.com") {
+    const [kind, id] = parts.slice(-2);
+    if (parts.length >= 2 && ["title", "watch"].includes(kind) && /^\d+$/.test(id)) {
+      return { app: "Netflix", appId: "12", params: { contentId: id, mediaType: kind === "watch" ? "movie" : "series" } };
+    }
+    throw liteFail(400, "That Netflix link doesn't point to a show or movie.");
+  }
+  return null;
+}
+
+async function liteRoute(method, path, input) {
+  const target = () => liteTarget(input.tv);
+  const ok = async (work) => { await work; return { ok: true }; };
+  if (method === "GET") {
+    if (path === "/api/device") return liteDevice(target());
+    if (path === "/api/apps") return liteApps(target(), input.refresh === "1");
+    if (path === "/api/settings") return liteSettings(target());
+  } else {
+    switch (path) {
+      case "/api/key":
+        return ok(litePress(target(), String(input.key ?? "")));
+      case "/api/type": {
+        const chars = [...String(input.text ?? "")];
+        if (!(chars.length > 0 && chars.length <= 200)) throw liteFail(400, "Type between 1 and 200 characters.");
+        return ok(litePressAll(target(), chars.map((ch) => `Lit_${ch}`), 80));
+      }
+      case "/api/search": {   // what the Roku phone app does: press Search, then type
+        const chars = [...String(input.text ?? "").trim()];
+        if (!(chars.length > 0 && chars.length <= 100)) throw liteFail(400, "Type something to search for.");
+        const tv = target();
+        await litePress(tv, "Search");
+        await sleep(1500);
+        return ok(litePressAll(tv, chars.map((ch) => `Lit_${ch}`), 80));
+      }
+      case "/api/link": {
+        const tv = target();
+        const link = parseLink(String(input.url ?? "").slice(0, 4000));
+        if (!link) throw liteFail(501, "Sending videos from other sites needs the Roku Detox extension or the home program.", { needs: "engine" });
+        await liteLaunch(tv, link.appId, link.params);
+        return { app: link.app, title: String(input.title || "").slice(0, 200) };
+      }
+      case "/api/watch": {
+        const tv = target();
+        const appId = String(input.appId ?? "");
+        if (!APP_ID_RE.test(appId)) throw liteFail(400, "Bad channel id.");
+        const params = {};
+        if (input.contentId) {
+          params.contentId = String(input.contentId);
+          if (params.contentId.length > 500) throw liteFail(400, "Bad content id.");
+          if (input.mediaType) {
+            params.mediaType = String(input.mediaType);
+            if (!/^[A-Za-z]{1,20}$/.test(params.mediaType)) throw liteFail(400, "Bad media type.");
+          }
+        }
+        return ok(liteLaunch(tv, appId, params.contentId ? params : null));
+      }
+      case "/api/launch":
+        return ok(liteLaunch(target(), String(input.id ?? "")));
+      case "/api/restart":
+        return ok(litePressAll(target(), RESTART_SEQUENCE, 350));
+      case "/api/settings":
+        return liteSaveSettings(target(), input);
+      case "/api/scene": {
+        const tv = target();
+        const scene = liteSettings(tv).scenes.find((s) => s.id === input.id);
+        if (!scene) throw liteFail(400, "That scene doesn't exist anymore.");
+        return ok(liteRunScene(tv, scene));
+      }
+    }
+  }
+  const feature = LITE_NEEDS.find(([prefix]) => path === prefix || path.startsWith(`${prefix}/`))?.[1] || "This";
+  throw liteFail(501, `${feature} needs the Roku Detox extension or the home program.`, { needs: "engine" });
+}
+
+const LiteEngine = {
+  kind: "lite",
+  async api(path, body) {
+    const url = new URL(path, location.href);
+    const input = body === undefined ? Object.fromEntries(url.searchParams) : body || {};
+    try {
+      return await liteRoute(body === undefined ? "GET" : "POST", url.pathname, input);
+    } catch (err) {
+      if (!err.reply) console.error(err);
+      const { status, data } = err.reply || { status: 500, data: {} };
+      throw apiError(status, data);
+    }
+  },
+  iconSrc(tv, id) {
+    try { return `${liteTarget(tv).base}query/icon/${quote(id)}`; } catch { return ""; }
+  },
+};
+
+// Picked once at startup, in the order ENGINE.md gives.
+async function serverAnswers() {
+  if (!/^https?:$/.test(location.protocol)) return false;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 8000);
+  try {
+    const res = await fetch("/api/log", { headers: { "X-Detox": "1" }, signal: controller.signal });
+    const data = await res.json();
+    return Boolean(data) && typeof data === "object";
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// A phone link with the household key (#k=...) goes through the encrypted relay to the
+// household computer's extension. The relay only passes sealed messages along.
+async function relayEngine() {
+  if (!/(^|[#&])k=/.test(location.hash)) return null;
+  try {
+    const { RelayEngine } = await import("./relay/client/relay-client.js");
+    const relay = RelayEngine.fromLocation();
+    if (!relay) return null;
+    return {
+      kind: "relay",
+      api: (path, body) => relay.api(path, body).catch((err) => {
+        if (err.offline) err.message = "The computer with Roku Detox isn't online right now. Open Chrome there and try again.";
+        throw err;
+      }),
+      iconSrc: () => "",
+      icon: (tv, id) => relay.icon(tv, id),
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function chooseEngine() {
+  if (location.protocol === "chrome-extension:") return makeExtensionEngine(true);
+  if (new URLSearchParams(location.search).get("engine") === "lite") return LiteEngine;
+  const relay = await relayEngine();
+  if (relay) return relay;
+  if (await serverAnswers()) return ServerEngine;
+  if (EXTENSION_ID) {
+    try {
+      const pong = await extensionMessage(false, { type: "ping" }, 1500);
+      if (pong?.ok) return makeExtensionEngine(false);
+    } catch { /* not installed, or this page's address isn't one it talks to */ }
+  }
+  return LiteEngine;
+}
+const engineReady = chooseEngine().then((engine) => (state.engine = engine));
+const isLite = () => state.engine?.kind === "lite";
+// The extension and the relay send pictures as messages, so icons load after the page draws.
+const usesIconLoader = () => ["extension", "relay"].includes(state.engine?.kind);
+
+// Same contract on every engine: GET when body is undefined, otherwise POST with a JSON body.
+// Throws an Error with .blocked, .status, and .needs ("engine" when this engine can't do it).
+async function api(path, body) {
+  const engine = state.engine || await engineReady;
+  return engine.api(path, body);
+}
+
+// Icons: a value for <img src>, or "" when the extension engine hasn't fetched it yet.
+function iconSrc(appId) { return state.engine ? state.engine.iconSrc(state.tv, appId) : ""; }
+function iconAttrs(appId) {
+  const src = iconSrc(appId);
+  if (!src && usesIconLoader()) return `data-icon-tv="${esc(state.tv)}" data-icon-id="${esc(appId)}"`;
+  return `src="${esc(src)}"`;   // an empty src fails, and onerror falls back to the initials
+}
+
+// The extension engine fills those <img data-icon-*> in once the extension sends the picture.
+let iconsQueued = false;
+function loadIcons() {
+  iconsQueued = false;
+  for (const img of document.querySelectorAll("img[data-icon-id]:not([src]):not([data-icon-wait])")) {
+    img.dataset.iconWait = "";
+    state.engine.icon(img.dataset.iconTv, img.dataset.iconId).then((url) => { if (url) img.src = url; else img.remove(); });
+  }
+}
+function watchIcons() {
+  new MutationObserver(() => {
+    if (!iconsQueued) { iconsQueued = true; queueMicrotask(loadIcons); }
+  }).observe(document.body, { childList: true, subtree: true });
+  loadIcons();
+}
+
+let toastTimer;
+function toast(message) {
+  const el = $("#toast");
+  el.textContent = message;
+  el.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.hidden = true; }, 3200);
+}
+
+/* ---------- Finding and connecting ---------- */
+
+function setPickerNote(text) { $("#picker-note").textContent = text; }
+
+function renderPicker() {
+  if (isLite()) {   // no finding TVs from a plain page: just the address box
+    const input = $("#manual-input");
+    if (document.activeElement !== input) input.value = state.tv || "";
+    return;
+  }
+  const select = $("#tv-select");
+  const options = [...state.tvs];
+  if (state.tv && !options.some((tv) => tv.address === state.tv)) {
+    options.unshift({ address: state.tv, name: state.device?.name || state.tv });
+  }
+  if (!options.length) {
+    select.innerHTML = `<option>No TVs found</option>`;
+    select.disabled = true;
+    return;
+  }
+  select.innerHTML = options.map((tv) =>
+    `<option value="${esc(tv.address)}" ${tv.address === state.tv ? "selected" : ""}>${esc(tv.name)} (${esc(tv.address)})</option>`
+  ).join("");
+  select.disabled = false;
+}
+
+async function findTVs({ autoConnect = true } = {}) {
+  const btn = $("#find-btn");
+  btn.disabled = true;
+  btn.textContent = "Looking…";
+  setPickerNote("Looking for Roku TVs on your Wi-Fi. This takes a few seconds.");
+  try {
+    const { tvs } = await api("/api/discover");
+    state.tvs = tvs;
+    renderPicker();
+    if (!tvs.length) {
+      setPickerNote("No Roku found. Check the TV is on and on the same Wi-Fi as this computer, or type its IP address.");
+      if (!state.tv) renderTV();
+      return;
+    }
+    setPickerNote(tvs.length === 1 ? "Found 1 TV." : `Found ${tvs.length} TVs. Pick one from the list.`);
+    if (autoConnect && !state.tv) await connect(tvs[0].address);
+  } catch (err) {
+    setPickerNote(err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Find TVs";
+  }
+}
+
+async function connect(address) {
+  if (state.job) stopJobs();
+  state.tv = address;
+  store.set("detox.tv", address);
+  state.device = null;
+  state.reachable = null;
+  state.apps = [];
+  state.selected.clear();
+  state.restart = null;
+  state.favorites = [];
+  state.scenes = [];
+  state.draftFavorites = null;
+  state.sceneDraft = null;
+  state.now = null;
+  state.rules = null;
+  state.rulesStatus = null;
+  state.limitsOpen = state.blockedOpen = state.swapsOpen = false;
+  state.pendingLimit = state.pendingSwap = null;
+  state.history = null;
+  state.showCache = {};
+  state.seasonCache = {};
+  renderPicker();
+  renderTV();
+  renderContinue();
+  await refreshDevice();
+  await loadSettings();
+  loadHistory();
+  pollNow();
+  if (state.view === "rules") loadRules();
+  if (state.view === "tvapp") loadTvApp();
+  renderChecklist();
+  renderRestart();
+}
+
+async function refreshDevice() {
+  if (!state.tv) return;
+  const hadControl = state.control;
+  const hadReachable = state.reachable;
+  try {
+    const { device, control } = await api(`/api/device?tv=${enc(state.tv)}`);
+    const renamed = state.device?.name !== device.name;
+    state.device = device;
+    state.control = control;
+    state.reachable = true;
+    if (renamed) renderPicker();
+  } catch (err) {
+    state.reachable = false;
+    state.control = false;
+    state.deviceError = err.message;
+  }
+  const changed = hadControl !== state.control || hadReachable !== state.reachable;
+  if (state.control && (!hadControl || !state.apps.length)) {
+    if (isLite()) loadLiteApps(); else await loadApps();
+  }
+  // Quiet refresh unless something changed, so open editors keep their focus.
+  if (changed) renderAll(); else renderTV();
+  if (hadControl !== state.control) renderRestart();
+}
+
+async function loadApps() {
+  try {
+    const { apps } = await api(`/api/apps?tv=${enc(state.tv)}`);
+    state.apps = apps;
+    for (const id of [...state.selected]) if (!apps.some((a) => a.id === id)) state.selected.delete(id);
+  } catch (err) {
+    if (err.blocked) state.control = false;
+    else toast(err.message);
+  }
+}
+
+// lite: looking at icons takes a few seconds, so the remote doesn't wait for it.
+let appsTicket = 0;
+async function loadLiteApps(refresh = false) {
+  const tv = state.tv;
+  if (!tv || (state.appsLoading === tv && !refresh)) return;
+  const ticket = ++appsTicket;
+  state.appsLoading = tv;
+  renderShortcuts();
+  try {
+    const { apps, guessed } = await api(`/api/apps?tv=${enc(tv)}${refresh ? "&refresh=1" : ""}`);
+    if (ticket !== appsTicket || tv !== state.tv) return;
+    state.apps = apps;
+    state.appsGuessed = Boolean(guessed);
+    if (refresh) toast(apps.length === 1 ? "Found 1 app or input." : `Found ${apps.length} apps and inputs.`);
+  } catch (err) {
+    if (ticket === appsTicket) toast(err.message);
+  } finally {
+    if (ticket === appsTicket) {
+      state.appsLoading = null;
+      renderAll();
+    }
+  }
+}
+
+/* ---------- Rendering ---------- */
+
+function renderAll() {
+  renderTV();
+  renderServices();
+  renderShortcuts();
+  renderNow();
+  renderApps();
+  renderRemote();
+  renderLog();
+  renderJob();
+}
+
+function renderTV() {
+  const tv = $("#tv");
+  const facts = $("#tv-facts");
+  const d = state.device;
+  $("#notice").hidden = !(state.reachable && !state.control);
+  $("#finish").hidden = !state.reachable;
+  $("#engine-badge").hidden = !state.engine || (isLite() && !state.reachable);   // lite has nothing to say until the TV answers
+
+  if (!state.tv) {
+    tv.dataset.state = "none";
+    $("#tv-name").textContent = "No TV connected yet";
+    $("#tv-status").textContent = isLite() ? "Type your TV's address at the top."
+      : (state.tvs.length ? "Pick your TV from the list at the top." : "Looking for Roku TVs on your Wi-Fi.");
+    facts.innerHTML = "";
+    return;
+  }
+  if (state.reachable === null) {
+    tv.dataset.state = "none";
+    $("#tv-name").textContent = d?.name || state.tv;
+    $("#tv-status").textContent = "Connecting…";
+    return;
+  }
+  if (!state.reachable) {
+    tv.dataset.state = "offline";
+    $("#tv-name").textContent = d?.name || state.tv;
+    $("#tv-status").textContent = `Not answering. ${state.deviceError || ""} Retrying every 15 seconds.`;
+    return;
+  }
+  tv.dataset.state = state.control ? "ready" : "limited";
+  $("#tv-name").textContent = d.name;
+  const ready = isLite() ? "Ready. Taps go straight to the TV, but this page can't see what's playing on it."
+    : "Connected. Channels and the remote are ready.";
+  $("#tv-status").textContent = state.control
+    ? ready
+    : "Connected, but the TV is only sharing basic info.";
+  const accessNames = { limited: "Limited", default: "Default", enabled: "Enabled", permissive: "Permissive", disabled: "Off" };
+  const rows = [
+    ["Model", [d.vendor && d.model && !d.model.toLowerCase().includes(d.vendor.toLowerCase()) ? d.vendor : "", d.model, d.modelNumber].filter(Boolean).join(" ")],
+    ["Software", d.software ? `Roku OS ${d.software}` : ""],
+    ["Address", d.address],
+    ["Remote access", accessNames[d.accessMode] || d.accessMode],
+  ].filter(([, value]) => value);
+  facts.innerHTML = rows.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join("");
+}
+
+function initials(name) {
+  const words = name.replace(/[^A-Za-z0-9 ]/g, " ").split(/\s+/).filter(Boolean);
+  return (words.length > 1 ? words[0][0] + words[1][0] : (words[0] || "?").slice(0, 2)).toUpperCase();
+}
+
+const TAGS = { free: "Free with ads", roku: "Made by Roku", input: "TV input", system: "Part of the TV" };
+
+function tileHTML(app, fixed) {
+  const art = `<span class="tile-art" data-initials="${esc(initials(app.name))}"><img ${iconAttrs(app.id)} alt="" loading="lazy" data-drop-on-error></span>`;
+  const text = `<span class="tile-name">${esc(app.name)}</span>${TAGS[app.group] ? `<span class="tile-tag">${TAGS[app.group]}</span>` : ""}`;
+  if (fixed) return `<div class="tile fixed">${art}${text}</div>`;
+  const current = state.job && state.job.app.id === app.id ? " is-current" : "";
+  return `<button type="button" class="tile${current}" data-id="${esc(app.id)}" aria-pressed="${state.selected.has(app.id)}" ${state.job ? "disabled" : ""}>${art}${text}</button>`;
+}
+
+function removable(app) { return app.group !== "input" && app.group !== "system"; }
+
+function renderApps() {
+  $("#channels").hidden = !(state.reachable && state.control);
+  const channels = state.apps.filter(removable).sort((a, b) => a.name.localeCompare(b.name));
+  const builtIn = state.apps.filter((a) => !removable(a));
+  $("#channel-grid").innerHTML = channels.length
+    ? channels.map((a) => tileHTML(a, false)).join("")
+    : `<p class="empty">No channels left to remove.</p>`;
+  $("#builtin-grid").innerHTML = builtIn.map((a) => tileHTML(a, true)).join("");
+  $("#select-free").hidden = !channels.some((a) => a.group === "free");
+  renderSelectionBar();
+}
+
+function renderSelectionBar() {
+  const n = state.selected.size;
+  $("#select-bar").hidden = n === 0 || Boolean(state.job);
+  $("#select-count").textContent = n;
+  $("#select-word").textContent = n === 1 ? "channel" : "channels";
+}
+
+function renderRemote() {
+  const enabled = Boolean(state.reachable && state.control);
+  $("#remote").setAttribute("aria-disabled", String(!enabled));
+  for (const btn of document.querySelectorAll("#remote .rk, #smart-form button, #smart-form input")) btn.disabled = !enabled;
+}
+
+function setRemoteError(message) {
+  const el = $("#remote-error");
+  el.textContent = message;
+  el.hidden = !message;
+}
+
+/* ---------- Removing and adding back ---------- */
+
+function startRemovals() {
+  const picked = state.apps.filter((a) => state.selected.has(a.id));
+  if (!picked.length) return;
+  state.queue = picked;
+  state.queueTotal = picked.length;
+  state.removedThisRun = 0;
+  nextJob();
+}
+
+function nextJob() {
+  const app = state.queue.shift();
+  if (!app) {
+    const removed = state.removedThisRun;
+    state.job = null;
+    state.queueTotal = 0;
+    renderAll();
+    if (removed) toast(removed === 1 ? "Done. 1 channel removed." : `Done. ${removed} channels removed.`);
+    return;
+  }
+  const mode = app.mode || "remove";
+  startJob(app, mode, state.queueTotal - state.queue.length, state.queueTotal);
+}
+
+async function startJob(app, mode, index, total) {
+  const job = { app, mode, index, total, step: "opening", error: "" };
+  state.job = job;
+  renderAll();
+  try {
+    await api("/api/store", { tv: state.tv, id: app.id });
+    if (state.job !== job) return;
+    job.step = "waiting";
+  } catch (err) {
+    if (state.job !== job) return;
+    job.step = "error";
+    job.error = err.message;
+  }
+  renderJob();
+  if (job.step === "waiting") watchJob(job);
+}
+
+async function watchJob(job) {
+  while (state.job === job && job.step === "waiting") {
+    await sleep(2000);
+    if (state.job !== job || job.step !== "waiting") return;
+    try {
+      const { apps } = await api(`/api/apps?tv=${enc(state.tv)}`);
+      if (state.job !== job) return;
+      const present = apps.some((a) => a.id === job.app.id);
+      if (job.mode === "remove" ? !present : present) {
+        state.apps = apps;
+        await finishJob(job);
+        return;
+      }
+    } catch { /* keep watching; the TV may be busy */ }
+  }
+}
+
+async function finishJob(job) {
+  job.step = "done";
+  const { app, mode } = job;
+  if (mode === "remove") {
+    state.selected.delete(app.id);
+    state.removedThisRun += 1;
+  }
+  renderAll();
+  try {
+    await api("/api/log", {
+      action: mode === "remove" ? "removed" : "reinstalled",
+      id: app.id, name: app.name, version: app.version || "",
+      tv: state.device?.name || "", address: state.tv,
+    });
+    await loadLog();
+  } catch (err) {
+    toast(`Couldn't save to the undo list: ${err.message}`);
+  }
+  toast(mode === "remove" ? `Removed ${app.name}.` : `Added back ${app.name}.`);
+  await sleep(1500);
+  if (state.job === job) nextJob();
+}
+
+function stopJobs() {
+  state.queue = [];
+  state.queueTotal = 0;
+  state.job = null;
+  renderAll();
+}
+
+function renderJob() {
+  const panel = $("#job");
+  const job = state.job;
+  panel.hidden = !job;
+  if (!job) { panel.innerHTML = ""; return; }
+  const remove = job.mode === "remove";
+  panel.dataset.mode = job.mode;
+  const steps = remove
+    ? ["Open its page on the TV", "On the TV, choose Remove channel, then confirm", "Check that it's gone"]
+    : ["Open its page in the Streaming Store", "On the TV, choose Add channel", "Check that it's back"];
+  const current = { opening: 0, error: 0, waiting: 1, done: 3 }[job.step];
+  const items = steps.map((text, i) => {
+    let cls = i < current ? "ok" : i === current ? "now" : "";
+    if (job.step === "waiting" && i === 2) cls = "now";
+    let extra = "";
+    if (i === 1 && job.step === "waiting") {
+      extra = remove
+        ? `<span class="hint">Use the remote below or your own. Don't see Remove channel? Press Home, highlight the channel, press the star button, then choose Remove channel.</span>`
+        : `<span class="hint">Use the remote below or your own.</span>`;
+    }
+    if (i === 2 && job.step === "waiting") extra = `<span class="hint">Watching for it to ${remove ? "disappear" : "show up"}…</span>`;
+    return `<li class="${cls}"><span class="mark"></span><span>${esc(text)}${extra ? "<br>" + extra : ""}</span></li>`;
+  }).join("");
+  const count = job.total > 1 ? `<span class="job-count">${job.index} of ${job.total}</span>` : "";
+  const error = job.step === "error" ? `<p class="error">${esc(job.error)}</p>` : "";
+  const done = job.step === "done" ? `<p class="hint">${remove ? "Removed. It's on your undo list." : "Added back."}</p>` : "";
+  const buttons = job.step === "done" ? "" : `
+    <div class="row">
+      ${job.step === "waiting" || job.step === "error" ? `<button class="btn" type="button" data-job="reopen">${job.step === "error" ? "Try again" : "Open page again"}</button>` : ""}
+      ${state.queue.length ? `<button class="btn" type="button" data-job="skip">Skip</button>` : ""}
+      <button class="btn quiet" type="button" data-job="stop">${state.queue.length ? "Stop all" : "Cancel"}</button>
+    </div>`;
+  panel.innerHTML = `<h3>${remove ? "Removing" : "Adding back"} ${esc(job.app.name)}${count}</h3><ol>${items}</ol>${error}${done}${buttons}`;
+}
+
+/* ---------- Undo list ---------- */
+
+async function loadLog() {
+  if (isLite()) return;
+  try {
+    const { entries } = await api("/api/log");
+    state.log = entries;
+  } catch { /* keep what we have */ }
+  renderLog();
+}
+
+function currentlyRemoved() {
+  const latest = new Map();
+  for (const entry of state.log) latest.set(`${entry.address}|${entry.id}`, entry);
+  return [...latest.values()].filter((e) => e.action === "removed").sort((a, b) => b.time.localeCompare(a.time));
+}
+
+function formatTime(iso) {
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime()) ? iso : date.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+}
+
+function renderLog() {
+  const removed = currentlyRemoved();
+  $("#copy-btn").hidden = !removed.length;
+  $("#undo-intro").textContent = removed.length
+    ? "To undo, press Add back. The TV opens the channel's store page and you choose Add channel."
+    : "Channels you remove show up here, with a button to add each one back.";
+  $("#undo-list").innerHTML = removed.map((e) => {
+    const here = e.address === state.tv && state.control;
+    const label = here ? `<button class="btn" type="button" data-undo="${esc(e.id)}" ${state.job ? "disabled" : ""}>Add back</button>` : "";
+    return `<li><div><strong>${esc(e.name)}</strong><span class="meta">Removed ${esc(formatTime(e.time))}${e.tv ? ` from ${esc(e.tv)}` : ""}</span></div>${label}</li>`;
+  }).join("");
+}
+
+function copyLog() {
+  const removed = currentlyRemoved();
+  const lines = removed.map((e) => `- ${e.name} (channel id ${e.id}), removed ${formatTime(e.time)} from ${e.tv || e.address}`);
+  const text = ["Channels removed with Roku Detox:", ...lines, "", "To add one back: on the TV, open the Streaming Store, search for the name, and choose Add channel."].join("\n");
+  navigator.clipboard.writeText(text).then(() => toast("Undo list copied."), () => toast("Couldn't copy. Your browser blocked it."));
+}
+
+/* ---------- Finish-up checklist and restart ---------- */
+
+function checklistKey() { return `detox.checklist.${state.tv}`; }
+
+function renderChecklist() {
+  const done = store.get(checklistKey(), {});
+  for (const li of document.querySelectorAll("#steps li")) {
+    const checked = Boolean(done[li.dataset.step]);
+    li.querySelector("input").checked = checked;
+    li.classList.toggle("done", checked);
+  }
+}
+
+function renderRestart() {
+  const box = $("#restart-actions");
+  const r = state.restart;
+  const disabled = !(state.reachable && state.control) || (r && ["sending", "waiting", "restarting"].includes(r.phase));
+  if (r?.phase === "confirm") {
+    box.innerHTML = `<span>Restart now? The screen goes dark for about a minute.</span>
+      <button class="btn danger" type="button" id="restart-yes">Yes, restart</button>
+      <button class="btn quiet" type="button" id="restart-no">Cancel</button>`;
+    return;
+  }
+  const messages = {
+    sending: ["", "Sending the restart shortcut…"],
+    waiting: ["", "Waiting for the TV to turn off…"],
+    restarting: ["", "The TV is restarting. Waiting for it to come back…"],
+    done: ["good", r?.message],
+    sent: ["", r?.message],
+    error: ["bad", r?.message],
+  };
+  const [cls, text] = (r && messages[r.phase]) || ["", ""];
+  box.innerHTML = `<button class="btn" id="restart-btn" type="button" ${disabled ? "disabled" : ""}>Restart TV</button>${text ? `<span class="restart-msg ${cls}" role="status">${esc(text)}</span>` : ""}`;
+}
+
+async function restartTV() {
+  const uptimeBefore = state.device?.uptime ?? Number.POSITIVE_INFINITY;
+  const startedAt = Date.now();
+  let wentOffline = false;
+  state.restart = { phase: "sending" };
+  renderRestart();
+  try {
+    await api("/api/restart", { tv: state.tv });
+  } catch (err) {
+    state.restart = { phase: "error", message: err.message };
+    renderRestart();
+    return;
+  }
+  if (isLite()) {   // send-only: no way to see the TV go off and come back
+    state.restart = { phase: "sent", message: "Sent. The TV should go dark and come back in about a minute. This page can't check on it from here." };
+    renderRestart();
+    return;
+  }
+  state.restart = { phase: "waiting" };
+  renderRestart();
+  const deadline = startedAt + 4 * 60 * 1000;
+  while (Date.now() < deadline) {
+    await sleep(3000);
+    try {
+      const { device, control } = await api(`/api/device?tv=${enc(state.tv)}`);
+      if (device.uptime < uptimeBefore) {
+        const seconds = Math.round((Date.now() - startedAt) / 1000);
+        let screen = "";
+        try { screen = (await api(`/api/active?tv=${enc(state.tv)}`)).app.name; } catch { /* not important */ }
+        state.device = device;
+        state.control = control;
+        state.reachable = true;
+        state.restart = {
+          phase: "done",
+          message: `Back on after ${seconds} seconds and started normally${isHomeScreen({ id: "x", name: screen }) ? " (home screen showing)" : ""}.`,
+        };
+        if (control) await loadApps();
+        markStep("restart", true);
+        renderAll();
+        renderRestart();
+        return;
+      }
+      if (!wentOffline && Date.now() - startedAt > 90 * 1000) {
+        state.restart = { phase: "error", message: "The TV didn't restart. Try Settings, System, Power, System restart." };
+        renderRestart();
+        return;
+      }
+    } catch {
+      wentOffline = true;
+      if (state.restart.phase !== "restarting") {
+        state.restart = { phase: "restarting" };
+        renderRestart();
+      }
+    }
+  }
+  state.restart = { phase: "error", message: "The TV hasn't come back after 4 minutes. If it's stuck on the logo, unplug it for 30 seconds, then plug it back in." };
+  renderRestart();
+}
+
+function markStep(step, value) {
+  const done = store.get(checklistKey(), {});
+  done[step] = value;
+  store.set(checklistKey(), done);
+  renderChecklist();
+}
+
+/* ---------- Remote ---------- */
+
+let keyChain = Promise.resolve();
+function pressKey(key) {
+  if (!state.tv || !state.control) return;
+  const btn = $(`#remote [data-key="${key}"]`);
+  if (btn) {
+    btn.classList.add("sent");
+    setTimeout(() => btn.classList.remove("sent"), 220);
+  }
+  // One at a time, so fast presses reach the TV in order.
+  keyChain = keyChain.then(() => api("/api/key", { tv: state.tv, key }))
+    .then(() => setRemoteError(""))
+    .catch((err) => setRemoteError(err.blocked ? "The TV is blocking remote buttons. See the note at the top." : err.message));
+}
+
+const KEYBOARD = { ArrowUp: "Up", ArrowDown: "Down", ArrowLeft: "Left", ArrowRight: "Right", Backspace: "Back", Escape: "Back", h: "Home", H: "Home", "*": "Info" };
+
+/* ---------- Events ---------- */
+
+$("#find-btn").addEventListener("click", () => findTVs({ autoConnect: false }));
+$("#tv-select").addEventListener("change", (e) => connect(e.target.value));
+$("#manual-form").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const value = $("#manual-input").value.trim();
+  if (!value) return;
+  if (!isLite()) $("#manual-input").value = "";
+  connect(value);
+});
+$("#recheck-btn").addEventListener("click", async (e) => {
+  e.target.disabled = true;
+  e.target.textContent = "Checking…";
+  await refreshDevice();
+  e.target.disabled = false;
+  e.target.textContent = "Check again";
+  if (!state.control) toast("Still limited. Check the setting on the TV and try again.");
+});
+
+$("#channel-grid").addEventListener("click", (e) => {
+  const tile = e.target.closest(".tile[data-id]");
+  if (!tile || state.job) return;
+  const id = tile.dataset.id;
+  if (state.selected.has(id)) state.selected.delete(id); else state.selected.add(id);
+  tile.setAttribute("aria-pressed", String(state.selected.has(id)));
+  renderSelectionBar();
+});
+$("#select-free").addEventListener("click", () => {
+  for (const app of state.apps) if (app.group === "free") state.selected.add(app.id);
+  renderApps();
+});
+$("#clear-btn").addEventListener("click", () => { state.selected.clear(); renderApps(); });
+$("#remove-btn").addEventListener("click", startRemovals);
+
+$("#job").addEventListener("click", (e) => {
+  const action = e.target.closest("[data-job]")?.dataset.job;
+  const job = state.job;
+  if (!action || !job) return;
+  if (action === "reopen") startJob(job.app, job.mode, job.index, job.total);
+  if (action === "skip") nextJob();
+  if (action === "stop") stopJobs();
+});
+
+$("#undo-list").addEventListener("click", (e) => {
+  const id = e.target.closest("[data-undo]")?.dataset.undo;
+  if (!id || state.job) return;
+  const entry = currentlyRemoved().find((x) => x.id === id && x.address === state.tv);
+  if (!entry) return;
+  state.queue = [{ id: entry.id, name: entry.name, version: entry.version, mode: "reinstall" }];
+  state.queueTotal = 1;
+  state.removedThisRun = 0;
+  nextJob();
+});
+$("#copy-btn").addEventListener("click", copyLog);
+
+$("#steps").addEventListener("change", (e) => {
+  const li = e.target.closest("li[data-step]");
+  if (li) markStep(li.dataset.step, e.target.checked);
+});
+$("#restart-actions").addEventListener("click", (e) => {
+  if (e.target.id === "restart-btn") { state.restart = { phase: "confirm" }; renderRestart(); $("#restart-yes")?.focus(); }
+  if (e.target.id === "restart-no") { state.restart = null; renderRestart(); }
+  if (e.target.id === "restart-yes") restartTV();
+});
+
+$("#remote").addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-key]");
+  if (btn && !btn.disabled) pressKey(btn.dataset.key);
+});
+document.addEventListener("keydown", (e) => {
+  if (e.metaKey || e.ctrlKey || e.altKey || !state.control) return;
+  const target = e.target;
+  if (target.closest("input, select, textarea")) return;
+  let key = KEYBOARD[e.key];
+  if (e.key === "Enter" || e.key === " ") {
+    if (target.closest("button, a, label")) return;   // let focused controls work normally
+    key = e.key === "Enter" ? "Select" : "Play";
+  }
+  if (!key) return;
+  e.preventDefault();
+  pressKey(key);
+});
+const looksLikeLink = (text) => /^\s*(https?:\/\/|www\.|m\.|youtu\.be\/|(music\.)?youtube\.com\/|netflix\.com\/)/i.test(text) || /^\s*[a-z0-9-]+(\.[a-z0-9-]+)+\/\S*$/i.test(text);
+function renderSmart() {
+  $("#smart-go").textContent = looksLikeLink($("#smart-input").value) ? "Play on TV" : "Search on TV";
+}
+$("#smart-input").addEventListener("input", renderSmart);
+$("#smart-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const input = $("#smart-input");
+  let text = input.value.trim();
+  if (!text || !state.control) return;
+  const link = looksLikeLink(text);
+  if (link && !/^https?:\/\//i.test(text)) text = `https://${text}`;
+  try {
+    if (link) {
+      const { app } = await api("/api/link", { tv: state.tv, url: text });
+      toast(app === "Detox Home" ? "Found the video. Playing it on the TV." : `Opening it in ${app} on the TV.`);
+    } else {
+      await api("/api/search", { tv: state.tv, text });
+      toast("Search results are on the TV.");
+    }
+    input.value = "";
+    renderSmart();
+    setRemoteError("");
+    setTimeout(pollNow, 3000);
+  } catch (err) {
+    setRemoteError(err.message);
+  }
+});
+$("#smart-type").addEventListener("click", async () => {
+  const input = $("#smart-input");
+  const text = input.value;
+  if (!text || !state.control) return;
+  try {
+    await api("/api/type", { tv: state.tv, text });
+    input.value = "";
+    renderSmart();
+    setRemoteError("");
+  } catch (err) {
+    setRemoteError(err.message);
+  }
+});
+
+/* ---------- Shortcuts: apps, inputs, scenes ---------- */
+
+const plain = (text) => String(text ?? "").replace(/ /g, " ");
+
+function portLabel(id) {
+  const hdmi = /^tvinput\.hdmi(\d+)$/.exec(id);
+  if (hdmi) return `HDMI ${hdmi[1]}`;
+  return { "tvinput.dtv": "Antenna", "tvinput.cvbs": "AV" }[id] || "";
+}
+
+function appLabel(id) {
+  const app = state.apps.find((a) => a.id === id);
+  if (!app) return "";
+  const name = plain(app.name);
+  const port = portLabel(id);
+  return app.type === "tvin" && port && port !== name ? `${name} (${port})` : name;
+}
+
+function artHTML(app) {
+  return `<span class="tile-art" data-initials="${esc(initials(app.name))}"><img ${iconAttrs(app.id)} alt="" loading="lazy" data-drop-on-error></span>`;
+}
+
+async function loadSettings() {
+  if (!state.tv) return;
+  try {
+    const { favorites, scenes, services } = await api(`/api/settings?tv=${enc(state.tv)}`);
+    state.favorites = favorites;
+    state.scenes = scenes;
+    state.services = services || {};
+  } catch { /* keep what we have */ }
+  renderShortcuts();
+}
+
+async function saveSettings(change) {
+  const data = await api("/api/settings", { tv: state.tv, ...change });
+  state.favorites = data.favorites;
+  state.scenes = data.scenes;
+  state.services = data.services || {};
+}
+
+function renderShortcuts() {
+  const show = Boolean(state.reachable && state.control);
+  $("#shortcuts").hidden = !show;
+  if (!show) return;
+  const apps = state.apps.filter(removable);
+  const editing = Boolean(state.draftFavorites);
+  const favorites = state.favorites.map((id) => apps.find((a) => a.id === id)).filter(Boolean);
+
+  $("#fav-row").hidden = editing;
+  $("#fav-edit").hidden = editing;
+  $("#fav-edit").textContent = favorites.length ? "Change favorites" : "Choose favorites";
+  $("#fav-row").innerHTML = favorites.length
+    ? favorites.map((a) => `<button type="button" class="shortcut" data-launch="${esc(a.id)}">${artHTML(a)}<span class="shortcut-name">${esc(plain(a.name))}</span></button>`).join("")
+    : `<p class="empty">Pick the apps you open most to keep them up here.</p>`;
+  $("#app-grid").innerHTML = apps.slice().sort((a, b) => a.name.localeCompare(b.name)).map((a) =>
+    `<button type="button" class="tile" data-launch="${esc(a.id)}" aria-label="Open ${esc(plain(a.name))}">${artHTML(a)}<span class="tile-name">${esc(plain(a.name))}</span></button>`
+  ).join("");
+  $("#fav-editor").hidden = !editing;
+  if (editing && !$("#fav-grid").childElementCount) {
+    const picked = new Set(state.draftFavorites);
+    $("#fav-grid").innerHTML = apps.slice().sort((a, b) => a.name.localeCompare(b.name)).map((a) =>
+      `<button type="button" class="tile" data-fav="${esc(a.id)}" aria-pressed="${picked.has(a.id)}">${artHTML(a)}<span class="tile-name">${esc(plain(a.name))}</span></button>`
+    ).join("");
+  }
+
+  const inputs = state.apps.filter((a) => a.type === "tvin");
+  $("#input-row").innerHTML = inputs.length
+    ? inputs.map((a) => {
+      const name = plain(a.name);
+      const port = portLabel(a.id);
+      return `<button type="button" class="shortcut input" data-launch="${esc(a.id)}"><span class="shortcut-name">${esc(name)}</span>${port && port !== name ? `<span class="shortcut-port">${esc(port)}</span>` : ""}</button>`;
+    }).join("")
+    : `<p class="empty">This TV didn't list any inputs.</p>`;
+  if (isLite()) renderLiteApps();
+  renderScenes();
+}
+
+function renderLiteApps() {
+  const loading = state.appsLoading === state.tv;
+  const refresh = $("#apps-refresh");
+  refresh.setAttribute("aria-disabled", String(loading));   // not disabled, so keyboard focus stays on it
+  refresh.textContent = loading ? "Looking…" : "Refresh apps";
+  const note = $("#apps-note");
+  note.hidden = !(state.appsGuessed && state.apps.length && !loading);
+  note.textContent = "Your TV didn't say which apps it has, so this shows common ones. Some may not be installed.";
+  if (state.apps.length) return;
+  $("#app-grid").innerHTML = loading
+    ? `<p class="empty wide">Looking for apps on the TV…</p>`
+    : `<p class="empty wide">Couldn't see any apps. If the remote buttons don't work either, the TV may be set to Limited. On the TV, go to Settings, System, Advanced system settings, Control by mobile apps, Network access, and choose Default.</p>`;
+  $("#input-row").innerHTML = `<p class="empty">${loading ? "Looking for inputs…" : "No inputs found."}</p>`;
+}
+
+async function launchApp(id, btn) {
+  btn?.classList.add("busy");
+  try {
+    await api("/api/launch", { tv: state.tv, id });
+    toast(`Opening ${appLabel(id) || "it"}.`);
+    setTimeout(pollNow, 2500);
+  } catch (err) {
+    toast(err.message);
+  } finally {
+    btn?.classList.remove("busy");
+  }
+}
+
+const STEP_LABELS = {
+  power_on: "Turn TV on", power_off: "Turn TV off", open: "Open", volume_up: "Volume up",
+  volume_down: "Volume down", mute: "Mute or unmute", wait: "Wait",
+};
+
+function describeStep(step) {
+  if (step.do === "open") return `open ${appLabel(step.target) || "an app"}`;
+  if (step.do === "volume_up") return `volume up ${step.n}`;
+  if (step.do === "volume_down") return `volume down ${step.n}`;
+  if (step.do === "wait") return `wait ${step.n} ${step.n === 1 ? "second" : "seconds"}`;
+  return { power_on: "turn the TV on", power_off: "turn the TV off", mute: "mute or unmute" }[step.do];
+}
+
+function formatClock(hhmm) {
+  const [h, m] = hhmm.split(":").map(Number);
+  return new Date(2000, 0, 1, h, m).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+}
+
+function renderScenes() {
+  const editing = Boolean(state.sceneDraft);
+  $("#scene-new").hidden = editing;
+  if (!state.scenes.length) {
+    $("#scene-list").innerHTML = editing ? "" : `<li><div><span class="meta">A scene runs several steps with one tap. Start from an example:</span></div>
+      <button class="btn" type="button" data-template="game">Game time</button>
+      <button class="btn" type="button" data-template="bedtime">Bedtime</button></li>`;
+  } else {
+    $("#scene-list").innerHTML = state.scenes.map((scene) => {
+      const steps = scene.steps.map(describeStep).join(", ");
+      const when = scene.at ? `Every day at ${formatClock(scene.at)}: ` : "";
+      const running = state.runningScene === scene.id;
+      return `<li><div><strong>${esc(scene.name)}</strong><span class="meta">${esc(when + steps.charAt(0).toUpperCase() + steps.slice(1))}</span></div>
+        <button class="btn" type="button" data-run="${esc(scene.id)}" ${state.runningScene ? "disabled" : ""}>${running ? "Running…" : "Run"}</button>
+        <button class="btn quiet" type="button" data-edit="${esc(scene.id)}" ${editing ? "disabled" : ""}>Edit</button></li>`;
+    }).join("");
+  }
+  renderSceneEditor();
+}
+
+function sceneTemplate(kind) {
+  const inputs = state.apps.filter((a) => a.type === "tvin");
+  const gameInput = inputs.find((a) => /switch|xbox|playstation|ps5|ps4|game/i.test(a.name)) || inputs.find((a) => a.id.startsWith("tvinput.hdmi"));
+  if (kind === "game") return { name: "Game time", steps: [{ do: "power_on" }, ...(gameInput ? [{ do: "open", target: gameInput.id }] : [])], at: null };
+  if (kind === "bedtime") return { name: "Bedtime", steps: [{ do: "power_off" }], at: isLite() ? null : "23:00" };
+  return { name: "", steps: [{ do: "power_on" }, { do: "open", target: "" }], at: null };
+}
+
+function editScene(draft) {
+  state.sceneDraft = JSON.parse(JSON.stringify(draft));
+  state.sceneError = "";
+  state.draftVersion += 1;
+  renderScenes();
+  $("#scene-name")?.focus();
+}
+
+function targetOptions(selected) {
+  const option = (a) => `<option value="${esc(a.id)}" ${a.id === selected ? "selected" : ""}>${esc(appLabel(a.id))}</option>`;
+  const inputs = state.apps.filter((a) => a.type === "tvin");
+  const apps = state.apps.filter(removable).sort((a, b) => a.name.localeCompare(b.name));
+  return `<option value="">Choose…</option><optgroup label="Inputs">${inputs.map(option).join("")}</optgroup><optgroup label="Apps">${apps.map(option).join("")}</optgroup>`;
+}
+
+function renderSceneEditor() {
+  const box = $("#scene-editor");
+  const draft = state.sceneDraft;
+  box.hidden = !draft;
+  if (!draft) { box.innerHTML = ""; delete box.dataset.v; return; }
+  if (box.dataset.v === String(state.draftVersion)) return;   // don't wipe what's being typed
+  box.dataset.v = String(state.draftVersion);
+  const steps = draft.steps.map((step, i) => {
+    const actions = Object.entries(STEP_LABELS).map(([value, label]) => `<option value="${value}" ${value === step.do ? "selected" : ""}>${label}</option>`).join("");
+    let extra = "";
+    if (step.do === "open") extra = `<select data-field="target" aria-label="What to open">${targetOptions(step.target)}</select>`;
+    if (step.do === "volume_up" || step.do === "volume_down") extra = `<input type="number" data-field="n" min="1" max="50" value="${step.n || 5}" aria-label="How many clicks"><span>clicks</span>`;
+    if (step.do === "wait") extra = `<input type="number" data-field="n" min="1" max="30" value="${step.n || 3}" aria-label="Seconds"><span>seconds</span>`;
+    return `<li data-i="${i}"><div class="step"><select data-field="do" aria-label="Step ${i + 1}">${actions}</select>${extra}
+      <button class="btn quiet" type="button" data-step-remove="${i}" aria-label="Remove step ${i + 1}">Remove</button></div></li>`;
+  }).join("");
+  box.innerHTML = `
+    <label class="field">Name<input type="text" id="scene-name" maxlength="40" value="${esc(draft.name)}" placeholder="Game time"></label>
+    <div>
+      <p class="field-label">Steps, in order</p>
+      <ol class="scene-steps">${steps}</ol>
+      <button class="btn quiet" type="button" id="scene-add-step">Add a step</button>
+    </div>
+    <div>
+      ${isLite() ? "" : `<div class="scene-time">
+        <label><input type="checkbox" id="scene-timed" ${draft.at ? "checked" : ""}> Also run it every day at</label>
+        <input type="time" id="scene-at" value="${esc(draft.at || "23:00")}" ${draft.at ? "" : "disabled"} aria-label="Time">
+      </div>`}
+      <p class="note">${{
+        lite: "Running a scene at a set time needs the Roku Detox extension on a computer, or the Roku Detox program at home.",
+        extension: "Timed scenes run only while your browser is open.",
+        relay: "Timed scenes run only while the browser with the Roku Detox extension is open.",
+      }[state.engine?.kind] || "Timed scenes run only while Roku Detox is open on your Mac."} Volume steps move up or down by clicks, because Roku can't set an exact level.</p>
+    </div>
+    ${state.sceneError ? `<p class="error" role="alert">${esc(state.sceneError)}</p>` : ""}
+    <div class="row">
+      <button class="btn primary" type="button" id="scene-save">Save scene</button>
+      <button class="btn" type="button" id="scene-cancel">Cancel</button>
+      ${draft.id ? `<button class="btn quiet" type="button" id="scene-delete">Delete scene</button>` : ""}
+    </div>`;
+}
+
+function redrawDraft(focusSelector) {
+  state.draftVersion += 1;
+  renderSceneEditor();
+  if (focusSelector) $(focusSelector)?.focus();
+}
+
+async function saveScene() {
+  const draft = state.sceneDraft;
+  draft.name = $("#scene-name").value.trim();
+  if (!draft.name) { state.sceneError = "Give the scene a name."; return redrawDraft("#scene-name"); }
+  if (!draft.steps.length) { state.sceneError = "Add at least one step."; return redrawDraft(); }
+  if (draft.steps.some((s) => s.do === "open" && !s.target)) { state.sceneError = "Pick what each Open step should open."; return redrawDraft(); }
+  const scenes = draft.id ? state.scenes.map((s) => (s.id === draft.id ? draft : s)) : [...state.scenes, draft];
+  try {
+    await saveSettings({ scenes });
+    state.sceneDraft = null;
+    renderScenes();
+    toast(`Saved ${draft.name}.`);
+  } catch (err) {
+    state.sceneError = err.message;
+    redrawDraft();
+  }
+}
+
+async function deleteScene() {
+  const draft = state.sceneDraft;
+  try {
+    await saveSettings({ scenes: state.scenes.filter((s) => s.id !== draft.id) });
+    state.sceneDraft = null;
+    renderScenes();
+    toast(`Deleted ${draft.name}.`);
+  } catch (err) {
+    state.sceneError = err.message;
+    redrawDraft();
+  }
+}
+
+async function runScene(id) {
+  const scene = state.scenes.find((s) => s.id === id);
+  if (!scene) return;
+  state.runningScene = id;
+  renderScenes();
+  try {
+    await api("/api/scene", { tv: state.tv, id });
+    toast(`Ran ${scene.name}.`);
+  } catch (err) {
+    toast(err.message);
+  } finally {
+    state.runningScene = null;
+    renderScenes();
+    setTimeout(pollNow, 1500);
+  }
+}
+
+$("#fav-edit").addEventListener("click", () => {
+  state.draftFavorites = [...state.favorites];
+  $("#fav-grid").innerHTML = "";
+  renderShortcuts();
+});
+$("#fav-grid").addEventListener("click", (e) => {
+  const tile = e.target.closest("[data-fav]");
+  if (!tile) return;
+  const id = tile.dataset.fav;
+  const list = state.draftFavorites;
+  const at = list.indexOf(id);
+  if (at >= 0) list.splice(at, 1); else list.push(id);
+  tile.setAttribute("aria-pressed", String(at < 0));
+});
+$("#fav-save").addEventListener("click", async () => {
+  try {
+    await saveSettings({ favorites: state.draftFavorites });
+    state.draftFavorites = null;
+    renderShortcuts();
+    toast("Favorites saved.");
+  } catch (err) {
+    toast(err.message);
+  }
+});
+$("#fav-cancel").addEventListener("click", () => { state.draftFavorites = null; renderShortcuts(); });
+
+$("#shortcuts").addEventListener("click", (e) => {
+  const launchBtn = e.target.closest("[data-launch]");
+  if (launchBtn) return launchApp(launchBtn.dataset.launch, launchBtn);
+  const template = e.target.closest("[data-template]")?.dataset.template;
+  if (template) return editScene(sceneTemplate(template));
+  const runId = e.target.closest("[data-run]")?.dataset.run;
+  if (runId) return runScene(runId);
+  const editId = e.target.closest("[data-edit]")?.dataset.edit;
+  if (editId) return editScene(state.scenes.find((s) => s.id === editId));
+});
+$("#scene-new").addEventListener("click", () => editScene(sceneTemplate("blank")));
+
+$("#scene-editor").addEventListener("click", (e) => {
+  const draft = state.sceneDraft;
+  if (!draft) return;
+  const remove = e.target.closest("[data-step-remove]");
+  if (remove) { draft.steps.splice(Number(remove.dataset.stepRemove), 1); return redrawDraft(); }
+  if (e.target.id === "scene-add-step") { draft.steps.push({ do: "open", target: "" }); return redrawDraft(`.scene-steps li:last-child select`); }
+  if (e.target.id === "scene-save") return saveScene();
+  if (e.target.id === "scene-delete") return deleteScene();
+  if (e.target.id === "scene-cancel") { state.sceneDraft = null; renderScenes(); }
+});
+$("#scene-editor").addEventListener("input", (e) => {
+  const draft = state.sceneDraft;
+  if (!draft) return;
+  if (e.target.id === "scene-name") { draft.name = e.target.value; return; }
+  if (e.target.id === "scene-at") { if (e.target.value) draft.at = e.target.value; return; }
+  if (e.target.id === "scene-timed") {
+    draft.at = e.target.checked ? ($("#scene-at").value || "23:00") : null;
+    return redrawDraft("#scene-timed");
+  }
+  const li = e.target.closest("li[data-i]");
+  if (!li) return;
+  const i = Number(li.dataset.i);
+  const step = draft.steps[i];
+  const field = e.target.dataset.field;
+  if (field === "do") {
+    draft.steps[i] = { do: e.target.value, ...(e.target.value === "open" ? { target: "" } : {}), ...(["volume_up", "volume_down"].includes(e.target.value) ? { n: 5 } : {}), ...(e.target.value === "wait" ? { n: 3 } : {}) };
+    return redrawDraft(`.scene-steps li[data-i="${i}"] select`);
+  }
+  if (field === "target") step.target = e.target.value;
+  if (field === "n") step.n = Number(e.target.value) || 1;
+});
+
+/* ---------- Now playing ---------- */
+
+function clock(ms) {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const sec = String(total % 60).padStart(2, "0");
+  return h ? `${h}:${String(m).padStart(2, "0")}:${sec}` : `${m}:${sec}`;
+}
+
+async function pollNow() {
+  if (!state.tv || !state.control || document.hidden || isLite()) return;
+  if (state.engine?.kind === "relay") {   // every 15 s through the relay, to stay well under its limit
+    if (Date.now() - (state.lastNowPoll || 0) < 15000) return;
+    state.lastNowPoll = Date.now();
+  }
+  if (state.restart && ["sending", "waiting", "restarting"].includes(state.restart.phase)) return;
+  try {
+    const { now } = await api(`/api/now?tv=${enc(state.tv)}`);
+    state.now = { ...now, fetchedAt: Date.now() };
+  } catch {
+    state.now = null;
+  }
+  renderNow();
+}
+
+function renderNow() {
+  const box = $("#now");
+  const now = state.now;
+  box.hidden = !(now && state.control && state.reachable);
+  if (box.hidden) return;
+  const playing = ["play", "pause", "buffer"].includes(now.state) && now.appId;
+  const screen = now.screen || {};
+  const home = !playing && isHomeScreen(screen);
+  const appId = playing ? now.appId : home ? "" : screen.id;
+  const name = playing ? plain(now.app) : home ? "Home screen" : plain(screen.name);
+  let detail = !playing && portLabel(screen.id) ? `${portLabel(screen.id)} input` : "Nothing playing";
+  let percent = null;
+  if (playing) {
+    const label = { play: "Playing", pause: "Paused", buffer: "Loading" }[now.state];
+    let position = now.position ?? 0;
+    if (now.state === "play") position += Date.now() - now.fetchedAt;
+    if (now.duration) position = Math.min(position, now.duration);
+    if (now.live) detail = `${label}, live`;
+    else if (now.duration) { detail = `${label}, ${clock(position)} of ${clock(now.duration)}`; percent = (position / now.duration) * 100; }
+    else detail = `${label}, ${clock(position)} in`;
+  }
+  const key = appId || "home";
+  if (box.dataset.app !== key) {
+    box.dataset.app = key;
+    box.innerHTML = `<span class="tile-art now-art" data-initials="${esc(home ? "⌂" : initials(name))}">${appId ? `<img ${iconAttrs(appId)} alt="" data-drop-on-error>` : ""}</span>
+      <div><p class="now-app"></p><p class="now-state"></p><div class="now-bar" hidden><span></span></div></div>`;
+  }
+  box.querySelector(".now-app").textContent = name;
+  box.querySelector(".now-state").textContent = detail;
+  const bar = box.querySelector(".now-bar");
+  bar.hidden = percent === null;
+  if (percent !== null) bar.firstElementChild.style.width = `${Math.min(100, percent)}%`;
+}
+
+/* ---------- Find a show ---------- */
+
+function hasService(appId) { return state.services[appId] !== false; }
+
+function renderServices() {
+  const subs = state.apps.filter((a) => a.subscription).sort((a, b) => a.name.localeCompare(b.name));
+  const on = subs.filter((a) => hasService(a.id)).length;
+  $("#services-summary").textContent = subs.length ? `(${on} of ${subs.length} marked as yours)` : "";
+  $("#services-box").hidden = !subs.length || state.findSource === "sites";
+  $("#service-chips").innerHTML = subs.map((a) =>
+    `<button type="button" class="chip" data-service="${esc(a.id)}" aria-pressed="${hasService(a.id)}"><img ${iconAttrs(a.id)} alt="" data-drop-on-error>${esc(plain(a.name))}</button>`
+  ).join("");
+}
+
+function offerYours(offer) {
+  if (!offer.installed || offer.addon) return false;
+  if (offer.kind === "free") return true;
+  if (offer.kind === "included") return !offer.subscription || hasService(offer.appId);
+  return false;
+}
+
+function offerLabel(offer) {
+  if (offer.kind === "rent") return `Rent on ${offer.service}${offer.price ? ` ${offer.price}` : ""}`;
+  if (offer.kind === "buy") return `Buy on ${offer.service}${offer.price ? ` ${offer.price}` : ""}`;
+  const why = offer.addon ? " (add-on)" : !offer.installed ? " (app not on this TV)" : offer.subscription && !hasService(offer.appId) ? " (not yours)" : "";
+  return `${offer.service}${offer.kind === "free" ? ", free" : ""}${why}`;
+}
+
+function renderFind() {
+  const list = $("#find-results");
+  const find = state.find;
+  if (!find) { list.innerHTML = ""; return; }
+  if (!find.results.length) {
+    list.innerHTML = "";
+    $("#find-status").textContent = `Nothing found for "${find.query}". Try a shorter name.`;
+    return;
+  }
+  $("#find-status").textContent = "";
+  paint(() => { list.innerHTML = find.results.map((title, index) => {
+    const yours = [];
+    const seenApps = new Set();
+    for (const offer of title.offers) {
+      if (!offerYours(offer) || seenApps.has(offer.appId)) continue;
+      seenApps.add(offer.appId);
+      yours.push(offer);
+    }
+    // Other packages of an app you already have a button for (e.g. Peacock Premium Plus) aren't news.
+    const elsewhere = title.offers.filter((o) => !yours.includes(o) && !(seenApps.has(o.appId) && ["included", "free"].includes(o.kind)));
+    const buttons = yours.map((o) => {
+      const i = title.offers.indexOf(o);
+      return `<button type="button" class="btn ${yours[0] === o ? "primary" : ""} watch-btn" data-watch="${index}:${i}">
+        <img ${iconAttrs(o.appId)} alt="" data-drop-on-error>
+        ${o.contentId ? "Watch on" : "Open"} ${esc(plain(o.appName || o.service))}${o.kind === "free" ? " <small>free</small>" : ""}</button>`;
+    }).join("");
+    const none = yours.length ? "" : `<p class="note" style="margin-top:10px">Not on any of your apps right now.</p>`;
+    const seenLabels = new Set();
+    const other = elsewhere.map(offerLabel).filter((label) => !seenLabels.has(label) && seenLabels.add(label)).slice(0, 6);
+    const meta = [title.type, title.year].filter(Boolean).join(", ");
+    const pickable = title.type === "Show" && title.id != null;
+    return `<li class="result">
+      <div class="poster">${title.poster ? `<img src="${esc(title.poster)}" alt="" loading="lazy">` : ""}</div>
+      <div>
+        <h3>${esc(title.title)}</h3>
+        <p class="meta">${esc(meta)}</p>
+        ${title.description ? `<p class="desc">${esc(title.description)}</p>` : ""}
+        <div class="watch-row">${buttons}${pickable ? toggleHTML(`r:${title.id}`) : ""}<button type="button" class="btn quiet" data-roku-search="${index}">Search on TV</button></div>
+        ${none}
+        ${other.length ? `<p class="elsewhere">Other ways to watch: ${esc(other.join("; "))}</p>` : ""}
+      </div>
+      ${pickable ? panelHTML(`r:${title.id}`, title.id) : ""}</li>`;
+  }).join(""); });
+}
+
+async function runFind(query) {
+  if (!state.tv || !state.control) { $("#find-status").textContent = "Connect to your TV first."; return; }
+  $("#find-go").disabled = true;
+  $("#find-status").textContent = `Looking for "${query}"…`;
+  try {
+    const data = await api(`/api/find?tv=${enc(state.tv)}&q=${enc(query)}`);
+    state.find = { query, ...data };
+    renderFind();
+  } catch (err) {
+    $("#find-status").textContent = err.message;
+  } finally {
+    $("#find-go").disabled = false;
+  }
+}
+
+$("#find-form").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const query = $("#find-input").value.trim();
+  if (!query) return;
+  if (state.findSource === "sites") runSiteSearch(query); else runFind(query);
+});
+
+/* ---------- My sites ---------- */
+
+state.findSource = store.get("detox.findSource", "catalog");
+state.sites = [];
+state.siteGroups = null;
+
+function renderFindSource() {
+  const sites = state.findSource === "sites";
+  for (const btn of document.querySelectorAll("#find-source [data-source]")) btn.setAttribute("aria-pressed", String(btn.dataset.source === state.findSource));
+  for (const id of ["#services-box", "#find-status", "#find-results", "#jw-note"]) $(id).hidden = sites;
+  if (sites) $("#continue").hidden = true; else renderContinue();
+  $("#sites-area").hidden = !sites;
+  $("#find-input").placeholder = sites ? "Search your sites" : "Show or movie name";
+  $("#find-input").setAttribute("aria-label", sites ? "Search your sites" : "Show or movie name");
+  $("#find-intro").textContent = sites
+    ? "Search the sites you've added. Pick a result and Roku Detox finds the video on its page and plays it on the TV."
+    : "Search for any show or movie. You'll see which of your apps has it, and can start it on the TV.";
+  if (sites && !state.sites.length) $("#sites-box").open = true;
+}
+
+async function loadSites() {
+  if (isLite()) return;
+  try {
+    state.sites = (await api("/api/sites")).sites;
+  } catch { /* keep what we have */ }
+  renderSites();
+}
+
+function siteHost(site) {
+  try { return new URL(site.search.replace("{q}", "x")).hostname.replace(/^www\./, ""); } catch { return ""; }
+}
+
+function renderSites() {
+  $("#sites-summary").textContent = state.sites.length ? `(${state.sites.length})` : "";
+  $("#sites-list").innerHTML = state.sites.length
+    ? state.sites.map((site) => `<li><div><strong>${esc(site.name)}</strong><span class="meta">${esc(siteHost(site))}</span></div><button class="btn quiet" type="button" data-site-remove="${esc(site.id)}">Remove</button></li>`).join("")
+    : `<li><span class="note">No sites yet.</span></li>`;
+}
+
+async function saveSites(sites) {
+  state.sites = (await api("/api/sites", { sites })).sites;
+  renderSites();
+}
+
+async function runSiteSearch(query) {
+  if (!state.sites.length) {
+    $("#sites-status").textContent = "Add a site first.";
+    $("#sites-box").open = true;
+    $("#site-name").focus();
+    return;
+  }
+  $("#find-go").disabled = true;
+  $("#sites-status").textContent = `Searching ${state.sites.length === 1 ? state.sites[0].name : `${state.sites.length} sites`} for "${query}"…`;
+  try {
+    state.siteGroups = (await api(`/api/sites/search?q=${enc(query)}`)).groups;
+    const total = state.siteGroups.reduce((n, g) => n + g.results.length, 0);
+    $("#sites-status").textContent = total ? "" : `Nothing found for "${query}".`;
+    renderSiteResults();
+  } catch (err) {
+    $("#sites-status").textContent = err.message;
+  } finally {
+    $("#find-go").disabled = false;
+  }
+}
+
+function renderSiteResults() {
+  const groups = state.siteGroups || [];
+  $("#site-results").innerHTML = groups.map((group, gi) => `
+    <section class="site-group" aria-label="${esc(group.site)}">
+      <h3 class="subhead">${esc(group.site)}</h3>
+      ${group.error ? `<p class="note">${esc(group.error)}</p>` : ""}
+      ${!group.error && !group.results.length ? `<p class="note">No matches here.</p>` : ""}
+      <ul class="results">${group.results.map((r, ri) => `
+        <li class="result site-result">
+          <div class="site-thumb">${r.image ? `<img src="${esc(r.image)}" alt="" loading="lazy" referrerpolicy="no-referrer" data-drop-on-error>` : ""}</div>
+          <div>
+            <h3>${esc(r.title)}</h3>
+            <p class="meta">${esc(new URL(r.url).hostname.replace(/^www\./, "") + new URL(r.url).pathname)}</p>
+            <div class="watch-row">
+              <button class="btn primary" type="button" data-site-play="${gi}:${ri}">Play on TV</button>
+              <a class="btn quiet" href="${esc(r.url)}" target="_blank" rel="noopener noreferrer">Open page</a>
+            </div>
+          </div>
+        </li>`).join("")}</ul>
+    </section>`).join("");
+}
+
+$("#find-source").addEventListener("click", (e) => {
+  const source = e.target.closest("[data-source]")?.dataset.source;
+  if (!source || source === state.findSource) return;
+  state.findSource = source;
+  store.set("detox.findSource", source);
+  renderFindSource();
+  $("#find-input").focus();
+});
+$("#sites-list").addEventListener("click", async (e) => {
+  const id = e.target.closest("[data-site-remove]")?.dataset.siteRemove;
+  if (!id) return;
+  try {
+    await saveSites(state.sites.filter((site) => site.id !== id));
+  } catch (err) {
+    toast(err.message);
+  }
+});
+$("#site-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const name = $("#site-name").value.trim();
+  let search = $("#site-search").value.trim();
+  if (search && !/^https?:\/\//i.test(search)) search = `https://${search}`;
+  if (!name || !search) { toast("Give the site a name and its search address."); return; }
+  if (!search.includes("{q}")) { toast("Put {q} in the address where your search words go."); return; }
+  try {
+    await saveSites([...state.sites, { name, search }]);
+    $("#site-name").value = "";
+    $("#site-search").value = "";
+    toast(`Added ${name}.`);
+  } catch (err) {
+    toast(err.message);
+  }
+});
+$("#site-results").addEventListener("click", async (e) => {
+  const btn = e.target.closest("[data-site-play]");
+  if (!btn) return;
+  const [gi, ri] = btn.dataset.sitePlay.split(":").map(Number);
+  const result = state.siteGroups[gi].results[ri];
+  btn.disabled = true;
+  btn.textContent = "Finding the video…";
+  try {
+    const played = await api("/api/link", { tv: state.tv, url: result.url, title: result.title });
+    toast(played.app === "Detox Home" ? `Playing "${played.title || result.title}" on the TV.` : `Opening it in ${played.app} on the TV.`);
+    setTimeout(pollNow, 3000);
+  } catch (err) {
+    toast(err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Play on TV";
+  }
+});
+$("#service-chips").addEventListener("click", async (e) => {
+  const chip = e.target.closest("[data-service]");
+  if (!chip) return;
+  const id = chip.dataset.service;
+  const services = { ...state.services, [id]: !hasService(id) };
+  try {
+    await saveSettings({ services });
+    renderServices();
+    renderFind();
+    renderContinue();
+  } catch (err) {
+    toast(err.message);
+  }
+});
+$("#find-results").addEventListener("click", async (e) => {
+  const watchBtn = e.target.closest("[data-watch]");
+  if (watchBtn) {
+    const [ti, oi] = watchBtn.dataset.watch.split(":").map(Number);
+    const title = state.find.results[ti];
+    const offer = title.offers[oi];
+    watchBtn.disabled = true;
+    try {
+      await api("/api/watch", { tv: state.tv, appId: offer.appId, contentId: offer.contentId, mediaType: offer.mediaType });
+      toast(offer.contentId ? `Opening ${title.title} in ${plain(offer.appName || offer.service)}.` : `Opened ${plain(offer.appName || offer.service)}. Search for ${title.title} there.`);
+      setTimeout(pollNow, 3000);
+      // Show-level watch: recordHistory keeps the season and episode already on file for this show.
+      if (title.id != null) recordHistory({ id: title.id, title: title.title, type: title.type, year: title.year, poster: title.poster, appId: offer.appId, appName: plain(offer.appName || offer.service) });
+    } catch (err) {
+      toast(err.message);
+    } finally {
+      watchBtn.disabled = false;
+    }
+    return;
+  }
+  const searchBtn = e.target.closest("[data-roku-search]");
+  if (searchBtn) {
+    const title = state.find.results[Number(searchBtn.dataset.rokuSearch)];
+    try {
+      await api("/api/search", { tv: state.tv, text: title.title });
+      toast(`Searching for ${title.title} on the TV.`);
+    } catch (err) {
+      toast(err.message);
+    }
+  }
+});
+
+/* ---------- Continue watching and the episode picker ---------- */
+// A picker is keyed "r:<show id>" under a search result and "c:<show id>" under Continue watching.
+
+const CHECK_SVG = `<svg viewBox="0 0 18 18" aria-hidden="true"><path d="m3.5 9.5 3.5 3.5 7.5-8"/></svg>`;
+const sameId = (a, b) => a != null && b != null && String(a) === String(b);
+
+function atTime(at) {
+  if (typeof at === "number") return at < 1e12 ? at * 1000 : at;
+  const t = Date.parse(at || "");
+  return Number.isNaN(t) ? 0 : t;
+}
+
+function whenText(at) {
+  const t = atTime(at);
+  if (!t) return "";
+  const midnight = (ms) => new Date(ms).setHours(0, 0, 0, 0);
+  const days = Math.round((midnight(Date.now()) - midnight(t)) / 86400000);
+  if (days <= 0) return "today";
+  if (days === 1) return "yesterday";
+  if (days < 7) return `${days} days ago`;
+  return `on ${new Date(t).toLocaleDateString(undefined, { month: "short", day: "numeric" })}`;
+}
+
+function seasonName(number, title) {
+  if (number > 0) return `Season ${number}`;
+  if (number === 0) return "Specials";
+  return title || "Season";
+}
+
+function episodeCode(seasonNumber, episodeNumber) {
+  if (seasonNumber > 0) return `S${seasonNumber} E${episodeNumber}`;
+  return seasonNumber === 0 ? `Special ${episodeNumber}` : `Episode ${episodeNumber}`;
+}
+
+function runtimeText(runtime) {
+  if (runtime === null || runtime === undefined || runtime === "") return "";
+  if (typeof runtime !== "number") return String(runtime);
+  const minutes = Math.round(runtime > 400 ? runtime / 60 : runtime);   // minutes, or seconds if it's that big
+  return minutes > 0 ? `${minutes} min` : "";
+}
+
+function placeText(item) {
+  if (item.type === "Movie") return ["Movie", item.year].filter(Boolean).join(", ");
+  const s = item.season ? item.season.number : null;
+  if (item.episode) {
+    const n = item.episode.number;
+    const where = s > 0 ? `Season ${s}, episode ${n}` : s === 0 ? `Specials, episode ${n}` : `Episode ${n}`;
+    return item.episode.title ? `${where}: ${item.episode.title}` : where;
+  }
+  if (item.season) return seasonName(s, "");
+  return ["Show", item.year].filter(Boolean).join(", ");
+}
+
+function historyFor(id) { return (state.history || []).find((item) => item && sameId(item.id, id)) || null; }
+
+function historyItems() {
+  return (state.history || []).filter((item) => item && item.id != null)
+    .sort((a, b) => Number(Boolean(b.pinned)) - Number(Boolean(a.pinned)) || atTime(b.at) - atTime(a.at));
+}
+
+function showMeta(showId) {
+  const found = state.find?.results?.find((r) => sameId(r.id, showId));
+  const show = state.showCache[showId]?.data;
+  const src = found || historyFor(showId) || show || {};
+  return { id: src.id ?? showId, title: src.title || show?.title || "", year: src.year ?? show?.year ?? null, poster: src.poster || show?.poster || null };
+}
+
+// Re-render while keeping keyboard focus (by data-fk) and each episode list's scroll position.
+function paint(render) {
+  const active = document.activeElement;
+  const fk = active?.dataset?.fk;
+  const scroll = new Map();
+  for (const list of document.querySelectorAll(".ep-list[data-list]")) if (list.offsetParent) scroll.set(list.dataset.list, list.scrollTop);
+  render();
+  for (const list of document.querySelectorAll(".ep-list[data-list]")) {
+    if (scroll.has(list.dataset.list)) { list.scrollTop = scroll.get(list.dataset.list); continue; }
+    const current = list.querySelector(".episode.current");
+    if (current) list.scrollTop = Math.max(0, current.offsetTop - 8);
+  }
+  if (fk && !active.isConnected) {
+    const next = [...document.querySelectorAll("[data-fk]")].find((el) => el.dataset.fk === fk);
+    if (next) next.focus();
+  }
+}
+
+/* Loading shows and seasons (cached while the page is open) */
+
+function cachedLoad(cache, id, path, showId, clean) {
+  let entry = cache[id];
+  if (entry) return entry;
+  entry = cache[id] = { loading: true };
+  api(path)
+    .then((data) => { entry.data = clean(data || {}); })
+    .catch((err) => { entry.error = err.message || "Something went wrong."; })
+    .finally(() => {
+      entry.loading = false;
+      if (cache[id] === entry && (cache === state.showCache || cache === state.seasonCache)) refreshPanels(showId);
+    });
+  return entry;
+}
+
+function ensureShow(showId) {
+  return cachedLoad(state.showCache, showId, `/api/find/show?tv=${enc(state.tv)}&id=${enc(showId)}`, showId,
+    (data) => ({ ...data, seasons: (Array.isArray(data.seasons) ? data.seasons : []).filter((s) => s && s.id != null) }));
+}
+
+function ensureSeason(seasonId, showId) {
+  return cachedLoad(state.seasonCache, seasonId, `/api/find/season?tv=${enc(state.tv)}&id=${enc(seasonId)}`, showId,
+    (data) => ({ ...data, episodes: (Array.isArray(data.episodes) ? data.episodes : []).filter(Boolean) }));
+}
+
+function currentSeasonId(showId) {
+  const seasons = state.showCache[showId]?.data?.seasons || [];
+  const picked = state.seasonPick[showId];
+  if (picked && seasons.some((s) => sameId(s.id, picked))) return picked;
+  const last = historyFor(showId)?.season;
+  if (last) {
+    const match = seasons.find((s) => sameId(s.id, last.id)) || seasons.find((s) => last.number != null && s.number === last.number);
+    if (match) return match.id;
+  }
+  return (seasons.find((s) => s.number > 0) || seasons[0])?.id;
+}
+
+/* Rendering the picker */
+
+function pickerOpen(key) {
+  if (Object.hasOwn(state.pickerOpen, key)) return state.pickerOpen[key];
+  return key.startsWith("c:") && Boolean(historyFor(key.slice(2))?.pinned);   // pinned shows keep theirs open
+}
+
+const panelDomId = (key) => `eps-${key.replace(/[^A-Za-z0-9_-]/g, "_")}`;
+
+function toggleHTML(key, primary = false) {
+  const open = pickerOpen(key);
+  return `<button type="button" class="btn${primary ? " primary" : ""}" data-ep-toggle="${esc(key)}" data-fk="t:${esc(key)}" aria-expanded="${open}" aria-controls="${panelDomId(key)}">${open ? "Hide episodes" : "Episodes"}</button>`;
+}
+
+function panelHTML(key, showId) {
+  const open = pickerOpen(key);
+  return `<div class="episodes" id="${panelDomId(key)}" data-panel="${esc(key)}" data-panel-show="${esc(showId)}"${open ? "" : " hidden"}>${open ? panelBody(key, String(showId)) : ""}</div>`;
+}
+
+function retryHTML(key, message, showId, seasonId) {
+  return `<p class="note">${esc(message)} <button type="button" class="btn quiet" data-ep-retry="${esc(showId)}" data-season-id="${esc(seasonId ?? "")}" data-fk="rt:${esc(key)}">Try again</button></p>`;
+}
+
+function panelBody(key, showId) {
+  const show = ensureShow(showId);
+  if (show.error) return retryHTML(key, `Couldn't load the seasons. ${show.error}`, showId, "");
+  if (!show.data) return `<p class="note">Loading seasons…</p>`;
+  const seasons = show.data.seasons;
+  if (!seasons.length) return `<p class="note">There's no episode list for this show.</p>`;
+  const seasonId = currentSeasonId(showId);
+  const season = seasons.find((s) => sameId(s.id, seasonId));
+  const label = (s) => seasonName(s.number, s.title);
+  const picker = seasons.length <= 8
+    ? `<div class="chips season-chips" role="group" aria-label="Season">${seasons.map((s) =>
+        `<button type="button" class="chip" data-season-pick="${esc(s.id)}" data-show-id="${esc(showId)}" data-fk="s:${esc(key)}:${esc(s.id)}" aria-pressed="${sameId(s.id, seasonId)}">${esc(label(s))}</button>`).join("")}</div>`
+    : `<div class="season-select"><select data-season-select data-show-id="${esc(showId)}" data-fk="ss:${esc(key)}" aria-label="Season">${seasons.map((s) =>
+        `<option value="${esc(s.id)}"${sameId(s.id, seasonId) ? " selected" : ""}>${esc(label(s))}${s.episodeCount ? ` (${esc(s.episodeCount)} episodes)` : ""}</option>`).join("")}</select></div>`;
+  return picker + episodesHTML(key, showId, season);
+}
+
+function episodesHTML(key, showId, season) {
+  const entry = ensureSeason(String(season.id), showId);
+  if (entry.error) return retryHTML(key, `Couldn't load the episodes. ${entry.error}`, showId, season.id);
+  if (!entry.data) return `<p class="note">Loading episodes…</p>`;
+  const episodes = entry.data.episodes;
+  if (!episodes.length) return `<p class="note">No episodes are listed for this season yet.</p>`;
+  const number = entry.data.number ?? season.number;
+  const last = historyFor(showId);
+  const lastEp = last?.episode ? Number(last.episode.number) : null;
+  const lastSeason = last?.season ? Number(last.season.number) : null;
+  const sameSeason = Boolean(last?.season) && (sameId(last.season.id, season.id) || (last.season.number != null && Number(last.season.number) === Number(number)));
+  const currentIndex = sameSeason && lastEp !== null ? episodes.findIndex((ep) => Number(ep.number) === lastEp) : -1;
+
+  const rows = episodes.map((ep, index) => {
+    const current = index === currentIndex;
+    const watched = !current && lastEp !== null && (sameSeason ? Number(ep.number) < lastEp : number > 0 && lastSeason > 0 && number < lastSeason);
+    const upNext = currentIndex >= 0 && index === currentIndex + 1;
+    const offers = Array.isArray(ep.offers) ? ep.offers : [];
+    const yours = [];
+    const seenApps = new Set();
+    for (const offer of offers) {
+      if (!offerYours(offer) || seenApps.has(offer.appId)) continue;
+      seenApps.add(offer.appId);
+      yours.push(offer);
+    }
+    if (last?.appId) yours.sort((a, b) => Number(sameId(b.appId, last.appId)) - Number(sameId(a.appId, last.appId)));
+    const code = episodeCode(number, ep.number);
+    const buttons = yours.map((o, n) => {
+      const verb = o.contentId && !o.showLevel ? "Watch on" : "Open";
+      const app = plain(o.appName || o.service);
+      return `<button type="button" class="btn${upNext && n === 0 ? " primary" : ""} watch-btn" data-ep-watch="${offers.indexOf(o)}" data-ep-index="${index}" data-season-id="${esc(season.id)}" data-show-id="${esc(showId)}" data-fk="w:${esc(key)}:${esc(ep.id ?? index)}:${esc(o.appId)}" aria-label="${esc(`${verb} ${app}${o.kind === "free" ? " free" : ""}, ${code}`)}">
+        <img ${iconAttrs(o.appId)} alt="" data-drop-on-error>
+        ${verb} ${esc(app)}${o.kind === "free" ? " <small>free</small>" : ""}</button>`;
+    }).join("");
+    let none = "";
+    if (!yours.length) {
+      const seenLabels = new Set();
+      const other = offers.map(offerLabel).filter((label) => !seenLabels.has(label) && seenLabels.add(label)).slice(0, 3);
+      none = `<p class="note">Not on any of your apps${other.length ? `. Other ways to watch: ${esc(other.join("; "))}` : ""}.</p>`;
+    }
+    const runtime = runtimeText(ep.runtime);
+    return `<li class="episode${current ? " current" : ""}${watched ? " watched" : ""}">
+      <span class="ep-mark">${watched ? CHECK_SVG : ""}</span>
+      <div>
+        <p class="ep-title">${ep.number != null ? `<span class="ep-n">${esc(ep.number)}.</span> ` : ""}${esc(ep.title || `Episode ${ep.number ?? index + 1}`)}${runtime ? ` <span class="ep-time">${esc(runtime)}</span>` : ""}${current ? ` <span class="tag">Last watched</span>` : ""}${watched ? `<span class="sr-only">, watched</span>` : ""}</p>
+        ${ep.description ? `<p class="ep-desc" title="${esc(ep.description)}">${esc(ep.description)}</p>` : ""}
+        ${buttons ? `<div class="watch-row">${buttons}</div>` : ""}${none}
+      </div></li>`;
+  }).join("");
+  return `<ol class="ep-list" data-list="${esc(key)}|${esc(season.id)}" aria-label="${esc(seasonName(number, season.title))} episodes">${rows}</ol>`;
+}
+
+function refreshPanels(showId) {
+  paint(() => {
+    for (const panel of document.querySelectorAll("[data-panel]")) {
+      if (showId !== undefined && !sameId(panel.dataset.panelShow, showId)) continue;
+      const key = panel.dataset.panel;
+      const open = pickerOpen(key);
+      panel.hidden = !open;
+      panel.innerHTML = open ? panelBody(key, panel.dataset.panelShow) : "";
+    }
+    for (const btn of document.querySelectorAll("[data-ep-toggle]")) {
+      const open = pickerOpen(btn.dataset.epToggle);
+      btn.setAttribute("aria-expanded", String(open));
+      btn.textContent = open ? "Hide episodes" : "Episodes";
+    }
+  });
+}
+
+/* Continue watching */
+
+function continueHTML(item) {
+  const key = `c:${item.id}`;
+  const isShow = item.type !== "Movie";
+  const id = esc(item.id);
+  const name = esc(item.title);
+  const app = item.appId != null ? plain(item.appName || appLabel(item.appId) || "") : "";
+  const when = whenText(item.at);
+  const appLine = app || when
+    ? `<p class="cw-app">${app ? `<img ${iconAttrs(item.appId)} alt="" data-drop-on-error>` : ""}<span>${esc(app ? [app, when].filter(Boolean).join(", ") : `Watched ${when}`)}</span></p>`
+    : "";
+  let main;
+  if (!isShow) main = `<button type="button" class="btn primary" data-cw-again="${id}" data-fk="a:${id}" aria-label="Watch again: ${name}">Watch again</button>`;
+  else if (item.season && item.episode) main = `<button type="button" class="btn primary" data-cw-next="${id}" data-fk="n:${id}" aria-label="Watch next episode of ${name}">Watch next episode</button>${toggleHTML(key)}`;
+  else main = toggleHTML(key, true);   // no episode on file yet, so the picker is the way back in
+  return `<li class="result">
+    <div class="poster">${item.poster ? `<img src="${esc(item.poster)}" alt="" loading="lazy" data-drop-on-error>` : ""}</div>
+    <div>
+      <div class="cw-head"><h3>${name}</h3>${item.pinned ? `<span class="tag">Pinned</span>` : ""}</div>
+      <p class="meta">${esc(placeText(item))}</p>
+      ${appLine}
+      <div class="watch-row">${main}<button type="button" class="btn" data-cw-pin="${id}" data-fk="p:${id}" aria-label="${item.pinned ? "Unpin" : "Pin"} ${name}">${item.pinned ? "Unpin" : "Pin"}</button><button type="button" class="btn quiet" data-cw-remove="${id}" data-fk="x:${id}" aria-label="Remove ${name}">Remove</button></div>
+    </div>
+    ${isShow ? panelHTML(key, item.id) : ""}</li>`;
+}
+
+const CONTINUE_SHOWN = 6;
+function renderContinue() {
+  const items = state.tv ? historyItems() : [];
+  const shown = state.continueAll ? items : items.slice(0, CONTINUE_SHOWN);
+  $("#continue").hidden = !items.length || state.findSource === "sites";
+  const more = $("#continue-more");
+  more.hidden = items.length <= CONTINUE_SHOWN;
+  more.textContent = state.continueAll ? "Show fewer" : `Show all ${items.length}`;
+  more.setAttribute("aria-expanded", String(Boolean(state.continueAll)));
+  paint(() => { $("#continue-list").innerHTML = shown.map(continueHTML).join(""); });
+}
+$("#continue-more").addEventListener("click", () => {
+  state.continueAll = !state.continueAll;
+  renderContinue();
+});
+
+let historyTicket = 0;
+function setHistory(items) {
+  historyTicket += 1;   // a newer answer than any history request still in flight
+  state.history = Array.isArray(items) ? items : null;
+  renderContinue();
+  refreshPanels();      // watched marks in the search results' pickers
+}
+
+async function loadHistory() {
+  if (!state.tv || isLite()) return;
+  const tv = state.tv;
+  const ticket = ++historyTicket;
+  let items = null;
+  try {
+    items = (await api(`/api/find/history?tv=${enc(tv)}`)).items;
+  } catch { /* not available: the row stays hidden and search works as before */ }
+  if (tv === state.tv && ticket === historyTicket) setHistory(items);
+}
+
+async function recordHistory(entry) {
+  if (!state.tv || entry.id == null) return;
+  const prev = historyFor(entry.id);
+  const item = {
+    id: entry.id,
+    title: entry.title || prev?.title || "",
+    type: entry.type || prev?.type || "Show",
+    year: entry.year ?? prev?.year ?? null,
+    poster: entry.poster || prev?.poster || null,
+    season: entry.season !== undefined ? entry.season : prev?.season ?? null,
+    episode: entry.episode !== undefined ? entry.episode : prev?.episode ?? null,
+    appId: entry.appId ?? null,
+    appName: entry.appName || null,
+  };   // no "pinned": the server keeps the item's pin
+  try {
+    setHistory((await api("/api/find/history", { tv: state.tv, item })).items);
+  } catch {
+    loadHistory();
+  }
+}
+
+/* Watching */
+
+const busyKeys = new Set();
+async function busy(el, task) {
+  const fk = el.dataset.fk;
+  if (busyKeys.has(fk)) return;
+  const mark = (on) => {
+    for (const b of document.querySelectorAll("[data-fk]")) if (b.dataset.fk === fk) on ? b.setAttribute("aria-disabled", "true") : b.removeAttribute("aria-disabled");
+  };
+  busyKeys.add(fk);
+  mark(true);
+  try { await task(); } finally { busyKeys.delete(fk); mark(false); }
+}
+
+async function playEpisode(meta, season, episode, offer) {
+  try {
+    await api("/api/watch", { tv: state.tv, appId: offer.appId, contentId: offer.contentId, mediaType: offer.mediaType });
+  } catch (err) {
+    toast(err.message);
+    return;
+  }
+  const app = plain(offer.appName || offer.service);
+  const code = episodeCode(season.number, episode.number);
+  toast(offer.contentId && !offer.showLevel ? `Playing ${code} in ${app}.`
+    : offer.contentId ? `Opened ${meta.title} in ${app}. Pick ${code} there.`
+    : `Opened ${app}. Find ${meta.title}, ${code} there.`);
+  setTimeout(pollNow, 3000);
+  if (season.id != null) state.seasonPick[meta.id] = String(season.id);
+  await recordHistory({
+    ...meta, type: "Show",
+    season: { id: season.id ?? null, number: season.number ?? null },
+    episode: { id: episode.id ?? null, number: episode.number, title: episode.title || "" },
+    appId: offer.appId, appName: app,
+  });
+}
+
+async function watchEpisode(btn) {
+  const { showId, seasonId } = btn.dataset;
+  const seasonData = state.seasonCache[seasonId]?.data;
+  const episode = seasonData?.episodes[Number(btn.dataset.epIndex)];
+  const offer = episode?.offers?.[Number(btn.dataset.epWatch)];
+  if (!offer) return;
+  const listed = state.showCache[showId]?.data?.seasons.find((s) => sameId(s.id, seasonId));
+  const season = { id: seasonData.id ?? seasonId, number: seasonData.number ?? listed?.number ?? null };
+  await busy(btn, () => playEpisode(showMeta(showId), season, episode, offer));
+}
+
+async function watchNext(item) {
+  let next;
+  try {
+    next = await api(`/api/find/next?tv=${enc(state.tv)}&show=${enc(item.id)}&season=${enc(item.season.id)}&episode=${enc(item.episode.number)}`);
+  } catch (err) {
+    toast(err.message);
+    return;
+  }
+  if (next.done) { toast("That was the last episode."); return; }
+  const season = next.season || {};
+  const episode = next.episode;
+  if (!episode) { toast("Couldn't find the next episode."); return; }
+  const yours = (Array.isArray(episode.offers) ? episode.offers : []).filter(offerYours);
+  const offer = yours.find((o) => sameId(o.appId, item.appId)) || yours[0];
+  if (!offer) {
+    toast(`${episodeCode(season.number, episode.number)} isn't on any of your apps right now. Pick another way below.`);
+    if (season.id != null) state.seasonPick[item.id] = String(season.id);
+    state.pickerOpen[`c:${item.id}`] = true;
+    refreshPanels(String(item.id));
+    return;
+  }
+  await playEpisode({ id: item.id, title: item.title, year: item.year ?? null, poster: item.poster || null },
+    { id: season.id ?? null, number: season.number ?? null }, episode, offer);
+}
+
+async function watchAgain(item) {
+  // History doesn't keep the movie's link, so look it up again in the catalog.
+  let offer = null;
+  try {
+    const data = await api(`/api/find?tv=${enc(state.tv)}&q=${enc(item.title)}`);
+    const match = (data.results || []).find((r) => sameId(r.id, item.id));
+    const yours = (match?.offers || []).filter(offerYours);
+    offer = yours.find((o) => sameId(o.appId, item.appId) && o.contentId) || yours.find((o) => sameId(o.appId, item.appId)) || yours[0] || null;
+  } catch { /* fall back to opening the app it was watched in */ }
+  if (!offer && item.appId != null) offer = { appId: item.appId, appName: item.appName, service: item.appName };
+  if (!offer) {
+    toast(`${item.title} isn't on any of your apps right now.`);
+    $("#find-input").value = item.title;
+    runFind(item.title);
+    return;
+  }
+  try {
+    await api("/api/watch", { tv: state.tv, appId: offer.appId, contentId: offer.contentId, mediaType: offer.mediaType });
+  } catch (err) {
+    toast(err.message);
+    return;
+  }
+  const app = plain(offer.appName || offer.service || appLabel(offer.appId) || "the app");
+  toast(offer.contentId ? `Opening ${item.title} in ${app}.` : `Opened ${app}. Search for ${item.title} there.`);
+  setTimeout(pollNow, 3000);
+  await recordHistory({ id: item.id, title: item.title, type: "Movie", year: item.year, poster: item.poster, season: null, episode: null, appId: offer.appId, appName: app });
+}
+
+async function pinItem(item) {
+  try {
+    const { items } = await api("/api/find/history/pin", { tv: state.tv, id: item.id, pinned: !item.pinned });
+    delete state.pickerOpen[`c:${item.id}`];   // back to the default: open when pinned
+    setHistory(items);
+    toast(item.pinned ? `Unpinned ${item.title}.` : `Pinned ${item.title} to the top.`);
+  } catch (err) {
+    toast(err.message);
+  }
+}
+
+async function removeItem(item) {
+  try {
+    const { items } = await api("/api/find/history/remove", { tv: state.tv, id: item.id });
+    delete state.pickerOpen[`c:${item.id}`];
+    setHistory(items);
+    toast(`Removed ${item.title} from Continue watching.`);
+    if ($("#continue").hidden) $("#find-input").focus(); else $("#continue-head").focus();
+  } catch (err) {
+    toast(err.message);
+  }
+}
+
+$("#find").addEventListener("click", (e) => {
+  const el = e.target.closest("[data-ep-toggle], [data-season-pick], [data-ep-retry], [data-ep-watch], [data-cw-next], [data-cw-again], [data-cw-pin], [data-cw-remove]");
+  if (!el) return;
+  const d = el.dataset;
+  if (d.epToggle !== undefined) {
+    state.pickerOpen[d.epToggle] = !pickerOpen(d.epToggle);
+    refreshPanels(d.epToggle.slice(2));
+  } else if (d.seasonPick !== undefined) {
+    state.seasonPick[d.showId] = d.seasonPick;
+    refreshPanels(d.showId);
+  } else if (d.epRetry !== undefined) {
+    if (d.seasonId) delete state.seasonCache[d.seasonId]; else delete state.showCache[d.epRetry];
+    refreshPanels(d.epRetry);
+  } else if (d.epWatch !== undefined) {
+    watchEpisode(el);
+  } else {
+    const item = historyFor(d.cwNext ?? d.cwAgain ?? d.cwPin ?? d.cwRemove);
+    if (!item) return;
+    if (d.cwNext !== undefined) busy(el, () => watchNext(item));
+    else if (d.cwAgain !== undefined) busy(el, () => watchAgain(item));
+    else if (d.cwPin !== undefined) busy(el, () => pinItem(item));
+    else busy(el, () => removeItem(item));
+  }
+});
+$("#find").addEventListener("change", (e) => {
+  const select = e.target.closest("[data-season-select]");
+  if (!select) return;
+  state.seasonPick[select.dataset.showId] = select.value;
+  refreshPanels(select.dataset.showId);
+});
+
+/* ---------- Rules ---------- */
+
+function minutesText(seconds) {
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return `${minutes} min`;
+  return `${Math.floor(minutes / 60)} h ${minutes % 60} min`;
+}
+
+function usageLabel(id) { return id === "home" ? "Home screen" : appLabel(id) || id; }
+
+async function loadRules() {
+  if (!state.tv || !state.reachable || isLite()) return;
+  try {
+    const status = await api(`/api/rules?tv=${enc(state.tv)}`);
+    const changedElsewhere = JSON.stringify(status.rules) !== JSON.stringify(state.rulesStatus?.rules);
+    state.rulesStatus = status;
+    if (!state.rules || (changedElsewhere && !rulesSaveTimer)) {
+      state.rules = JSON.parse(JSON.stringify(status.rules));
+      state.rulesVersion += 1;
+    }
+  } catch (err) {
+    $("#rules-status").textContent = err.message;
+    return;
+  }
+  renderRules();
+}
+
+function renderRules() {
+  const status = state.rulesStatus;
+  const rules = state.rules;
+  if (!status || !rules) return;
+  const line = $("#rules-status");
+  if (!status.active) { line.dataset.state = "off"; line.textContent = "No rules are on."; }
+  else if (!status.watching) { line.dataset.state = "problem"; line.textContent = "Starting to watch the TV…"; }
+  else {
+    line.dataset.state = "on";
+    const screen = status.power === "on" ? `The TV is on${status.app ? `, showing ${is_home_label(status.app)}` : ""}.` : status.power === "standby" ? "The TV is off." : "The TV isn't answering.";
+    line.textContent = `Watching the TV. ${screen}${status.awake ? " Your Mac is kept awake." : ""}`;
+  }
+  renderRuleList();
+
+  const usage = Object.entries(status.usage).filter(([, s]) => s >= 30).sort((a, b) => b[1] - a[1]);
+  $("#usage-list").innerHTML = usage.map(([id, seconds]) => `<li><span>${esc(usageLabel(id))}</span><span>${minutesText(seconds)}</span></li>`).join("");
+  $("#usage-intro").textContent = usage.length
+    ? "How long the TV spent on each app or input today, counted while rules are on."
+    : "How long the TV spent on each app or input today. Turn on a rule or the viewing log to start counting.";
+  $("#activity-list").innerHTML = status.events.length
+    ? status.events.slice(0, 25).map((e) => `<li class="${e.kind === "alert" ? "alert" : ""}"><time datetime="${esc(e.time)}">${esc(formatTime(e.time))}</time><span>${esc(e.message)}</span></li>`).join("")
+    : `<li><span class="note">Nothing yet.</span></li>`;
+}
+
+function isHomeScreen(app) { return !app.id || ["roku", "roku dynamic menu", "home"].includes(String(app.name || "").trim().toLowerCase()); }
+function is_home_label(app) { return isHomeScreen(app) ? "the home screen" : plain(app.name); }
+
+function ruleHTML(key, title, description, enabled, body) {
+  return `<li class="rule" data-rule="${key}">
+    <label class="rule-head"><input type="checkbox" data-toggle="${key}" ${enabled ? "checked" : ""}><strong>${title}</strong></label>
+    <p class="note">${description}</p>
+    ${enabled && body ? `<div class="rule-body">${body}</div>` : ""}</li>`;
+}
+
+function anyOptions(selected) { return targetOptions(selected); }
+
+function renderRuleList() {
+  const box = $("#rule-list");
+  if (box.dataset.v === String(state.rulesVersion)) {
+    // Only refresh the small live bits.
+    for (const el of box.querySelectorAll("[data-used]")) {
+      const seconds = state.rulesStatus.usage[el.dataset.used] || 0;
+      el.textContent = `used ${minutesText(seconds)} today`;
+    }
+    const extend = $("#bedtime-extend");
+    if (extend) extend.hidden = !state.rulesStatus.bedtimeNow;
+    return;
+  }
+  box.dataset.v = String(state.rulesVersion);
+  const r = state.rules;
+  const time = (rule, field) => `<input type="time" data-field="${rule}.${field}" value="${esc(r[rule][field])}" aria-label="${field === "start" ? "From" : "Until"}">`;
+  const apps = state.apps.filter((a) => a.type === "appl" || a.type === "tvin").sort((a, b) => appLabel(a.id).localeCompare(appLabel(b.id)));
+
+  const autopilot = ruleHTML("autopilot", "Skip the home screen",
+    "When the TV turns on and lands on the home screen, open this instead. If it wakes up on an input, like a game console, it's left alone.",
+    r.autopilot.enabled,
+    `<div class="line"><span>Open</span><select data-field="autopilot.target" aria-label="What to open">${anyOptions(r.autopilot.target)}</select>${r.autopilot.target ? "" : `<span class="used">Pick one to turn this on.</span>`}</div>
+     <div class="line"><button class="btn" type="button" data-action="skip" ${r.autopilot.skipNext ? "disabled" : ""}>${r.autopilot.skipNext ? "Will skip next time" : "Skip next time"}</button></div>`);
+
+  const bedtime = ruleHTML("bedtime", "Bedtime",
+    "Turns the TV off during these hours, after a 1-minute grace period. If someone turns it back on, it goes off again after 15 seconds.",
+    r.bedtime.enabled,
+    `<div class="line"><span>From</span>${time("bedtime", "start")}<span>until</span>${time("bedtime", "end")}</div>
+     <div class="line"><button class="btn" type="button" id="bedtime-extend" data-action="extend" ${state.rulesStatus.bedtimeNow ? "" : "hidden"}>Give 15 more minutes</button></div>`);
+
+  const limitRows = Object.entries(r.limits).map(([id, minutes]) => `<div class="line" data-limit="${esc(id)}">
+      <select data-limit-app aria-label="App">${anyOptions(id)}</select>
+      <input type="number" min="1" max="720" value="${minutes}" data-limit-minutes aria-label="Minutes per day"><span>minutes a day</span>
+      <span class="used" data-used="${esc(id)}"></span>
+      <button class="btn quiet" type="button" data-action="limit-remove">Remove</button></div>`).join("");
+  const pendingLimit = state.pendingLimit ? `<div class="line" data-limit="">
+      <select data-limit-app aria-label="App">${anyOptions("")}</select>
+      <input type="number" min="1" max="720" value="${state.pendingLimit.minutes}" data-limit-minutes aria-label="Minutes per day"><span>minutes a day</span>
+      <button class="btn quiet" type="button" data-action="limit-remove">Remove</button></div>` : "";
+  const limits = ruleHTML("limits", "Daily time limits",
+    "When an app or input reaches its time for the day, the TV is sent to the home screen each time it's opened again. Counts reset at midnight.",
+    Object.keys(r.limits).length > 0 || state.limitsOpen,
+    `${limitRows}${pendingLimit}<div class="line"><button class="btn quiet" type="button" data-action="limit-add" ${state.pendingLimit ? "hidden" : ""}>Add a time limit</button></div>`);
+
+  const blocked = ruleHTML("blocked", "Blocked apps",
+    "These get sent back to the home screen whenever they open.",
+    r.blocked.length > 0 || state.blockedOpen,
+    `<div class="chips">${apps.filter((a) => a.type === "appl").map((a) => `<button type="button" class="chip" data-block="${esc(a.id)}" aria-pressed="${r.blocked.includes(a.id)}">${esc(plain(a.name))}</button>`).join("")}</div>`);
+
+  const swapRows = Object.entries(r.redirects).map(([from, to]) => `<div class="line" data-swap="${esc(from)}">
+      <span>When</span><select data-swap-from aria-label="When this opens">${anyOptions(from)}</select>
+      <span>opens, open</span><select data-swap-to aria-label="Open this instead">${anyOptions(to)}</select>
+      <button class="btn quiet" type="button" data-action="swap-remove">Remove</button></div>`).join("");
+  const pendingSwap = state.pendingSwap ? `<div class="line" data-swap="">
+      <span>When</span><select data-swap-from aria-label="When this opens">${anyOptions(state.pendingSwap.from)}</select>
+      <span>opens, open</span><select data-swap-to aria-label="Open this instead">${anyOptions(state.pendingSwap.to)}</select>
+      <button class="btn quiet" type="button" data-action="swap-remove">Remove</button></div>` : "";
+  const swaps = ruleHTML("redirects", "Swap apps",
+    "Useful for the branded buttons on the remote: when one app opens, open another instead.",
+    Object.keys(r.redirects).length > 0 || state.swapsOpen,
+    `${swapRows}${pendingSwap}<div class="line"><button class="btn quiet" type="button" data-action="swap-add" ${state.pendingSwap ? "hidden" : ""}>Add a swap</button></div>`);
+
+  const night = ruleHTML("nightGuard", "Night guard",
+    "Some Roku TVs turn themselves on at night. If the TV turns on during these hours and nothing is playing, it's turned back off and you get a notice on your Mac.",
+    r.nightGuard.enabled,
+    `<div class="line"><span>From</span>${time("nightGuard", "start")}<span>until</span>${time("nightGuard", "end")}</div>
+     <div class="line"><span>Turn off after</span><input type="number" min="1" max="30" value="${r.nightGuard.idleMinutes}" data-field="nightGuard.idleMinutes" aria-label="Minutes"><span>minutes with nothing playing</span></div>`);
+
+  const log = ruleHTML("log", "Viewing log",
+    "Counts time per app and input even when no other rule is on. It stays on this Mac, in viewing-log.json, and keeps two weeks.",
+    r.log, "");
+
+  box.innerHTML = autopilot + bedtime + limits + blocked + swaps + night + log;
+  renderRuleList();   // fill in the live bits
+}
+
+let rulesSaveTimer = null;
+function saveRulesSoon(delay = 400) {
+  clearTimeout(rulesSaveTimer);
+  rulesSaveTimer = setTimeout(async () => {
+    rulesSaveTimer = null;
+    try {
+      const rules = JSON.parse(JSON.stringify(state.rules));
+      rules.autopilot.enabled = rules.autopilot.enabled && Boolean(rules.autopilot.target);
+      state.rulesStatus = await api("/api/rules", { tv: state.tv, rules });
+      renderRules();
+    } catch (err) {
+      toast(err.message);
+      $("#rules-status").textContent = err.message;
+      $("#rules-status").dataset.state = "problem";
+    }
+  }, delay);
+}
+
+$("#rule-list").addEventListener("change", (e) => {
+  const r = state.rules;
+  if (!r) return;
+  const t = e.target;
+  const toggle = t.dataset.toggle;
+  if (toggle) {
+    if (toggle === "limits") { state.limitsOpen = t.checked; if (!t.checked) { r.limits = {}; state.pendingLimit = null; } else if (!Object.keys(r.limits).length) state.pendingLimit = { minutes: 60 }; }
+    else if (toggle === "blocked") { state.blockedOpen = t.checked; if (!t.checked) r.blocked = []; }
+    else if (toggle === "redirects") { state.swapsOpen = t.checked; if (!t.checked) { r.redirects = {}; state.pendingSwap = null; } else if (!Object.keys(r.redirects).length) state.pendingSwap = { from: "", to: "" }; }
+    else if (toggle === "log") r.log = t.checked;
+    else r[toggle].enabled = t.checked;
+    state.rulesVersion += 1;
+    renderRuleList();
+    return saveRulesSoon(0);
+  }
+  if (t.dataset.field) {
+    const [rule, field] = t.dataset.field.split(".");
+    r[rule][field] = t.type === "number" ? Number(t.value) || 1 : t.value;
+    if (rule === "autopilot") { state.rulesVersion += 1; renderRuleList(); }
+    return saveRulesSoon();
+  }
+  const limitRow = t.closest("[data-limit]");
+  if (limitRow) {
+    const id = limitRow.dataset.limit;
+    if (!id) {   // the new row: saved once an app is picked
+      if (t.matches("[data-limit-minutes]")) state.pendingLimit.minutes = Number(t.value) || 1;
+      if (t.matches("[data-limit-app]") && t.value) {
+        r.limits[t.value] = state.pendingLimit.minutes;
+        state.pendingLimit = null;
+        state.rulesVersion += 1;
+        renderRuleList();
+        return saveRulesSoon(0);
+      }
+      return;
+    }
+    if (t.matches("[data-limit-minutes]")) r.limits[id] = Number(t.value) || 1;
+    if (t.matches("[data-limit-app]") && t.value && t.value !== id) {
+      r.limits[t.value] = r.limits[id];
+      delete r.limits[id];
+      state.rulesVersion += 1;
+      renderRuleList();
+    }
+    return saveRulesSoon();
+  }
+  const swapRow = t.closest("[data-swap]");
+  if (swapRow) {
+    const from = swapRow.dataset.swap;
+    if (!from) {   // the new row: saved once both sides are picked
+      if (t.matches("[data-swap-from]")) state.pendingSwap.from = t.value;
+      if (t.matches("[data-swap-to]")) state.pendingSwap.to = t.value;
+      const { from: a, to: b } = state.pendingSwap;
+      if (a && b && a !== b) {
+        r.redirects[a] = b;
+        state.pendingSwap = null;
+        state.rulesVersion += 1;
+        renderRuleList();
+        return saveRulesSoon(0);
+      }
+      return;
+    }
+    if (t.matches("[data-swap-to]")) r.redirects[from] = t.value;
+    if (t.matches("[data-swap-from]") && t.value && t.value !== from) {
+      r.redirects[t.value] = r.redirects[from];
+      delete r.redirects[from];
+      state.rulesVersion += 1;
+      renderRuleList();
+    }
+    return saveRulesSoon();
+  }
+});
+
+$("#rule-list").addEventListener("click", async (e) => {
+  const r = state.rules;
+  if (!r) return;
+  const block = e.target.closest("[data-block]");
+  if (block) {
+    const id = block.dataset.block;
+    r.blocked = r.blocked.includes(id) ? r.blocked.filter((x) => x !== id) : [...r.blocked, id];
+    block.setAttribute("aria-pressed", String(r.blocked.includes(id)));
+    return saveRulesSoon();
+  }
+  const action = e.target.closest("[data-action]")?.dataset.action;
+  if (!action) return;
+  if (action === "skip" || action === "extend") {
+    try {
+      state.rulesStatus = await api(action === "skip" ? "/api/rules/skip" : "/api/rules/extend", { tv: state.tv, minutes: 15 });
+      state.rules = JSON.parse(JSON.stringify(state.rulesStatus.rules));
+      state.rulesVersion += 1;
+      renderRules();
+      toast(action === "skip" ? "The next time the TV turns on, it stays on the home screen." : "15 more minutes before bedtime kicks in.");
+    } catch (err) {
+      toast(err.message);
+    }
+    return;
+  }
+  if (action === "limit-add") state.pendingLimit = { minutes: 60 };
+  if (action === "limit-remove") {
+    const id = e.target.closest("[data-limit]").dataset.limit;
+    if (id) delete r.limits[id]; else state.pendingLimit = null;
+  }
+  if (action === "swap-add") state.pendingSwap = { from: "", to: "" };
+  if (action === "swap-remove") {
+    const from = e.target.closest("[data-swap]").dataset.swap;
+    if (from) delete r.redirects[from]; else state.pendingSwap = null;
+  }
+  state.rulesVersion += 1;
+  renderRuleList();
+  saveRulesSoon(0);
+});
+
+$("#doctor-btn").addEventListener("click", async () => {
+  const btn = $("#doctor-btn");
+  btn.disabled = true;
+  btn.textContent = "Checking…";
+  try {
+    const { checks, moved } = await api(`/api/doctor?tv=${enc(state.tv)}`);
+    $("#doctor-list").innerHTML = checks.map((c) => `<li><span class="mark ${c.ok ? "" : "bad"}" aria-label="${c.ok ? "OK" : "Needs a fix"}">${c.ok ? "✓" : "!"}</span><div><strong>${esc(c.title)}</strong>${c.fix ? `<p>${esc(c.fix)}</p>` : ""}</div></li>`).join("");
+    if (moved) { state.tvs = [...state.tvs.filter((t) => t.address !== moved.address), moved]; renderPicker(); }
+  } catch (err) {
+    $("#doctor-list").innerHTML = `<li><span class="mark bad">!</span><div>${esc(err.message)}</div></li>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Check connection";
+  }
+});
+
+setInterval(() => { if (state.view === "rules" && !document.hidden) loadRules(); }, 8000);
+setInterval(() => { if (state.view === "tvapp" && !document.hidden && state.tvApp && !state.tvApp.appReady) loadTvApp(); }, 10000);
+
+/* Pictures that fail to load are removed, so the letters behind them show. One listener does
+   this for every image, since extension pages block inline event attributes. */
+document.addEventListener("error", (e) => {
+  if (e.target instanceof HTMLImageElement && e.target.hasAttribute("data-drop-on-error")) e.target.remove();
+}, true);
+
+/* ---------- Detox Home (TV app) ---------- */
+
+async function loadTvApp() {
+  if (isLite()) return;
+  if (!state.tv || !state.reachable) { $("#app-status").textContent = "Connect to your TV first."; return; }
+  try {
+    state.tvApp = await api(`/api/tvapp?tv=${enc(state.tv)}`);
+  } catch (err) {
+    $("#app-status").textContent = err.message;
+    $("#app-status").dataset.state = "problem";
+    return;
+  }
+  renderTvApp();
+}
+
+function bookmarkletHref() {
+  const origin = `${location.protocol}//${location.host}`;
+  const code = `(()=>{const v=[...document.querySelectorAll('video')].map(x=>x.currentSrc||x.src).find(s=>/^https?:/.test(s))||'';window.open('${origin}/?cast='+encodeURIComponent(location.href)+'&video='+encodeURIComponent(v)+'&title='+encodeURIComponent(document.title),'_blank')})()`;
+  return `javascript:${code}`;
+}
+
+function renderTvApp() {
+  const app = state.tvApp;
+  const status = $("#app-status");
+  const body = $("#app-body");
+  if (!app) return;
+  const passwordForm = (label, id) => `<form class="install-form" id="${id}">
+      <input type="password" id="${id}-password" autocomplete="off" placeholder="Developer password" aria-label="Developer password">
+      <button class="btn ${id === "install-form" ? "primary" : ""}" type="submit">${label}</button>
+    </form>
+    <p class="note" style="margin-top:8px">The password you chose when you turned on developer mode. It goes only to your TV, for this one step, and isn't saved.</p>`;
+  const devSteps = `<ol class="app-steps">
+      <li>On the TV remote, press Home 3 times, Up 2 times, then Right, Left, Right, Left, Right.</li>
+      <li>Choose "Enable installer and restart," accept the terms, and pick a password.</li>
+      <li>Wait for the TV to restart, then come back here.</li>
+    </ol>`;
+  if (app.canInstall === false) {   // the extension: no Mac to install from, so use the TV's own installer page
+    const messageForm = `<h3 class="subhead">Send a message to the TV</h3>
+      <form class="install-form" id="message-form">
+        <input type="text" id="message-input" maxlength="200" placeholder="Dinner's ready!" aria-label="Message">
+        <button class="btn primary" type="submit">Show on TV</button>
+      </form>`;
+    if (app.installed) {
+      status.dataset.state = "on";
+      status.textContent = "Detox Home is on the TV.";
+      body.innerHTML = `<div class="row-gap" style="margin-top:0">
+          <button class="btn primary" type="button" data-app="open">Open it on the TV</button>
+          <button class="btn" type="button" data-app="autopilot">Open it when the TV turns on</button>
+        </div>${messageForm}
+        <p class="note" style="margin-top:12px">Videos you send with "Send to TV" play here too. To update it, install it again the same way.</p>`;
+      return;
+    }
+    if (!app.devMode) {
+      status.dataset.state = "problem";
+      status.textContent = "Developer mode is off, so the TV can't take custom apps yet.";
+      body.innerHTML = devSteps + `<button class="btn" type="button" data-app="recheck">Check again</button>`;
+      return;
+    }
+    status.dataset.state = "off";
+    status.textContent = "Developer mode is on. Install Detox Home from the TV's own installer page.";
+    const download = state.engine?.kind === "extension"
+      ? `<a class="btn primary" href="detox-home.zip" download="detox-home.zip">Download Detox Home</a>`
+      : `<span class="note">Download it on the computer that has the Roku Detox extension.</span>`;
+    body.innerHTML = `<ol class="app-steps">
+        <li>${download}</li>
+        <li>Open <a href="${esc(app.installPage)}" target="_blank" rel="noopener">the TV's installer page</a>. Sign in as <strong>rokudev</strong> with the password you chose for developer mode.</li>
+        <li>Choose the downloaded file, press Install, and wait for the TV to open Detox Home.</li>
+      </ol>
+      <button class="btn" type="button" data-app="recheck">Check again</button>
+      <p class="note" style="margin-top:12px">Roku allows one custom app at a time. Installing puts Detox Home in that slot and changes nothing else on the TV.</p>`;
+    return;
+  }
+  if (!isLocal) {
+    status.dataset.state = app.installed ? "on" : "off";
+    status.textContent = app.installed ? "Detox Home is on the TV." : "Detox Home isn't installed. Install it from the Mac.";
+    body.innerHTML = app.installed ? `<button class="btn primary" type="button" data-app="open">Open Detox Home</button>` : "";
+    return;
+  }
+  if (app.installed && app.linked) {
+    status.dataset.state = "on";
+    status.textContent = "Detox Home is installed and linked to this Mac.";
+    body.innerHTML = `
+      <div class="row-gap" style="margin-top:0">
+        <button class="btn primary" type="button" data-app="open">Open it on the TV</button>
+        <button class="btn" type="button" data-app="autopilot">Open it when the TV turns on</button>
+      </div>
+      <h3 class="subhead">Options</h3>
+      <label class="option-row"><input type="checkbox" data-option="simpleMode" ${app.options.simpleMode ? "checked" : ""}> Simple mode: only your favorites, extra large</label>
+      <label class="option-row"><input type="checkbox" data-option="clock24" ${app.options.clock24 ? "checked" : ""}> 24-hour clock</label>
+      <p class="note">The tiles show your favorites from the Remote menu. The screensaver is under Settings, Theme, Screensavers, called Detox Clock.</p>
+
+      <h3 class="subhead">Send a message to the TV</h3>
+      <form class="install-form" id="message-form">
+        <input type="text" id="message-input" maxlength="200" placeholder="Dinner's ready!" aria-label="Message">
+        <button class="btn primary" type="submit">Show on TV</button>
+      </form>
+
+      <h3 class="subhead">Send videos from your browser</h3>
+      <p class="intro" style="margin-bottom:12px">Drag this button to your browser's bookmarks bar. On a page with a video, click it to send the video to the TV. You can also paste a link into the box under the remote. Videos from paid services like Netflix are locked and can't be sent this way; use Find a show for those.${app.ytdlp ? "" : " Installing the free yt-dlp tool would let this find videos on many more sites."}</p>
+      <a class="bookmarklet" href="${esc(bookmarkletHref())}">Send to TV</a>
+
+      <h3 class="subhead">Remove or update</h3>
+      <p class="intro" style="margin-bottom:12px">Installing again updates it. Removing it takes it off the TV.</p>
+      ${passwordForm("Install again", "install-form")}
+      <div style="margin-top:12px">${passwordForm("Remove from TV", "remove-form")}</div>`;
+    return;
+  }
+  if (!app.devMode) {
+    status.dataset.state = "problem";
+    status.textContent = "Developer mode is off, so the TV can't take custom apps yet.";
+    body.innerHTML = devSteps + `<button class="btn" type="button" data-app="recheck">Check again</button>`;
+    return;
+  }
+  if (!app.appReady) {
+    status.dataset.state = "off";
+    status.textContent = "Developer mode is on. Detox Home is still being built; this page updates when it's ready.";
+    body.innerHTML = `<button class="btn" type="button" data-app="recheck">Check again</button>`;
+    return;
+  }
+  status.dataset.state = "off";
+  status.textContent = app.installed ? "A custom app is on the TV, but it isn't linked to this Mac. Install to replace it." : "Developer mode is on. Ready to install.";
+  body.innerHTML = `<p class="intro">Roku allows one custom app at a time. Installing puts Detox Home in that slot. It doesn't change anything else on the TV.</p>` + passwordForm("Install on TV", "install-form");
+}
+
+async function installOrRemove(kind, form) {
+  const input = form.querySelector('input[type="password"]');
+  const password = input.value;
+  if (!password) { toast("Type the developer password first."); return; }
+  const button = form.querySelector("button");
+  button.disabled = true;
+  const label = button.textContent;
+  button.textContent = kind === "install" ? "Installing…" : "Removing…";
+  try {
+    state.tvApp = await api(kind === "install" ? "/api/tvapp/install" : "/api/tvapp/remove", { tv: state.tv, password });
+    input.value = "";
+    toast(kind === "install" ? "Detox Home is on the TV." : "Removed Detox Home from the TV.");
+    await loadApps();
+    renderAll();
+    renderTvApp();
+  } catch (err) {
+    toast(err.message);
+    $("#app-status").textContent = err.message;
+    $("#app-status").dataset.state = "problem";
+  } finally {
+    input.value = "";
+    button.disabled = false;
+    button.textContent = label;
+  }
+}
+
+$("#app-body").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  if (e.target.id === "install-form") return installOrRemove("install", e.target);
+  if (e.target.id === "remove-form") return installOrRemove("remove", e.target);
+  if (e.target.id === "message-form") {
+    const input = $("#message-input");
+    const text = input.value.trim();
+    if (!text) return;
+    try {
+      await api("/api/tv-message", { tv: state.tv, text });
+      input.value = "";
+      toast("Message is on the TV.");
+    } catch (err) {
+      toast(err.message);
+    }
+  }
+});
+$("#app-body").addEventListener("change", async (e) => {
+  const option = e.target.dataset.option;
+  if (!option) return;
+  const options = { ...state.tvApp.options, [option]: e.target.checked };
+  try {
+    const { options: saved } = await api("/api/tvapp/options", { tv: state.tv, ...options });
+    state.tvApp.options = saved;
+    toast("Saved. Detox Home picks this up within 30 seconds.");
+  } catch (err) {
+    toast(err.message);
+  }
+});
+$("#app-body").addEventListener("click", async (e) => {
+  if (e.target.closest(".bookmarklet")) {
+    e.preventDefault();
+    toast("Drag this to your bookmarks bar instead of clicking it.");
+    return;
+  }
+  const action = e.target.closest("[data-app]")?.dataset.app;
+  if (!action) return;
+  if (action === "recheck") return loadTvApp();
+  if (action === "open") return launchApp("dev", e.target);
+  if (action === "autopilot") {
+    try {
+      const status = await api(`/api/rules?tv=${enc(state.tv)}`);
+      const rules = status.rules;
+      rules.autopilot = { ...rules.autopilot, enabled: true, target: "dev" };
+      await api("/api/rules", { tv: state.tv, rules });
+      state.rules = null;
+      toast("Done. When the TV turns on to the home screen, Detox Home opens instead. Change it in Rules.");
+    } catch (err) {
+      toast(err.message);
+    }
+  }
+});
+
+/* Links sent from the "Send to TV" bookmark */
+function checkCastLink() {
+  const params = new URLSearchParams(location.search);
+  const url = params.get("cast");
+  if (!url) return;
+  history.replaceState(null, "", location.pathname + (params.get("engine") === "lite" ? "?engine=lite" : ""));
+  state.pendingCast = { url, video: params.get("video") || "", title: params.get("title") || "" };
+  $("#cast-text").textContent = `Send "${state.pendingCast.title || url}" to the TV?`;
+  $("#cast-banner").hidden = false;
+  $("#cast-send").focus();
+}
+$("#cast-cancel").addEventListener("click", () => { state.pendingCast = null; $("#cast-banner").hidden = true; });
+$("#cast-send").addEventListener("click", async () => {
+  const cast = state.pendingCast;
+  if (!cast || !state.tv) return;
+  $("#cast-send").disabled = true;
+  try {
+    const result = await api("/api/link", { tv: state.tv, url: cast.url, video: cast.video, title: cast.title });
+    toast(`Playing on the TV in ${result.app}.`);
+    $("#cast-banner").hidden = true;
+    state.pendingCast = null;
+  } catch (err) {
+    $("#cast-text").textContent = err.message;
+  } finally {
+    $("#cast-send").disabled = false;
+  }
+});
+
+/* ---------- Menus ---------- */
+
+const isLocal = ["127.0.0.1", "localhost"].includes(location.hostname);
+
+function renderViews() {
+  // Phone pairing and installing the TV app need the program; lite hides them.
+  const unavailable = isLite() ? ["phone", "tvapp"] : isLocal ? [] : ["phone"];
+  if (!["remote", "find", "rules", "cleanup", "tvapp", "phone"].includes(state.view) || unavailable.includes(state.view)) state.view = "remote";
+  for (const btn of document.querySelectorAll("#views [data-view]")) {
+    btn.setAttribute("aria-pressed", String(btn.dataset.view === state.view));
+    btn.hidden = unavailable.includes(btn.dataset.view);
+  }
+  for (const view of document.querySelectorAll(".view")) view.hidden = view.dataset.view !== state.view;
+}
+$("#views").addEventListener("click", (e) => {
+  const view = e.target.closest("[data-view]")?.dataset.view;
+  if (!view) return;
+  state.view = view;
+  store.set("detox.view", view);
+  renderViews();
+  if (view === "rules") loadRules();
+  if (view === "tvapp") loadTvApp();
+  if (view === "find") loadHistory();
+});
+
+/* ---------- Engine badge, and what this engine can't do ---------- */
+
+function applyEngine() {
+  const kind = state.engine.kind;
+  document.documentElement.dataset.engine = kind;   // [data-engine="lite"] .needs-engine is hidden
+  const badge = $("#engine-badge");
+  badge.textContent = {
+    server: isLocal ? "Using Roku Detox on this Mac" : "Using Roku Detox on your Mac",
+    extension: "Using the Roku Detox extension",
+    relay: "Using Roku Detox on your computer, through the relay",
+    lite: "Connected directly (send-only)",
+  }[kind];
+  if (kind === "lite") badge.title = "This page sends buttons and apps straight to the TV, but can't see what's on it.";
+  for (const note of document.querySelectorAll(".engine-note")) note.hidden = kind !== "lite";
+  $("#apps-refresh").hidden = kind !== "lite";
+  $("#https-note").hidden = !(kind === "lite" && location.protocol === "https:");
+  if (kind !== "server") $("#footer").textContent = "Not made by Roku.";
+  if (kind === "extension" || kind === "relay") $("#rules-intro").textContent = "Rules run while the browser with the Roku Detox extension is open. It checks the TV every 30 seconds.";
+  if (kind === "lite") {
+    const label = $("#picker-label");
+    label.htmlFor = "manual-input";
+    label.textContent = "TV address";
+    const input = $("#manual-input");
+    input.removeAttribute("aria-label");   // the visible label names it now
+    input.setAttribute("aria-describedby", "picker-note");
+    input.placeholder = "Like 192.168.1.20";
+    setPickerNote("Find it on the TV: Settings, Network, About.");
+    $("#restart-path").textContent = "Clears out memory. This page sends Roku's restart shortcut, and the TV comes back on its own in about a minute.";
+  }
+}
+$("#apps-refresh").addEventListener("click", () => { if (state.appsLoading !== state.tv) loadLiteApps(true); });
+
+/* ---------- Phone remote ---------- */
+
+async function loadPhone() {
+  if (!isLocal || isLite()) return;
+  let next;
+  try {
+    next = await api("/api/phone");
+  } catch (err) {
+    next = { enabled: false, error: err.message };
+  }
+  if (JSON.stringify(next) === JSON.stringify(state.phone)) return;   // keep the QR code steady
+  state.phone = next;
+  renderPhone();
+}
+
+function renderPhone() {
+  $("#phone").hidden = !isLocal;
+  const phone = state.phone;
+  const body = $("#phone-body");
+  if (!isLocal || !phone) return;
+  const error = phone.error ? `<p class="error" role="alert">${esc(phone.error)}</p>` : "";
+  if (!phone.enabled) {
+    body.innerHTML = `${error}
+      <button class="btn primary" type="button" id="phone-on">Turn on phone remote</button>
+      <p class="note" style="margin-top:10px">Your Mac needs to stay on with Roku Detox running. macOS may ask whether python3 can accept incoming connections. Choose Allow.</p>
+      ${phone.paired ? `<div class="row-gap"><span class="note">${phone.paired} ${phone.paired === 1 ? "phone is" : "phones are"} still paired.</span><button class="btn quiet" type="button" id="phone-forget">Forget paired phones</button></div>` : ""}`;
+    return;
+  }
+  body.innerHTML = `${error}
+    <div class="phone-box">
+      <div class="qr" id="phone-qr" aria-hidden="true"></div>
+      <div>
+        <p>On your phone, scan the code or open</p>
+        <p class="phone-url">${esc(phone.url)}</p>
+        <p style="margin-top:16px">Then enter</p>
+        <p class="phone-code" aria-label="Code ${esc(phone.code.split("").join(" "))}">${esc(phone.code)}</p>
+        <p class="note" style="margin-top:8px">Each code works once. A new one shows up here after a phone connects.${phone.paired ? ` ${phone.paired} paired so far.` : ""}</p>
+      </div>
+    </div>
+    <p class="note" style="margin-top:16px;max-width:74ch">The code keeps other people off this page. While the TV's remote access is on, devices on your Wi-Fi can still control the TV directly. That's Roku's setting, not this page's.</p>
+    <div class="row-gap">
+      <button class="btn" type="button" id="phone-off">Turn off phone remote</button>
+      <button class="btn quiet" type="button" id="phone-forget">Turn off and forget paired phones</button>
+    </div>`;
+  if (window.QRCode) new QRCode($("#phone-qr"), { text: phone.url, width: 152, height: 152, correctLevel: QRCode.CorrectLevel.M });
+  else $("#phone-qr").hidden = true;
+}
+
+async function switchPhone(change) {
+  try {
+    state.phone = await api("/api/phone", change);
+  } catch (err) {
+    state.phone = { ...(state.phone || {}), error: err.message };
+  }
+  renderPhone();
+}
+
+$("#phone-body").addEventListener("click", (e) => {
+  if (e.target.id === "phone-on") switchPhone({ enabled: true });
+  if (e.target.id === "phone-off") switchPhone({ enabled: false });
+  if (e.target.id === "phone-forget") switchPhone({ enabled: false, forget: true });
+});
+
+function showPair() {
+  if (isLocal || !$("#pair").hidden) return;
+  $("#pair").hidden = false;
+  $("#pair-input").focus();
+}
+$("#pair-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  try {
+    await api("/api/pair", { code: $("#pair-input").value });
+    location.reload();
+  } catch (err) {
+    $("#pair-error").textContent = err.message;
+  }
+});
+
+/* ---------- Start ---------- */
+
+setInterval(pollNow, 5000);
+setInterval(() => { if (state.now?.state === "play") renderNow(); }, 1000);
+setInterval(() => { if (state.phone?.enabled) loadPhone(); }, 5000);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) pollNow(); });
+
+setInterval(() => {
+  if (state.tv && !state.job && !(state.restart && ["sending", "waiting", "restarting"].includes(state.restart.phase))) refreshDevice();
+}, 15000);
+
+(async function start() {
+  await engineReady;
+  applyEngine();
+  if (usesIconLoader()) watchIcons();
+  loadSites().then(renderFindSource);
+  renderViews();
+  checkCastLink();
+  renderAll();
+  renderRestart();
+  loadLog();
+  loadPhone();
+  if (isLite()) {   // no finding TVs: the address is typed once and saved
+    renderPicker();
+    if (state.tv) connect(state.tv);
+    return;
+  }
+  if (state.tv) {
+    connect(state.tv);
+    findTVs({ autoConnect: false });
+  } else {
+    await findTVs();
+  }
+})();
+</script>
+</body>
+</html>

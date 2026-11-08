@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Roku Detox settings</title>
+<link rel="stylesheet" href="ui.css">
+<style>
+  body { padding: 32px 16px; }
+  main { max-width: 620px; margin: 0 auto; display: grid; gap: 16px; }
+  header { display: flex; align-items: center; gap: 12px; }
+  header img { width: 40px; height: 40px; }
+  .card { display: grid; gap: 10px; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; }
+  .row input { flex: 1 1 200px; }
+  ol { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
+  .id { font-size: 14px; padding: 4px 8px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <img src="icons/128.png" alt="">
+    <div>
+      <h1>Roku Detox settings</h1>
+      <p class="muted small" id="version"></p>
+    </div>
+  </header>
+
+  <section class="card" aria-labelledby="tv-heading">
+    <h2 id="tv-heading">TV for the toolbar button</h2>
+    <p>The toolbar button sends videos to the TV you used last in Roku Detox. To always use one TV, type its address here.</p>
+    <form class="row" id="tv-form">
+      <input type="text" id="tv-input" placeholder="192.168.1.20" autocomplete="off" spellcheck="false" aria-label="TV address">
+      <button class="btn primary" type="submit">Save</button>
+      <button class="btn" type="button" id="tv-clear">Use the last TV</button>
+    </form>
+    <p class="status" id="tv-status" role="status" aria-live="polite"></p>
+  </section>
+
+  <section class="card" aria-labelledby="id-heading">
+    <h2 id="id-heading">Use the extension from a web page</h2>
+    <p>The Roku Detox page can also run from <code>http://localhost</code> or <code>http://127.0.0.1</code> and use this extension to reach the TV. The page needs this extension's id to find it:</p>
+    <div class="row">
+      <code class="id" id="ext-id"></code>
+      <button class="btn" type="button" id="copy-id">Copy id</button>
+    </div>
+    <ol class="small">
+      <li>Open the Roku Detox page in this browser.</li>
+      <li>Open the browser console there (View &gt; Developer &gt; JavaScript Console) and run:<br><code id="snippet"></code></li>
+      <li>Reload the page. It now shows that it's using the extension.</li>
+    </ol>
+    <p class="muted small">Published copies of the page have the id built in, so this step is only for an unpacked install. Other web addresses can't talk to the extension.</p>
+    <p class="status" id="id-status" role="status" aria-live="polite"></p>
+  </section>
+
+  <section class="card" aria-labelledby="relay-heading">
+    <h2 id="relay-heading">Use it from your phone</h2>
+    <p>Phones can use this extension through a small relay on the internet, while this browser is open. Everything passing through it is locked with your household's own key, so the relay can't read what you send or what's on your TV.</p>
+    <form class="row" id="relay-form">
+      <input type="text" id="relay-input" placeholder="https://roku-detox-relay.example.workers.dev" autocomplete="off" spellcheck="false" aria-label="Relay address">
+      <button class="btn primary" type="submit">Save</button>
+      <button class="btn" type="button" id="relay-off">Turn off</button>
+    </form>
+    <p class="status" id="relay-status" role="status" aria-live="polite"></p>
+    <div id="relay-link-box" hidden>
+      <p>Open this link on your phone. Anyone with it can control the TV while this browser is open, so share it only with your household.</p>
+      <div class="row">
+        <code class="id" id="relay-link"></code>
+        <button class="btn" type="button" id="relay-copy">Copy link</button>
+        <button class="btn" type="button" id="relay-new-key">Make a new link</button>
+      </div>
+      <p class="muted small">A new link stops every old one from working.</p>
+    </div>
+    <p class="muted small">You set up the relay once with a free Cloudflare account; see relay/README.md in the Roku Detox folder.</p>
+  </section>
+
+  <section class="card" aria-labelledby="open-heading">
+    <h2 id="open-heading">Open Roku Detox</h2>
+    <p>The full page opens in the side panel from the toolbar button, or in its own tab:</p>
+    <div class="row"><a class="btn" href="app/index.html" target="_blank">Open in a tab</a></div>
+  </section>
+</main>
+<script src="options.js" type="module"></script>
+</body>
+</html>

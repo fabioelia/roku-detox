@@ -1,0 +1,10 @@
+{
+  "name": "roku-detox-relay",
+  "private": true,
+  "type": "module",
+  "description": "End-to-end-encrypted relay between a phone and the Roku Detox extension. No dependencies.",
+  "scripts": {
+    "test": "node --test test/",
+    "check": "for f in src/*.js client/*.js test/*.js; do node --check \"$f\" || exit 1; done"
+  }
+}

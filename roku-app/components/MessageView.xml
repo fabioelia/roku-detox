@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Full-screen message or notice.
+    message = {title: "" (message) or "Time's up" (notice), text, from}
+  Keys are handled by HomeScene (OK / Back go home).
+-->
+<component name="MessageView" extends="Group">
+  <interface>
+    <field id="message" type="assocarray" alwaysNotify="true" onChange="onMessageChanged"/>
+  </interface>
+  <script type="text/brightscript" uri="pkg:/components/MessageView.brs"/>
+  <script type="text/brightscript" uri="pkg:/components/DetoxUtils.brs"/>
+  <children>
+    <Rectangle id="bg" width="1920" height="1080" color="0x10161FFF"/>
+    <Label id="titleLabel" translation="[160,170]" width="1600" horizAlign="center" color="0x66C5B1FF" font="font:LargeBoldSystemFont"/>
+    <Label id="bodyLabel" translation="[160,280]" width="1600" height="520" horizAlign="center" vertAlign="center" wrap="true" color="0xF2F5F8FF" font="font:LargeBoldSystemFont"/>
+    <Label id="fromLabel" translation="[160,830]" width="1600" horizAlign="center" color="0x9AA7B5FF" font="font:LargeSystemFont"/>
+    <Label id="hintLabel" translation="[160,950]" width="1600" horizAlign="center" color="0x5F6D7CFF" text="Press OK to close" font="font:LargeSystemFont"/>
+  </children>
+</component>

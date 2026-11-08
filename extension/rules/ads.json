@@ -1,0 +1,28 @@
+[
+  {
+    "id": 1,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "requestDomains": [
+        "doubleclick.net", "googlesyndication.com", "googleadservices.com", "imasdk.googleapis.com",
+        "amazon-adsystem.com", "adnxs.com", "moatads.com", "taboola.com", "outbrain.com", "popads.net",
+        "popcash.net", "pubmatic.com", "rubiconproject.com", "advertising.com", "adform.net",
+        "smartadserver.com", "spotxchange.com", "springserve.com", "teads.tv", "exoclick.com",
+        "juicyads.com", "revcontent.com", "mgid.com", "openx.net", "casalemedia.com", "indexww.com",
+        "sharethrough.com", "media.net"
+      ],
+      "excludedResourceTypes": ["main_frame"]
+    }
+  },
+  {
+    "id": 2,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "regexFilter": "^[a-z]+://[^/?#]*(adservice\\.google|propellerads|criteo\\.|trafficjunky|adsterra|hilltopads|onclickads|admaven|adsystem|adserver)",
+      "isUrlFilterCaseSensitive": false,
+      "excludedResourceTypes": ["main_frame"]
+    }
+  }
+]

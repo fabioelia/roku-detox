@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Full-screen player using the built-in Video node UI (trickplay bar, buffering bar).
+    item          = {title, url, streamFormat, referer}   (set to start playing)
+    stopNow       = true to stop
+    finished      -> set when the video ends
+    playbackError -> set to video.errorMsg when playback fails
+  Back is not handled here: it bubbles up to HomeScene, which stops playback and goes home.
+-->
+<component name="VideoView" extends="Group">
+  <interface>
+    <field id="item" type="assocarray" alwaysNotify="true" onChange="onItemChanged"/>
+    <field id="stopNow" type="boolean" alwaysNotify="true" onChange="onStopNow"/>
+    <field id="finished" type="boolean" alwaysNotify="true"/>
+    <field id="playbackError" type="string" alwaysNotify="true"/>
+  </interface>
+  <script type="text/brightscript" uri="pkg:/components/VideoView.brs"/>
+  <script type="text/brightscript" uri="pkg:/components/DetoxUtils.brs"/>
+  <children>
+    <Rectangle id="bg" width="1920" height="1080" color="0x000000FF"/>
+    <Video id="video" translation="[0,0]" width="1920" height="1080" enableUI="true"/>
+  </children>
+</component>

@@ -1,0 +1,16 @@
+# systemd service for a Raspberry Pi or any Linux computer that stays on.
+# install-pi.sh copies this to /etc/systemd/system/ and starts it.
+[Unit]
+Description=Roku Detox
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=rokudetox
+WorkingDirectory=/opt/roku-detox
+ExecStart=/usr/bin/python3 -u /opt/roku-detox/roku_detox.py --no-browser --household --data /var/lib/roku-detox
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

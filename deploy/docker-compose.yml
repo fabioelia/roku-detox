@@ -1,0 +1,11 @@
+services:
+  roku-detox:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    network_mode: host          # needed to find the TV and to be reachable from your Wi-Fi
+    volumes:
+      - ./data:/data            # settings, undo list and logs survive updates
+    restart: unless-stopped
+    # To require a PIN for rules, the TV app and sites from other devices, add:
+    # command: ["python3", "-u", "roku_detox.py", "--no-browser", "--household", "--data", "/data", "--pin", "1234"]

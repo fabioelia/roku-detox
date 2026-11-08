@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  One-shot HTTP request to the Mac program. Create one per request:
+    request  = {tag, method: "GET"|"POST", url, token, query: {k: v} (optional), body: "json string" (POST)}
+    response = {tag, ok: bool, code: int, data: parsed JSON (if any), error: str}
+-->
+<component name="HttpTask" extends="Task">
+  <interface>
+    <field id="request" type="assocarray"/>
+    <field id="response" type="assocarray" alwaysNotify="true"/>
+  </interface>
+  <script type="text/brightscript" uri="pkg:/components/HttpTask.brs"/>
+</component>
