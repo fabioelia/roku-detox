@@ -185,6 +185,8 @@ async function main() {
     document.querySelector('#views [data-view="remote"]').click();
     return { saved, note }; })()`);
   check("bedtime can be set for school nights", nights.saved.join() === "mon,tue,wed,thu,sat,sun" && nights.note === "Every night except Friday.", JSON.stringify(nights));
+  const csv = await page(`screenTimeCsv({ byDay: { "2026-11-02": { "837": 1500, "12": 600, home: 900, "13": 10 }, "2026-11-01": { "12": 3000 } } })`);
+  check("screen time downloads as a spreadsheet", csv === "Date,App or input,Minutes\r\n2026-11-01,Netflix,50\r\n2026-11-02,YouTube,25\r\n2026-11-02,Netflix,10\r\n", JSON.stringify(csv));
   check("screen time compares the past week with the one before",
     trend[0] === "Past week: about 1 h a day, 50% less than the week before." && trend[1] === "Past week: about 1 h a day, about the same as the week before."
     && trend[2] === "Past week: about 30 min a day, up from almost nothing the week before." && trend[3] === "" && trend[4] === "", JSON.stringify(trend));

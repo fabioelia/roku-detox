@@ -3423,9 +3423,32 @@ function renderScreenTime() {
   const trend = weekTrend(u.perDay || [], u.today || "");
   $("#screen-time-trend").hidden = !trend;
   $("#screen-time-trend").textContent = trend;
+  $("#screen-time-csv").hidden = !u.byDay || !Object.keys(u.byDay).length;   // an older program sends no days
   $("#screen-time-list").innerHTML = watched.slice(0, 6).map(([id, seconds]) =>
     `<li><span>${esc(usageLabel(id))}</span><span>${minutesText(seconds)}</span></li>`).join("");
 }
+
+// Every day on record, one row per app or input: date, name, minutes (the home screen left out).
+function screenTimeCsv(u) {
+  const cell = (v) => (/[",\n]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : String(v));
+  const rows = [["Date", "App or input", "Minutes"]];
+  for (const day of Object.keys(u.byDay || {}).sort()) {
+    const apps = Object.entries(u.byDay[day]).filter(([id, s]) => id !== "home" && s >= 30).sort((a, b) => b[1] - a[1]);
+    for (const [id, seconds] of apps) rows.push([day, usageLabel(id), Math.round(seconds / 60)]);
+  }
+  return rows.map((r) => r.map(cell).join(",")).join("\r\n") + "\r\n";
+}
+$("#screen-time-csv").addEventListener("click", () => {
+  const u = state.usage && state.usage.tv === state.tv ? state.usage : null;
+  if (!u) return;
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(new Blob([screenTimeCsv(u)], { type: "text/csv" }));
+  link.download = `screen-time-${u.since || "start"}-to-${u.today || "today"}.csv`;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(link.href), 10000);
+});
 
 async function loadRules() {
   if (!state.tv || !state.reachable || isLite()) return;

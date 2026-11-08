@@ -350,12 +350,15 @@ export async function usageSummary(address) {
   const days = isPlainObject(data) && isPlainObject(data[address]) ? data[address] : {};
   const totals = {};
   const perDay = []; // seconds on apps and inputs each day (the home screen doesn't count)
+  const byDay = {}; // day -> app id -> seconds (for the spreadsheet download)
   const tracked = Object.keys(days).filter((day) => isPlainObject(days[day])).sort();
   for (const day of tracked) {
     let watched = 0;
+    byDay[day] = {};
     for (const [appId, seconds] of Object.entries(days[day])) {
       if (typeof seconds === "number" && Number.isFinite(seconds)) {
         totals[appId] = (totals[appId] || 0) + Math.trunc(seconds);
+        byDay[day][appId] = Math.trunc(seconds);
         if (appId !== "home") watched += Math.trunc(seconds);
       }
     }
@@ -363,7 +366,7 @@ export async function usageSummary(address) {
   }
   const now = new Date();   // this computer's date, which the log uses
   const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-  return { days: tracked.length, since: tracked[0] || null, totals, perDay, today };
+  return { days: tracked.length, since: tracked[0] || null, totals, perDay, byDay, today };
 }
 
 async function saveUsage(address, day, usage) {
