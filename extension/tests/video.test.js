@@ -1,7 +1,11 @@
-// Video finder (live public page vs roku_detox.py), "My sites" result reading, and the media sniffer.
-import { test } from "node:test";
+// Video finder (a video page served on this computer vs roku_detox.py), "My sites" result reading, and the
+// media sniffer. Nothing here needs the internet.
+import { test, after } from "node:test";
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { createServer } from "node:net";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { installFakeChrome } from "./fake-chrome.js";
@@ -25,9 +29,27 @@ function oracle(calls) {
   return JSON.parse(execFileSync("python3", [path.join(HERE, "py_oracle.py")], { input: JSON.stringify(calls), encoding: "utf-8" }));
 }
 
-test("find_video on a public page matches the Python finder", async () => {
-  const url = "https://www.w3schools.com/html/html5_video.asp";
+// A page with a video, served by a throwaway web server (a separate process, since the Python side blocks).
+const SITE_PORT = await new Promise((resolve) => {   // a free port, so nothing else on this computer is in the way
+  const probe = createServer().listen(0, "127.0.0.1", () => { const { port } = probe.address(); probe.close(() => resolve(port)); });
+});
+const site = mkdtempSync(path.join(tmpdir(), "roku-detox-video-"));
+writeFileSync(path.join(site, "watch.html"), `<!doctype html><html><head><title>Big Buck Bunny &amp; friends</title>
+<meta property="og:title" content="Big Buck Bunny"></head><body>
+<video controls><source src="media/bunny.mp4" type="video/mp4"><source src="https://ads.doubleclick.net/x.mp4"></video>
+</body></html>`);
+const server = spawn("python3", ["-m", "http.server", String(SITE_PORT), "--bind", "127.0.0.1", "--directory", site], { stdio: "ignore" });
+after(() => server.kill());
+for (let i = 0; i < 50; i++) {
+  try { if ((await fetch(`http://127.0.0.1:${SITE_PORT}/watch.html`)).ok) break; } catch { /* starting */ }
+  await new Promise((r) => setTimeout(r, 100));
+}
+
+test("find_video on a video page matches the Python finder", async () => {
+  const url = `http://127.0.0.1:${SITE_PORT}/watch.html`;
   const js = await video.findVideo(url);
+  assert.equal(js.url, `http://127.0.0.1:${SITE_PORT}/media/bunny.mp4`);
+  assert.equal(js.title, "Big Buck Bunny");
   const py = pythonExpr(`rd.find_video(${JSON.stringify(url)})`);
   assert.ok(py.value, py.error);
   assert.deepEqual(js, py.value);
