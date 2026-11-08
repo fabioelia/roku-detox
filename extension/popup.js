@@ -117,6 +117,59 @@ async function openApp() {
   window.close();
 }
 
+// --- Quick remote -----------------------------------------------------------------------
+
+let keyChain = Promise.resolve();
+function pressKey(key) {
+  if (!tv) return;
+  const btn = $(`#keys [data-key="${key}"]`);
+  if (btn) {
+    btn.classList.add("sent");
+    setTimeout(() => btn.classList.remove("sent"), 200);
+  }
+  // One at a time, so quick presses reach the TV in order.
+  keyChain = keyChain.then(() => api("POST", "/api/key", { body: { tv, key } }))
+    .then(() => { if ($("#status").dataset.state === "problem") setStatus(""); })
+    .catch((err) => setStatus(err.message, "problem"));
+}
+
+const POPUP_KEYS = { ArrowUp: "Up", ArrowDown: "Down", ArrowLeft: "Left", ArrowRight: "Right", Enter: "Select", Backspace: "Back" };
+
+async function loadNow() {
+  if (!tv) return;
+  try {
+    const { now } = await api("GET", "/api/now", { query: { tv } });
+    const state = { play: "playing", pause: "paused", buffer: "loading" }[now?.state] || "";
+    const screen = now?.screen || {};
+    const home = !screen.id || ["roku", "roku dynamic menu", "home"].includes((screen.name || "").toLowerCase());
+    const name = now?.app || (home ? "Home screen" : screen.name);
+    $("#now").textContent = name ? `On the TV: ${name}${state && now?.app ? `, ${state}` : ""}` : "";
+  } catch {
+    $("#now").textContent = "";
+  }
+}
+
+function setUpQuickRemote() {
+  for (const btn of document.querySelectorAll("#keys [data-key]")) btn.disabled = !tv;
+  $("#keys").addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-key]");
+    if (btn && !btn.disabled) pressKey(btn.dataset.key);
+  });
+  document.addEventListener("keydown", (e) => {
+    const el = e.target instanceof Element ? e.target : document.body;
+    if (!tv || e.metaKey || e.ctrlKey || e.altKey || el.closest("select, input")) return;
+    const key = POPUP_KEYS[e.key];
+    if (!key || (key === "Select" && el.closest("button, a"))) return;
+    e.preventDefault();
+    pressKey(key);
+  });
+  $("#shortcuts").addEventListener("click", (e) => {
+    e.preventDefault();
+    chrome.tabs.create({ url: "chrome://extensions/shortcuts" });
+    window.close();
+  });
+}
+
 async function main() {
   $("#version").textContent = `v${chrome.runtime.getManifest().version}`;
   $("#send").addEventListener("click", sendToTv);
@@ -134,7 +187,9 @@ async function main() {
   }
   await tvReady;
   render();
+  setUpQuickRemote();
   loadTvName();
+  loadNow();
 }
 
 main();

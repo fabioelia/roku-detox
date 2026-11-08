@@ -14,7 +14,22 @@
   .video-meta { font-size: 12.5px; color: var(--muted); overflow-wrap: anywhere; }
   .actions { display: grid; gap: 8px; margin-top: 12px; }
   select { width: 100%; margin-top: 8px; font-size: 12.5px; }
-  footer { display: flex; justify-content: space-between; margin-top: 12px; font-size: 12.5px; }
+  footer { display: flex; justify-content: space-between; gap: 10px; margin-top: 12px; font-size: 12.5px; }
+  footer .links { display: flex; gap: 12px; }
+  .quick { margin-top: 10px; }
+  .now { font-size: 12.5px; color: var(--muted); margin: 0 0 8px; min-height: 1.2em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .keys { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .key {
+    display: grid; place-items: center; height: 38px; border: 1px solid var(--line); border-radius: 10px;
+    background: var(--raised); color: inherit; cursor: pointer;
+  }
+  .key:hover:not(:disabled) { border-color: var(--muted); }
+  .key:disabled { opacity: .45; cursor: default; }
+  .key.sent { border-color: var(--keep); box-shadow: 0 0 0 2px var(--keep-soft, rgba(30, 140, 110, .25)); }
+  .key svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .key svg.solid { fill: currentColor; stroke: none; }
+  .key.power { color: #C2334D; }
+  .hint { margin: 8px 0 0; font-size: 12px; color: var(--muted); }
 </style>
 </head>
 <body>
@@ -35,12 +50,28 @@
     <p class="status" id="status" role="status" aria-live="polite"></p>
   </section>
 
+  <section class="card quick" aria-label="Quick remote">
+    <p class="now" id="now"></p>
+    <div class="keys" id="keys" role="group" aria-label="TV remote">
+      <button class="key" data-key="Back" type="button" aria-label="Back" disabled><svg viewBox="0 0 24 24"><path d="M9 6 3 12l6 6"/><path d="M3 12h11a6 6 0 0 1 6 6"/></svg></button>
+      <button class="key" data-key="Home" type="button" aria-label="Home" disabled><svg viewBox="0 0 24 24"><path d="M4 11 12 4l8 7"/><path d="M6 9.5V20h12V9.5"/></svg></button>
+      <button class="key power" data-key="Power" type="button" aria-label="Power" disabled><svg viewBox="0 0 24 24"><path d="M12 3v8"/><path d="M6.4 7.4a8 8 0 1 0 11.2 0"/></svg></button>
+      <button class="key" data-key="Rev" type="button" aria-label="Rewind" disabled><svg class="solid" viewBox="0 0 24 24"><path d="M11 6v12l-8-6zM21 6v12l-8-6z"/></svg></button>
+      <button class="key" data-key="Play" type="button" aria-label="Play or pause" disabled><svg class="solid" viewBox="0 0 24 24"><path d="M4 5.5v13l8.5-6.5zM15 6h2.5v12H15zM19.5 6H22v12h-2.5z"/></svg></button>
+      <button class="key" data-key="Fwd" type="button" aria-label="Fast forward" disabled><svg class="solid" viewBox="0 0 24 24"><path d="M3 6v12l8-6zM13 6v12l8-6z"/></svg></button>
+      <button class="key" data-key="VolumeDown" type="button" aria-label="Volume down" disabled><svg viewBox="0 0 24 24"><path d="M3 10v4h4l5 4V6L7 10z"/><path d="M16 12h5"/></svg></button>
+      <button class="key" data-key="VolumeMute" type="button" aria-label="Mute" disabled><svg viewBox="0 0 24 24"><path d="M3 10v4h4l5 4V6L7 10z"/><path d="m16 9.5 5 5M21 9.5l-5 5"/></svg></button>
+      <button class="key" data-key="VolumeUp" type="button" aria-label="Volume up" disabled><svg viewBox="0 0 24 24"><path d="M3 10v4h4l5 4V6L7 10z"/><path d="M16 12h5M18.5 9.5v5"/></svg></button>
+    </div>
+    <p class="hint">While this is open, arrow keys move, Enter is OK, Backspace is Back.</p>
+  </section>
+
   <div class="actions">
     <button class="btn wide" id="open" type="button">Open Roku Detox</button>
   </div>
 
   <footer>
-    <a href="options.html" id="options" target="_blank">Settings</a>
+    <span class="links"><a href="options.html" id="options" target="_blank">Settings</a><a href="#" id="shortcuts">Keyboard shortcuts</a></span>
     <span class="muted" id="version"></span>
   </footer>
 <script src="popup.js" type="module"></script>
