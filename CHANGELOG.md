@@ -29,6 +29,7 @@ Newest first. The extension's version is in `extension/manifest.json`; after pul
   shortcut in the iPhone share sheet sends those links straight to the TV.
 - **Keyboard**: press `?` on the page for every shortcut (and Chrome's, in the extension). Holding an
   arrow key no longer keeps the TV moving after you let go.
+- **The popup** shows today's TV time under what's on ("TV today: 1 h 5 min of 2 h") while rules count it.
 - **Screen time** compares the past week with the week before. Activity shows "Today / 2:08 AM".
 - **Find a show** keeps recent searches under the box (this browser only), one tap to run again.
 - **Household PIN** prompt on the page: with `--household --pin`, other devices are asked for the PIN

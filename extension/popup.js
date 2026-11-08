@@ -169,6 +169,19 @@ function pressKey(key) {
 const POPUP_KEYS = { ArrowUp: "Up", ArrowDown: "Down", ArrowLeft: "Left", ArrowRight: "Right", Enter: "Select", Backspace: "Back" };
 
 let tvOff = false;
+const minutesText = (seconds) => {
+  const m = Math.round(seconds / 60);
+  return m < 60 ? `${m} min` : m % 60 ? `${Math.floor(m / 60)} h ${m % 60} min` : `${m / 60} h`;
+};
+// "TV today: 1 h 5 min of 2 h" while the viewing log (or any rule) is counting.
+function showToday(status) {
+  const watched = status ? Object.entries(status.usage || {}).reduce((n, [k, v]) => n + (k === "home" ? 0 : v), 0) : 0;
+  const box = $("#today");
+  box.hidden = !status || !status.active || watched < 60;
+  if (box.hidden) return;
+  box.textContent = `TV today: ${minutesText(watched)}${status.totalToday ? ` of ${minutesText(status.totalToday * 60)}` : ""}`;
+}
+
 async function loadNow() {
   if (!tv || tvOff) return;
   try {
@@ -181,9 +194,11 @@ async function loadNow() {
     // A daily time limit on what's showing: say how much is left today.
     let left = "";
     const appId = now?.appId || (home ? "" : screen.id);
-    if (appId) {
+    let status = null;
+    try { status = await api("GET", "/api/rules", { query: { tv } }); } catch { /* no rules: no notes */ }
+    showToday(status);
+    if (appId && status) {
       try {
-        const status = await api("GET", "/api/rules", { query: { tv } });
         const weekendDay = [0, 6].includes(new Date().getDay());
         const appLimit = status.limitsToday ? status.limitsToday[appId]
           : (weekendDay && status.rules?.weekendLimits?.[appId]) || status.rules?.limits?.[appId];

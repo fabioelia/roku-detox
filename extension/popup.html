@@ -23,6 +23,7 @@
   .video-card.idle h2, .video-card.idle .actions, .video-card.idle .video-meta { display: none; }
   .video-card.idle .video-title { margin: 0; font-weight: 400; color: var(--muted); font-size: 12.5px; }
   .status:empty { display: none; }
+  .today { margin: -4px 0 8px; font-size: 12.5px; color: var(--muted); }
   .now { font-size: 12.5px; color: var(--muted); margin: 0 0 8px; min-height: 1.2em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .keys { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
   .key {
@@ -71,6 +72,7 @@
 
   <section class="card quick" aria-label="Quick remote">
     <p class="now" id="now"></p>
+    <p class="today" id="today" hidden></p>
     <div class="keys" id="keys" role="group" aria-label="TV remote">
       <button class="key" data-key="Back" type="button" aria-label="Back" disabled><svg viewBox="0 0 24 24"><path d="M9 6 3 12l6 6"/><path d="M3 12h11a6 6 0 0 1 6 6"/></svg></button>
       <button class="key" data-key="Home" type="button" aria-label="Home" disabled><svg viewBox="0 0 24 24"><path d="M4 11 12 4l8 7"/><path d="M6 9.5V20h12V9.5"/></svg></button>

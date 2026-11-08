@@ -4334,7 +4334,7 @@ function shortcutsHTML() {
       <li>In the Shortcuts app on your iPhone, make a new shortcut and add <strong>Get Contents of URL</strong>.</li>
       <li>URL: <code>${esc(k.url)}</code> <button class="btn quiet" type="button" data-copy="${esc(k.url)}">Copy</button></li>
       <li>Method <strong>POST</strong>. Add a header <code>X-Detox-Key</code> with this key: <code>${esc(k.key)}</code> <button class="btn quiet" type="button" data-copy="${esc(k.key)}">Copy</button></li>
-      <li>Request Body <strong>JSON</strong>, with a text field <code>do</code>: what to do, like <em>pause</em>, <em>open Netflix</em>, <em>HDMI 2</em>, <em>game time</em> (one of your scenes), <em>sleep 30</em> or <em>search The Bear</em>. It answers questions too: <em>what's on</em>, <em>screen time</em>, <em>time left</em>.</li>
+      <li>Request Body <strong>JSON</strong>, with a text field <code>do</code>: what to do, like <em>pause</em>, <em>open Netflix</em>, <em>HDMI 2</em>, <em>game time</em> (one of your scenes), <em>sleep 30</em> or <em>search The Bear</em>. It answers questions too: <em>what's on</em>, <em>screen time</em>, <em>time left</em>. And <em>15 more minutes</em> gives extra time today (or moves bedtime, at bedtime).</li>
       <li>Add <strong>Speak Text</strong> after it to hear what happened. Name the shortcut, and "Hey Siri, <em>name</em>" runs it.</li>
     </ol>
     <p class="note">From the share sheet: in the shortcut's details turn on <strong>Show in Share Sheet</strong> for URLs and use <strong>Shortcut Input</strong> as <code>do</code>. Then share a YouTube or Netflix link and pick the shortcut to play it on the TV.</p>
