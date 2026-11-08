@@ -3397,6 +3397,7 @@ function renderViews() {
     btn.hidden = unavailable.includes(btn.dataset.view);
   }
   for (const view of document.querySelectorAll(".view")) view.hidden = view.dataset.view !== state.view;
+  document.documentElement.dataset.view = state.view;
 }
 $("#views").addEventListener("click", (e) => {
   const view = e.target.closest("[data-view]")?.dataset.view;

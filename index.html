@@ -331,6 +331,8 @@
   @media (max-width: 880px) {
     .layout { grid-template-columns: minmax(0, 1fr); gap: 28px; }
     .side { position: static; order: -1; max-height: none; overflow: visible; }
+    /* On a narrow screen the remote leads only on the Remote menu; elsewhere the menu's content comes first. */
+    html:not([data-view="remote"]) .side { order: 1; }
   }
   @media (max-width: 600px) {
     .shell { padding: 16px 16px 48px; }
@@ -4380,6 +4382,7 @@ function renderViews() {
     btn.hidden = unavailable.includes(btn.dataset.view);
   }
   for (const view of document.querySelectorAll(".view")) view.hidden = view.dataset.view !== state.view;
+  document.documentElement.dataset.view = state.view;
 }
 $("#views").addEventListener("click", (e) => {
   const view = e.target.closest("[data-view]")?.dataset.view;
