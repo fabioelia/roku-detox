@@ -5367,7 +5367,9 @@ $("#app-body").addEventListener("click", async (e) => {
       rules.autopilot = { ...rules.autopilot, enabled: true, target: "dev" };
       await api("/api/rules", { tv: state.tv, rules });
       state.rules = null;
-      toast("Done. When the TV turns on to the home screen, Detox Home opens instead. Change it in Rules.");
+      toast(tvAppRokuNote()
+        ? "Done. When the TV turns on, Detox Home opens with the clock; press Home on the remote for your apps (Roku won't let it open them). Change it in Rules."
+        : "Done. When the TV turns on to the home screen, Detox Home opens instead. Change it in Rules.");
     } catch (err) {
       toast(err.message);
     }
