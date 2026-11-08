@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Roku Detox",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "Control and clean up your Roku TV from the browser: remote, find a show, rules, and send videos to the TV. No program at home needed.",
   "minimum_chrome_version": "116",
   "icons": {

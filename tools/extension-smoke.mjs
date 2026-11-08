@@ -132,6 +132,10 @@ async function main() {
   check("Clean up shows the channels", usage);
   const phrase = await app.eval(`api("/api/do", { tv: state.tv, do: "hdmi 2" }).then((r) => r.done)`);
   check("phrases work through the extension", phrase === "Opening Xbox.", phrase);
+  // Detox Home straight from the extension, through the pretend TV's developer installer (password "testpass").
+  const install = await app.eval(`(async () => { const s = await api("/api/tvapp/install", { tv: state.tv, password: "testpass" });
+    return { installed: s.installed, outdated: s.outdated }; })().catch((e) => ({ error: e.message }))`);
+  check("the extension installs Detox Home itself", install.installed === true && install.outdated === false, JSON.stringify(install));
   app.close();
 
   // The toolbar popup, opened as a page.

@@ -137,9 +137,10 @@ test("input checks and unsupported routes", async () => {
   assert.deepEqual(await handleMessage("hello"), { status: 400, data: { error: "Bad request." } });
   const phone = await api("GET", "/api/phone");
   assert.deepEqual(phone, { status: 501, data: { error: "The phone remote needs the Roku Detox program at home.", needs: "home" } });
-  const install = await api("POST", "/api/tvapp/install", { tv: TV, password: "x" });
+  // Installing Detox Home works from the extension's own pages (installer.test.js); phones and web pages can't.
+  const install = await handleMessage({ type: "api", method: "POST", path: "/api/tvapp/install", body: { tv: "127.0.0.1", password: "x" } }, { internal: false });
   assert.equal(install.status, 501);
-  assert.equal(install.data.error, "Install Detox Home from the TV's own installer page: open http://127.0.0.1:9072 in your browser.");
+  assert.equal(install.data.error, "Install Detox Home from the Roku Detox page on the computer.");
   // The page's own path?query form works too.
   assert.equal((await handleMessage({ type: "api", method: "GET", path: `/api/active?tv=${TV}` }, { internal: true })).status, 200);
 });

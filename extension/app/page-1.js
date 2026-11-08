@@ -3923,22 +3923,36 @@ function renderTvApp() {
       <li>Choose "Enable installer and restart," accept the terms, and pick a password.</li>
       <li>Wait for the TV to restart, then come back here.</li>
     </ol>`;
-  if (app.canInstall === false) {   // the extension: no Mac to install from, so use the TV's own installer page
+  if (state.engine?.kind === "extension" || app.canInstall === false) {   // the extension: it installs through the TV's installer itself
     const messageForm = `<h3 class="subhead">Send a message to the TV</h3>
       <form class="install-form" id="message-form">
         <input type="text" id="message-input" maxlength="200" placeholder="Dinner's ready!" aria-label="Message">
         <button class="btn primary" type="submit">Show on TV</button>
       </form>`;
+    const canInstall = app.canInstall !== false && state.engine?.kind === "extension";
+    // By hand, from any browser on the Wi-Fi (a phone too): the file, then the TV's installer page.
+    const byHand = `<details class="by-hand"><summary>Or install it by hand</summary><ol class="app-steps">
+        <li>${state.engine?.kind === "extension" ? `<a href="detox-home.zip" download="detox-home.zip">Download Detox Home</a>` : "Download Detox Home (detox-home.zip) on the computer that has the Roku Detox extension."}</li>
+        <li>Open <a href="${esc(app.installPage)}" target="_blank" rel="noopener">the TV's installer page</a> and sign in as <strong>rokudev</strong> with the developer-mode password.</li>
+        <li>Choose the file, press Install, and wait for the TV to open Detox Home.</li>
+      </ol></details>`;
     if (app.installed && app.linked) {
       status.dataset.state = app.outdated ? "off" : "on";
-      status.textContent = app.outdated ? "Detox Home is on the TV, but it's an older version." : "Detox Home is on the TV. It runs on its own.";
-      body.innerHTML = `${app.outdated ? `<p class="note" style="margin-top:0"><strong>This copy needs a computer to work.</strong> To update it: download Detox Home below, then install it from <a href="${esc(app.installPage)}" target="_blank" rel="noopener">the TV's installer page</a> (sign in as <strong>rokudev</strong>).</p>
-          ${state.engine?.kind === "extension" ? `<p style="margin-top:8px"><a class="btn" href="detox-home.zip" download="detox-home.zip">Download Detox Home</a></p>` : ""}` : ""}
-        <div class="row-gap" style="margin-top:0">
+      status.textContent = app.outdated ? "Detox Home is on the TV, but it's an older version that needs a computer running." : "Detox Home is on the TV. It runs on its own.";
+      const update = app.outdated
+        ? `<p class="note" style="margin-top:0"><strong>Update it once and it runs on its own</strong>, with no computer needed: type the developer-mode password and press Update.</p>
+          ${canInstall ? passwordForm("Update Detox Home", "install-form") : ""}${byHand}`
+        : "";
+      body.innerHTML = `${update}
+        <div class="row-gap" style="${app.outdated ? "" : "margin-top:0"}">
           <button class="btn primary" type="button" data-app="open">Open it on the TV</button>
           <button class="btn" type="button" data-app="autopilot">Open it when the TV turns on</button>
         </div>${optionsHtml}${messageForm}
-        <p class="note" style="margin-top:12px">Videos you send with "Send to TV" play here too. To update it, install it again the same way.</p>`;
+        <p class="note" style="margin-top:12px">Videos you send with "Send to TV" play here too.</p>
+        ${app.outdated || !canInstall ? "" : `<h3 class="subhead">Remove or update</h3>
+          <p class="intro" style="margin-bottom:12px">Installing again updates it. Removing it takes it off the TV.</p>
+          ${passwordForm("Install again", "install-form")}
+          <div style="margin-top:12px">${passwordForm("Remove from TV", "remove-form")}</div>`}`;
       return;
     }
     if (!app.devMode) {
@@ -3949,18 +3963,11 @@ function renderTvApp() {
     }
     status.dataset.state = "off";
     status.textContent = app.installed
-      ? "A different custom app is on the TV. Installing Detox Home from the TV's installer page replaces it."
-      : "Developer mode is on. Install Detox Home from the TV's own installer page.";
-    const download = state.engine?.kind === "extension"
-      ? `<a class="btn primary" href="detox-home.zip" download="detox-home.zip">Download Detox Home</a>`
-      : `<span class="note">Download it on the computer that has the Roku Detox extension.</span>`;
-    body.innerHTML = `<ol class="app-steps">
-        <li>${download}</li>
-        <li>Open <a href="${esc(app.installPage)}" target="_blank" rel="noopener">the TV's installer page</a>. Sign in as <strong>rokudev</strong> with the password you chose for developer mode.</li>
-        <li>Choose the downloaded file, press Install, and wait for the TV to open Detox Home.</li>
-      </ol>
-      <button class="btn" type="button" data-app="recheck">Check again</button>
-      <p class="note" style="margin-top:12px">Roku allows one custom app at a time. Installing puts Detox Home in that slot and changes nothing else on the TV.</p>`;
+      ? "A different custom app is on the TV. Installing Detox Home replaces it."
+      : "Developer mode is on. Ready to install.";
+    body.innerHTML = `<p class="intro">Roku allows one custom app at a time. Installing puts Detox Home in that slot and changes nothing else on the TV.</p>
+      ${canInstall ? passwordForm("Install on TV", "install-form") : ""}${byHand}
+      <button class="btn quiet" type="button" data-app="recheck" style="margin-top:8px">Check again</button>`;
     return;
   }
   if (!isLocal) {

@@ -3,6 +3,14 @@
 Newest first. The extension's version is in `extension/manifest.json`; after pulling, reload it on
 `chrome://extensions`. The program has no version: restart `python3 roku_detox.py`.
 
+## Extension 1.3.0 (November 2026)
+
+- **The extension installs and updates Detox Home itself**: type the developer-mode password on the TV app
+  menu and press Install (or Update, for an older copy that needed a computer). It talks to the TV's own
+  developer installer, like the program does; the password goes only to the TV and isn't kept. No more
+  downloading the file and using the TV's installer page (still there, under "Or install it by hand").
+  Once updated, Detox Home runs on its own with no computer.
+
 ## Extension 1.2.0 (November 2026)
 
 ### New

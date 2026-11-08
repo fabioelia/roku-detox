@@ -3,7 +3,7 @@
 
 import {
   APP_ID_RE, ECP_PORT, HttpError, MAX_BODY, NotSupported, ValueError, boundedInt, cut, displayAddress,
-  fetchWithTimeout, isPlainObject, keepAlive, parseTarget, pyLen, pyStr, truthy,
+  fetchWithTimeout, isPlainObject, keepAlive, parseTarget, pyLen, pyStr, sleep, truthy,
 } from "./util.js";
 import {
   activeApp, canControl, deviceInfo, favoritesLink, fetchIcon, launch, listApps, nowPlaying, openStorePage, press,
@@ -19,6 +19,7 @@ import {
 import { cast, lookCloser, searchSites, sniffedForTab, tvMessage } from "./video.js";
 import { setSleep, sleepStatus } from "./sleep.js";
 import { doPhrase } from "./phrases.js";
+import { detoxHomePackage, sendToInstaller } from "./installer.js";
 import { discoverReport } from "./discover.js";
 import { cleanRules, doctor, extendBedtime, giveMoreTime, keepOwnedFields, pauseRules, rulesStatus, saveRules, skipAutopilot, tvRules, usageSummary } from "./rules.js";
 
@@ -93,7 +94,7 @@ async function tvAppStatus(target) {
     ytdlp: false,
     appReady: true,
     engine: "extension",
-    canInstall: false,
+    canInstall: true, // installer.js: from the extension's own pages
     installPage: installerPage(displayAddress(target)),
   };
 }
@@ -241,11 +242,22 @@ const POST_ROUTES = {
     await skipAutopilot(address);
     return rulesStatus(address);
   },
+  // Install, update or remove Detox Home through the TV's developer installer (installer.js). Only from this
+  // extension's own pages: the password is typed there and goes only to the TV.
   "/api/tvapp/install": async (c) => {
-    throw new NotSupported(`Install Detox Home from the TV's own installer page: open ${installerPage(c.body.tv)} in your browser.`);
+    if (!c.internal) throw new NotSupported("Install Detox Home from the Roku Detox page on the computer.");
+    const target = c.target();
+    const password = pyStr(c.body.password ?? "");
+    if (!password || password.length > 200) throw new ValueError("Type the developer password you chose on the TV.");
+    await sendToInstaller(target, password, await detoxHomePackage());
+    await sleep(4000); // the TV restarts the app; give it a moment before asking what's installed
+    return tvAppStatus(target);
   },
   "/api/tvapp/remove": async (c) => {
-    throw new NotSupported(`Remove Detox Home from the TV's own installer page: open ${installerPage(c.body.tv)} in your browser.`);
+    if (!c.internal) throw new NotSupported("Remove Detox Home from the Roku Detox page on the computer.");
+    const target = c.target();
+    await sendToInstaller(target, pyStr(c.body.password ?? ""), null);
+    return tvAppStatus(target);
   },
   "/api/tvapp/options": async (c) => {
     const target = c.target();

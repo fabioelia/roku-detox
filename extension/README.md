@@ -65,8 +65,10 @@ These answer with a plain-English explanation (status 501, `needs: "home"`):
 
 - the phone remote and pairing (`/api/phone`, `/api/pair`), and sharing the page with the
   household (`/api/household`)
-- installing or removing Detox Home (`/api/tvapp/install`, `/api/tvapp/remove`): use the TV's own
-  installer page instead
+
+Installing, updating and removing Detox Home (`/api/tvapp/install`, `/api/tvapp/remove`) work from the
+extension's own page: it sends `app/detox-home.zip` to the TV's developer installer with the password you type
+(digest sign-in as `rokudev`, `engine/installer.js`). Phones on the relay and other web pages can't.
 
 Rules stop when Chrome is closed. The Mac program keeps them running all the time.
 
