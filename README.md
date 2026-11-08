@@ -46,7 +46,8 @@ The page has six menus:
   It checks the TV every 4 seconds and keeps the Mac from sleeping (`caffeinate`) while any rule is on.
   Alerts show as macOS notifications. Includes a connection check with plain-language fixes, and
   screen time for the past days (total, daily average, top apps).
-- **Clean up**: remove channels, finish-up checklist, undo list. With the viewing log on, each channel
+- **Clean up**: remove channels, finish-up checklist, undo list, and "Move your settings" (save
+  favorites, scenes, rules and sites to a file and load them in the extension or on another computer). With the viewing log on, each channel
   shows how long it was watched, and after a week "Select the ones not opened lately" picks the unused ones.
 - **TV app**: install **Detox Home**, a custom Roku app (in `roku-app/`): a calm home screen with a clock
   and your apps and favorites, rule notices ("Time's up"), messages you send from the Mac or phone, videos from

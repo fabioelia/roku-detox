@@ -880,6 +880,17 @@
         <ul class="undo" id="undo-list"></ul>
       </section>
 
+      <section class="section" id="move-section">
+        <h2>Move your settings</h2>
+        <p class="intro">The program on your Mac and the browser extension each keep their own favorites, scenes, rules and sites. Save them to a file here, then load the file in the other one (or on another computer).</p>
+        <div class="row-gap">
+          <button class="btn" type="button" id="settings-export">Save settings to a file</button>
+          <button class="btn" type="button" id="settings-import-btn">Load settings from a file</button>
+          <input type="file" id="settings-import" accept="application/json,.json" hidden>
+        </div>
+        <p class="note" id="move-note" aria-live="polite"></p>
+      </section>
+
       </div>
 
       <div class="view" data-view="tvapp" hidden>

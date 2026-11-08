@@ -1981,6 +1981,69 @@ $("#wake-btn").addEventListener("click", async (e) => {
   }
 });
 
+/* ---------- Moving settings between the program and the extension (a file) ---------- */
+
+async function exportSettings() {
+  if (!state.tv) { toast("Connect to your TV first."); return; }
+  const tv = state.tv;
+  const [settings, rules, sites] = await Promise.all([
+    api(`/api/settings?tv=${enc(tv)}`),
+    api(`/api/rules?tv=${enc(tv)}`).catch(() => null),
+    api("/api/sites").catch(() => null),
+  ]);
+  const data = {
+    app: "roku-detox", version: 1, saved: new Date().toISOString(), tvName: state.device?.name || tv,
+    favorites: settings.favorites || [], scenes: settings.scenes || [], services: settings.services || {},
+    rules: rules?.rules ?? null, sites: sites?.sites ?? [],
+  };
+  const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }));
+  const a = Object.assign(document.createElement("a"), { href: url, download: "roku-detox-settings.json" });
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+  const count = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+  $("#move-note").textContent = `Saved ${count(data.favorites.length, "favorite", "favorites")}, ${count(data.scenes.length, "scene", "scenes")}${data.rules ? ", your rules" : ""} and ${count(data.sites.length, "site", "sites")} to roku-detox-settings.json.`;
+}
+
+async function importSettings(file) {
+  if (!state.tv) { toast("Connect to your TV first."); return; }
+  let data;
+  try {
+    data = JSON.parse(await file.text());
+  } catch {
+    toast("That file isn't a Roku Detox settings file.");
+    return;
+  }
+  if (!data || data.app !== "roku-detox") { toast("That file isn't a Roku Detox settings file."); return; }
+  const done = [];
+  try {
+    await saveSettings({ favorites: data.favorites || [], scenes: data.scenes || [], services: data.services || {} });
+    done.push("favorites and scenes");
+    if (data.rules && !isLite()) {
+      await api("/api/rules", { tv: state.tv, rules: data.rules });
+      done.push("rules");
+    }
+    if (Array.isArray(data.sites) && data.sites.length && !isLite()) {
+      await saveSites(data.sites.map(({ name, search, deep }) => ({ name, search, ...(deep ? { deep } : {}) })));
+      done.push("sites");
+    }
+  } catch (err) {
+    toast(err.message);
+  }
+  renderShortcuts();
+  loadRules();
+  $("#move-note").textContent = done.length ? `Loaded ${done.join(", ")} for ${state.device?.name || state.tv}.` : "";
+}
+
+$("#settings-export").addEventListener("click", () => exportSettings().catch((err) => toast(err.message)));
+$("#settings-import-btn").addEventListener("click", () => $("#settings-import").click());
+$("#settings-import").addEventListener("change", (e) => {
+  const file = e.target.files?.[0];
+  if (file) importSettings(file);
+  e.target.value = "";
+});
+
 /* ---------- Sleep timer (kept by the program at home or the extension, so the page can close) ---------- */
 
 state.sleep = null;   // {until: epoch seconds, minutes: what was picked} or null
