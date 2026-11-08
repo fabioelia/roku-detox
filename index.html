@@ -521,6 +521,21 @@
     display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 10px; font-weight: 700;
   }
   .remote-only-tv { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* A phone turned sideways: the remote in two halves, everything else beside it, all on one screen. */
+  @media (orientation: landscape) and (max-height: 520px) {
+    html[data-remote-only="true"] .side {
+      max-width: 760px; grid-template-columns: auto minmax(0, 300px); column-gap: 28px; align-items: start; justify-content: center;
+    }
+    html[data-remote-only="true"] .side > * { grid-column: 2; }
+    html[data-remote-only="true"] .side > .remote { grid-column: 1; grid-row: 1 / span 9; }
+    html[data-remote-only="true"] .remote {
+      width: auto; grid-template-columns: auto auto; column-gap: 24px; row-gap: 12px; align-items: center;
+      padding: 18px 22px; border-radius: 40px;
+    }
+    html[data-remote-only="true"] .remote > .ends { grid-column: 1; grid-row: 1; }
+    html[data-remote-only="true"] .remote > .dpad, html[data-remote-only="true"] .remote > .touchpad { grid-column: 1; grid-row: 2 / span 4; }
+    html[data-remote-only="true"] .remote > .r-row:not(.ends) { grid-column: 2; }
+  }
   .sleep { width: 100%; max-width: 300px; display: grid; gap: 8px; }
   .sleep-title { font-size: 14px; color: var(--muted); }
   .sleep-status { color: var(--ink); font-weight: 600; }
