@@ -112,6 +112,24 @@ export async function tvRules(address) {
   }
 }
 
+/** Any rule that acts on the TV (the viewing log alone only watches). */
+export function rulesEnforcing(rules) {
+  return Boolean(
+    (rules.autopilot.enabled && rules.autopilot.target)
+    || rules.bedtime.enabled || rules.nightGuard.enabled
+    || Object.keys(rules.limits).length || rules.blocked.length || Object.keys(rules.redirects).length,
+  );
+}
+
+/** pausedUntil, extendUntil and skipNext change only through their own routes (and the watcher), so a
+ * page saving its older copy of the rules can't undo them or bring them back (keep_owned_fields). */
+export function keepOwnedFields(rules, stored) {
+  rules.pausedUntil = stored.pausedUntil || 0;
+  rules.bedtime.extendUntil = stored.bedtime.extendUntil || 0;
+  rules.autopilot.skipNext = Boolean(stored.autopilot.skipNext);
+  return rules;
+}
+
 export function rulesActive(rules) {
   return Boolean(
     (rules.autopilot.enabled && rules.autopilot.target)
@@ -140,7 +158,7 @@ export function plainName(app) {
 const APP_NAMES = new Map(); // target key -> {app id: name}
 
 /** A channel's name for messages, looked up once per TV. */
-async function appLabel(target, appId) {
+export async function appLabel(target, appId) {
   const key = targetKey(target);
   let names = APP_NAMES.get(key);
   if (!names || !(appId in names)) {
@@ -274,7 +292,8 @@ async function check(address, rules) {
     state.power = "off";
     state.reachable = false;
     state.unreachableSince = state.unreachableSince || t;
-    if (t - state.unreachableSince > 180 && (rules.bedtime.enabled || Object.keys(rules.limits).length || rules.blocked.length)) {
+    if (t - state.unreachableSince > 180 && t >= (rules.pausedUntil || 0)
+      && (rules.bedtime.enabled || Object.keys(rules.limits).length || rules.blocked.length)) {
       await event(address, "Can't reach the TV. If it's on, rules aren't working. Check it's on the same Wi-Fi, and that Fast TV start is on.", "alert", "unreachable", 3600);
     }
     return;
@@ -286,6 +305,7 @@ async function check(address, rules) {
   const mode = info["ecp-setting-mode"] || "";
   state.control = mode !== "limited" && mode !== "disabled";
   if (!state.control) {
+    if (t < (rules.pausedUntil || 0)) return;
     await event(address, "The TV's remote access was switched to Limited, so rules can't run. Set it back: Settings > System > Advanced system settings > Control by mobile apps > Network access > Default.", "alert", "limited", 3600);
     return;
   }
@@ -315,7 +335,11 @@ async function check(address, rules) {
   }
 
   await tickUsage(address, state, app, t);
-  if (t < (rules.pausedUntil || 0)) return; // paused: keep counting viewing time, enforce nothing
+  if (t < (rules.pausedUntil || 0)) { // paused: keep counting viewing time, enforce nothing,
+    // and start fresh afterwards: a new bedtime warning, a new idle count, no late skip-home
+    state.bedtimeWarned = state.idleSince = state.autopilot = null;
+    return;
+  }
 
   if (await bedtime(address, rules, state, target, local, t)) return;
   if (await nightGuard(address, rules, state, target, local, t)) return;

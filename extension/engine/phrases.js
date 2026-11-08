@@ -1,9 +1,9 @@
 // Plain phrases ("pause", "open Netflix", "HDMI 2", "game time", "sleep 30"): the same rules as
 // do_phrase() in roku_detox.py, for the page's search box (typed or spoken).
 
-import { launch, listApps, press, pressSequence, runScene, search } from "./ecp.js";
+import { deviceInfo, launch, listApps, nowPlaying, press, pressSequence, runScene, search } from "./ecp.js";
 import { setSleep } from "./sleep.js";
-import { pauseRules } from "./rules.js";
+import { appLabel, isHome, pauseRules, plainName, rulesEnforcing, rulesStatus, tvRules } from "./rules.js";
 import { tvSettings } from "./store.js";
 import { ValueError, cut, displayAddress, pyLen } from "./util.js";
 
@@ -21,6 +21,74 @@ const PHRASE_KEYS = [
   [["rewind"], "Rev", "Rewinding."],
   [["fast forward", "forward"], "Fwd", "Fast forwarding."],
 ];
+
+const STATUS_ON_RE = /^(?:(?:what s|whats|what is) (?:on|playing)(?: on)?(?: (?:the )?tv)?(?: right now| now)?|now playing|what am i watching)$/;
+const STATUS_TIME_RE = /^(?:screen time|tv time|watch time|how much tv)(?: today)?$/;
+const STATUS_LEFT_RE = /^(?:time left|how much time is left|how much time left)(?: today)?$/;
+
+/** 1 hour 5 minutes, 45 minutes, less than a minute (say_duration in roku_detox.py). */
+export function sayDuration(seconds) {
+  let minutes = Math.floor(Math.trunc(seconds) / 60);
+  if (minutes < 1) return "less than a minute";
+  const hours = Math.floor(minutes / 60);
+  minutes %= 60;
+  const parts = hours ? [`${hours} hour${hours !== 1 ? "s" : ""}`] : [];
+  if (minutes) parts.push(`${minutes} minute${minutes !== 1 ? "s" : ""}`);
+  return parts.join(" ");
+}
+
+/** 21:00 -> 9 PM, 06:30 -> 6:30 AM. */
+export function sayClock(hhmm) {
+  const [hour, minute] = hhmm.split(":").map(Number);
+  const h = hour % 12 || 12;
+  return `${minute ? `${h}:${String(minute).padStart(2, "0")}` : h} ${hour < 12 ? "AM" : "PM"}`;
+}
+
+async function sayWhatsOn(target) {
+  if (((await deviceInfo(target))["power-mode"] ?? "PowerOn") !== "PowerOn") return "The TV is off.";
+  const now = await nowPlaying(target);
+  if (isHome(now.screen)) return "The home screen is on.";
+  const name = plainName(now.screen);
+  if (now.live) return `${name} is on, live.`;
+  if (["play", "pause", "buffer"].includes(now.state) && now.position) {
+    let said = `${name} is on, ${now.state === "pause" ? "paused" : "playing"}, ${sayDuration(now.position / 1000)} in`;
+    if (now.duration && now.duration > now.position) said += `, ${sayDuration((now.duration - now.position) / 1000)} to go`;
+    return `${said}.`;
+  }
+  return `${name} is on.`;
+}
+
+async function sayScreenTime(target) {
+  const status = await rulesStatus(displayAddress(target));
+  const usage = Object.entries(status.usage).filter(([k, v]) => k !== "home" && v > 0);
+  const total = usage.reduce((sum, [, v]) => sum + v, 0);
+  if (total < 60) {
+    if (!status.active) return "The viewing log is off. Turn it on in the Rules menu to keep track of screen time.";
+    return total ? "Less than a minute of TV today." : "No TV yet today.";
+  }
+  const [top, topSeconds] = usage.reduce((best, e) => (e[1] > best[1] || (e[1] === best[1] && e[0] < best[0]) ? e : best));
+  const name = await appLabel(target, top);
+  if (usage.length === 1) return `${sayDuration(total)} of TV today, all on ${name}.`;
+  return `${sayDuration(total)} of TV today. The most: ${name}, ${sayDuration(topSeconds)}.`;
+}
+
+async function sayTimeLeft(target) {
+  const status = await rulesStatus(displayAddress(target));
+  const { rules } = status;
+  const nowSeconds = Date.now() / 1000;
+  const parts = [];
+  if (nowSeconds < (rules.pausedUntil || 0)) parts.push("Rules are paused, so nothing closes for now.");
+  const limits = [];
+  for (const [appId, minutes] of Object.entries(rules.limits)) limits.push([await appLabel(target, appId), minutes * 60 - (status.usage[appId] || 0)]);
+  limits.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : a[1] - b[1]));
+  for (const [name, left] of limits) parts.push(left <= 0 ? `${name}: time's up for today.` : `${name}: ${sayDuration(left)} left.`);
+  if (rules.bedtime.enabled) {
+    const later = (rules.bedtime.extendUntil || 0) - nowSeconds;
+    if (!status.bedtimeNow) parts.push(`Bedtime is at ${sayClock(rules.bedtime.start)}.`);
+    else parts.push(later > 0 ? `Bedtime is put off for ${sayDuration(later)} more.` : "It's bedtime.");
+  }
+  return parts.join(" ") || "There's no daily limit or bedtime set.";
+}
 
 /** Lowercase words without accents or punctuation: "Pokémon TV!" -> "pokemon tv". */
 export function foldWords(text) {
@@ -44,6 +112,10 @@ export async function doPhrase(target, phrase, { strict = false } = {}) {
         return said;
       }
     }
+    // Questions (Siri reads the answer out): what's on, screen time, time left.
+    if (STATUS_ON_RE.test(words)) return sayWhatsOn(target);
+    if (STATUS_TIME_RE.test(words)) return sayScreenTime(target);
+    if (STATUS_LEFT_RE.test(words)) return sayTimeLeft(target);
   }
   let match = /^(?:volume |turn it )?(up|down) (\d{1,2})$/.exec(words);
   if (match) {
@@ -62,6 +134,7 @@ export async function doPhrase(target, phrase, { strict = false } = {}) {
     return "Sleep timer off.";
   }
   if (["pause rules", "pause the rules", "rules off"].includes(words)) {
+    if (!rulesEnforcing(await tvRules(displayAddress(target)))) return "No rules are on, so there's nothing to pause.";
     await pauseRules(displayAddress(target), 60);
     return "Rules are paused for an hour.";
   }
@@ -105,5 +178,5 @@ export async function doPhrase(target, phrase, { strict = false } = {}) {
   if (opening && !strict) throw new ValueError(`There's no app or scene called ${asked} on this TV.`);
   const text = cut(opening ? opening[1] : String(phrase).trim(), 100);
   await search(target, text);
-  return `Searching the TV for ${text}.`;
+  return `Searching the TV for ${text}${/[.?!]$/.test(text) ? "" : "."}`;
 }

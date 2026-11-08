@@ -3407,12 +3407,15 @@ function noteLimits(status, tv = state.tv) {
   state.limitStatus = status ? {
     tv, limits: status.rules?.limits || {}, usage: status.usage || {},
     bedtime: status.rules?.bedtime?.enabled ? status.rules.bedtime : null,
+    pausedUntil: status.rules?.pausedUntil || 0,
   } : null;
 }
+// Rules are paused: no limit or bedtime notes, since nothing will happen until the pause ends.
+const limitsPaused = () => (state.limitStatus?.pausedUntil || 0) * 1000 > Date.now();
 // "bedtime at 10:00 PM" when it starts within the hour.
 function bedtimeNote() {
   const b = state.limitStatus?.tv === state.tv ? state.limitStatus.bedtime : null;
-  if (!b || !/^\d\d:\d\d$/.test(b.start || "")) return "";
+  if (!b || !/^\d\d:\d\d$/.test(b.start || "") || limitsPaused()) return "";
   // "15 more minutes" was given: bedtime is then, not tomorrow's start time.
   if (b.extendUntil && b.extendUntil * 1000 > Date.now()) {
     return `bedtime at ${new Date(b.extendUntil * 1000).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}`;
@@ -3433,7 +3436,7 @@ async function loadLimits() {
 }
 function limitNote(appId) {
   const l = state.limitStatus;
-  if (!appId || !l || l.tv !== state.tv || !l.limits[appId]) return "";
+  if (!appId || !l || l.tv !== state.tv || !l.limits[appId] || limitsPaused()) return "";
   const left = Math.round(l.limits[appId] - (l.usage[appId] || 0) / 60);
   return left > 0 ? `${minutesText(left * 60)} left today` : "time's up for today";
 }
@@ -4422,13 +4425,16 @@ function minutesUntilMorning() {
   const morning = new Date(now);
   morning.setHours(7, 0, 0, 0);
   if (morning <= now) morning.setDate(morning.getDate() + 1);
-  return Math.min(24 * 60, Math.round((morning - now) / 60000));
+  return Math.min(24 * 60, Math.max(1, Math.ceil((morning - now) / 60000)));   // never 0, which means "resume"
 }
 function renderRulesPause(status) {
   const box = $("#rules-pause");
-  box.hidden = !status.active;
-  if (box.hidden) return;
   const until = status.rules.pausedUntil || 0;
+  const r = status.rules;
+  const enforcing = (r.autopilot.enabled && r.autopilot.target) || r.bedtime.enabled || r.nightGuard.enabled
+    || Object.keys(r.limits).length || r.blocked.length || Object.keys(r.redirects).length;
+  box.hidden = !enforcing && until * 1000 <= Date.now();   // the viewing log alone has nothing to pause
+  if (box.hidden) return;
   if (until * 1000 > Date.now()) {
     const at = new Date(until * 1000).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
     box.innerHTML = `<p><strong>All rules are paused until ${esc(at)}.</strong> The viewing log keeps counting.</p>
@@ -4448,9 +4454,10 @@ $("#rules-pause").addEventListener("click", async (e) => {
   try {
     const status = await api("/api/rules/pause", { tv: state.tv, minutes });
     state.rulesStatus = status;
-    state.rules = JSON.parse(JSON.stringify(status.rules));
-    state.rulesVersion += 1;
+    state.rules.pausedUntil = status.rules.pausedUntil;   // keep edits that are still waiting to save
+    noteLimits(status, state.tv);
     renderRules();
+    renderNow();
     toast(minutes ? "Rules paused." : "Rules are back on.");
   } catch (err) {
     toast(err.message);
@@ -4528,7 +4535,7 @@ function renderRuleList() {
     "Turns the TV off during these hours, after a 1-minute grace period. If someone turns it back on, it goes off again after 15 seconds.",
     r.bedtime.enabled,
     `<div class="line"><span>From</span>${time("bedtime", "start")}<span>until</span>${time("bedtime", "end")}</div>
-     <div class="line"><button class="btn" type="button" id="bedtime-extend" data-action="extend" ${state.rulesStatus.bedtimeNow ? "" : "hidden"}>Give 15 more minutes</button></div>`);
+     <div class="line"><button class="btn" type="button" id="bedtime-extend" data-action="extend" ${state.rulesStatus.bedtimeNow && !((state.rulesStatus.rules?.pausedUntil || 0) * 1000 > Date.now()) ? "" : "hidden"}>Give 15 more minutes</button></div>`);
 
   const limitRows = Object.entries(r.limits).map(([id, minutes]) => `<div class="line" data-limit="${esc(id)}">
       <select data-limit-app aria-label="App">${anyOptions(id)}</select>
@@ -5271,7 +5278,11 @@ $("#pair-form").addEventListener("submit", async (e) => {
 setInterval(pollNow, 5000);
 setInterval(() => { if (state.now?.state === "play") renderNow(); }, 1000);
 setInterval(() => { if (state.phone?.enabled) loadPhone(); }, 5000);
-document.addEventListener("visibilitychange", () => { if (!document.hidden) pollNow(); });
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) return;
+  pollNow();
+  if (state.view === "rules") loadRules();   // rules may have changed from a phone or Siri meanwhile
+});
 
 setInterval(() => {
   if (state.tv && !state.job && !(state.restart && ["sending", "waiting", "restarting"].includes(state.restart.phase))) refreshDevice();

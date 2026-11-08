@@ -165,3 +165,25 @@ test("pausing rules lets a blocked app stay on, then they're back", async () => 
   await setRules({});
   await tv("/keypress/Home");
 });
+
+test("after a pause, bedtime warns again before turning the TV off; saving rules keeps the pause", async () => {
+  const power = async () => (await ok("GET", "/api/device", { tv: TV })).device.powerMode;
+  const bedtime = { enabled: true, start: "21:00", end: "06:30" };
+  await setRules({ bedtime });
+  await tv("/keypress/PowerOn");
+  await roundAt("2026-11-10T20:59:55");
+  await roundAt("2026-11-10T21:00:02"); // the warning
+  mock.timers.setTime(new Date("2026-11-10T21:00:30").getTime());
+  const until = (await ok("POST", "/api/rules/pause", { tv: TV, minutes: 60 })).rules.pausedUntil;
+  // The page saves its own copy of the rules, which says nothing is paused: the pause stays.
+  const saved = await ok("POST", "/api/rules", { tv: TV, rules: { bedtime, pausedUntil: 0 } });
+  assert.equal(saved.rules.pausedUntil, until);
+  await roundAt("2026-11-10T21:30:00");
+  await roundAt("2026-11-10T22:00:35"); // the pause is over: a fresh warning, not straight off
+  assert.equal(await power(), "PowerOn");
+  await roundAt("2026-11-10T22:03:00");
+  assert.notEqual(await power(), "PowerOn", "after the warning's grace, bedtime turns it off");
+  await setRules({});
+  await tv("/keypress/PowerOn");
+  await tv("/keypress/Home");
+});

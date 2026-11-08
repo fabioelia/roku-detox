@@ -64,7 +64,10 @@ The page has six menus:
   for Apple's Shortcuts app (or anything that can send a web request): POST `{"do": "pause"}` to
   `http://<this Mac>:8642/api/do` with the header `X-Detox-Key`. Phrases: pause, home, back, louder,
   quieter, mute, on, off, volume up 5, open Netflix, HDMI 2, one of your scene names, sleep 30,
-  cancel sleep, pause rules, resume rules, search The Bear; anything else searches the TV. The answer is a sentence Siri can read out.
+  cancel sleep, pause rules, resume rules, search The Bear; anything else searches the TV. The answer is a sentence Siri can read out,
+  and you can ask too: "what's on" (Netflix is on, playing, 12 minutes in), "screen time" (today's total and the top app,
+  from the viewing log) and "time left" (what's left on each daily limit, and when bedtime is). With a household PIN set,
+  "pause rules" needs it too.
   The Phone menu also lists **home-screen buttons**: links like `http://<this Mac>:8642/#do=open%20Netflix`
   that open the page and do that on the TV after a 2-second pause you can cancel. Add them to a phone's
   home screen for one-tap Netflix, a scene, or "sleep 30".

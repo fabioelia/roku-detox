@@ -185,7 +185,8 @@ async function loadNow() {
       try {
         const status = await api("GET", "/api/rules", { query: { tv } });
         const limit = status.rules?.limits?.[appId];
-        if (limit) {
+        const paused = (status.rules?.pausedUntil || 0) > Date.now() / 1000;   // nothing closes while paused
+        if (limit && !paused) {
           const minutes = Math.round(limit - (status.usage?.[appId] || 0) / 60);
           left = minutes > 0 ? ` (${minutes} min left today)` : " (time's up for today)";
         }

@@ -20,7 +20,7 @@ import { cast, lookCloser, searchSites, sniffedForTab, tvMessage } from "./video
 import { setSleep, sleepStatus } from "./sleep.js";
 import { doPhrase } from "./phrases.js";
 import { discoverReport } from "./discover.js";
-import { cleanRules, doctor, extendBedtime, pauseRules, rulesStatus, saveRules, skipAutopilot, usageSummary } from "./rules.js";
+import { cleanRules, doctor, extendBedtime, keepOwnedFields, pauseRules, rulesStatus, saveRules, skipAutopilot, tvRules, usageSummary } from "./rules.js";
 
 export const VERSION = (() => {
   try { return chrome.runtime.getManifest().version; } catch { return "1.0.0"; }
@@ -202,7 +202,7 @@ const POST_ROUTES = {
   },
   "/api/rules": async (c) => {
     const address = c.address();
-    await saveRules(address, cleanRules(c.body.rules));
+    await saveRules(address, keepOwnedFields(cleanRules(c.body.rules), await tvRules(address)));
     return rulesStatus(address);
   },
   "/api/rules/extend": async (c) => {

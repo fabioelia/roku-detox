@@ -1343,6 +1343,15 @@ def tv_rules(address):
         return json.loads(json.dumps(RULES_DEFAULT))
 
 
+def rules_enforcing(rules):
+    """Any rule that acts on the TV (the viewing log alone only watches)."""
+    return bool(
+        (rules["autopilot"]["enabled"] and rules["autopilot"]["target"])
+        or rules["bedtime"]["enabled"] or rules["nightGuard"]["enabled"]
+        or rules["limits"] or rules["blocked"] or rules["redirects"]
+    )
+
+
 def rules_active(rules):
     return bool(
         (rules["autopilot"]["enabled"] and rules["autopilot"]["target"])
@@ -1533,7 +1542,8 @@ class Watcher:
             state.power = "off"
             state.reachable = False
             state.unreachable_since = state.unreachable_since or now
-            if now - state.unreachable_since > 180 and (rules["bedtime"]["enabled"] or rules["limits"] or rules["blocked"]):
+            if now - state.unreachable_since > 180 and now >= rules.get("pausedUntil", 0) \
+                    and (rules["bedtime"]["enabled"] or rules["limits"] or rules["blocked"]):
                 self.event(address, "Can't reach the TV. If it's on, rules aren't working. Check it's on the same Wi-Fi, and that Fast TV start is on.", kind="alert", key="unreachable", every=3600)
             return
         state.reachable = True
@@ -1543,6 +1553,8 @@ class Watcher:
         mode = info.get("ecp-setting-mode", "")
         state.control = mode not in ("limited", "disabled")
         if not state.control:
+            if now < rules.get("pausedUntil", 0):
+                return
             self.event(address, "The TV's remote access was switched to Limited, so rules can't run. Set it back: Settings > System > Advanced system settings > Control by mobile apps > Network access > Default.", kind="alert", key="limited", every=3600)
             return
         state.said.pop("limited", None)
@@ -1570,6 +1582,8 @@ class Watcher:
 
         self.tick_usage(address, state, app, now)
         if now < rules.get("pausedUntil", 0):  # paused: keep counting viewing time, enforce nothing
+            # and start fresh afterwards: a new bedtime warning, a new idle count, no late skip-home
+            state.bedtime_warned = state.idle_since = state.autopilot = None
             return
 
         if self.bedtime(address, rules, state, target, local, now):
@@ -1743,6 +1757,15 @@ def save_rules(address, rules):
     save_tv_settings(address, rules=rules)
 
 
+def keep_owned_fields(rules, stored):
+    """A pause, "15 more minutes" and "skip next time" change only through their own buttons (and
+    the watcher), so a page saving its older copy of the rules can't undo them or bring them back."""
+    rules["pausedUntil"] = stored.get("pausedUntil", 0)
+    rules["bedtime"]["extendUntil"] = stored["bedtime"].get("extendUntil", 0)
+    rules["autopilot"]["skipNext"] = stored["autopilot"].get("skipNext", False)
+    return rules
+
+
 def pause_rules(address, minutes):
     """Rest every rule for `minutes` (0 picks them back up). The viewing log keeps counting."""
     rules = tv_rules(address)
@@ -1871,6 +1894,85 @@ def fold_words(text):
     return " ".join(re.sub(r"[^\w\s+]", " ", plain.lower()).split())
 
 
+PAUSE_RULE_PHRASES = ("pause rules", "pause the rules", "rules off")
+RESUME_RULE_PHRASES = ("resume rules", "rules on", "unpause rules")
+STATUS_ON_RE = r"^(?:(?:what s|whats|what is) (?:on|playing)(?: on)?(?: (?:the )?tv)?(?: right now| now)?|now playing|what am i watching)$"
+STATUS_TIME_RE = r"^(?:screen time|tv time|watch time|how much tv)(?: today)?$"
+STATUS_LEFT_RE = r"^(?:time left|how much time is left|how much time left)(?: today)?$"
+
+
+def say_duration(seconds):
+    """1 hour 5 minutes, 45 minutes, less than a minute."""
+    minutes = int(seconds) // 60
+    if minutes < 1:
+        return "less than a minute"
+    hours, minutes = divmod(minutes, 60)
+    parts = [f"{hours} hour{'s' if hours != 1 else ''}"] if hours else []
+    if minutes:
+        parts.append(f"{minutes} minute{'s' if minutes != 1 else ''}")
+    return " ".join(parts)
+
+
+def say_clock(hhmm):
+    """21:00 -> 9 PM, 06:30 -> 6:30 AM."""
+    hour, minute = (int(x) for x in hhmm.split(":"))
+    clock = f"{hour % 12 or 12}:{minute:02d}" if minute else str(hour % 12 or 12)
+    return f"{clock} {'AM' if hour < 12 else 'PM'}"
+
+
+def say_whats_on(target):
+    """What's on the TV, as a sentence for Siri or the popup."""
+    if device_info(target).get("power-mode", "PowerOn") != "PowerOn":
+        return "The TV is off."
+    now = now_playing(target)
+    if is_home(now["screen"]):
+        return "The home screen is on."
+    name = plain_name(now["screen"])
+    if now["live"]:
+        return f"{name} is on, live."
+    if now["state"] in ("play", "pause", "buffer") and now["position"]:
+        said = f"{name} is on, {'paused' if now['state'] == 'pause' else 'playing'}, {say_duration(now['position'] / 1000)} in"
+        if now["duration"] and now["duration"] > now["position"]:
+            said += f", {say_duration((now['duration'] - now['position']) / 1000)} to go"
+        return said + "."
+    return f"{name} is on."
+
+
+def say_screen_time(target):
+    """Today's viewing time from the viewing log."""
+    status = WATCHER.status(display_address(target))
+    usage = {k: v for k, v in status["usage"].items() if k != "home" and v > 0}
+    total = sum(usage.values())
+    if total < 60:
+        if not status["active"]:
+            return "The viewing log is off. Turn it on in the Rules menu to keep track of screen time."
+        return "Less than a minute of TV today." if total else "No TV yet today."
+    top = min(usage, key=lambda k: (-usage[k], k))
+    if len(usage) == 1:
+        return f"{say_duration(total)} of TV today, all on {app_label(target, top)}."
+    return f"{say_duration(total)} of TV today. The most: {app_label(target, top)}, {say_duration(usage[top])}."
+
+
+def say_time_left(target):
+    """Time left on each daily limit, and bedtime."""
+    status = WATCHER.status(display_address(target))
+    rules = status["rules"]
+    parts = []
+    if time.time() < rules.get("pausedUntil", 0):
+        parts.append("Rules are paused, so nothing closes for now.")
+    for name, left in sorted((app_label(target, app_id), minutes * 60 - status["usage"].get(app_id, 0))
+                             for app_id, minutes in rules["limits"].items()):
+        parts.append(f"{name}: time's up for today." if left <= 0 else f"{name}: {say_duration(left)} left.")
+    bedtime = rules["bedtime"]
+    if bedtime["enabled"]:
+        later = bedtime.get("extendUntil", 0) - time.time()
+        if not status["bedtimeNow"]:
+            parts.append(f"Bedtime is at {say_clock(bedtime['start'])}.")
+        else:
+            parts.append(f"Bedtime is put off for {say_duration(later)} more." if later > 0 else "It's bedtime.")
+    return " ".join(parts) or "There's no daily limit or bedtime set."
+
+
 def do_phrase(target, phrase, strict=False):
     """Do what a short phrase says on the TV. Returns a sentence saying what happened.
 
@@ -1887,6 +1989,13 @@ def do_phrase(target, phrase, strict=False):
             if words in names:
                 press(target, key)
                 return said
+        # Questions (Siri reads the answer out): what's on, screen time, time left.
+        if re.match(STATUS_ON_RE, words):
+            return say_whats_on(target)
+        if re.match(STATUS_TIME_RE, words):
+            return say_screen_time(target)
+        if re.match(STATUS_LEFT_RE, words):
+            return say_time_left(target)
     match = re.match(r"^(?:volume |turn it )?(up|down) (\d{1,2})$", words)
     if match:
         press_sequence(target, [("VolumeUp" if match.group(1) == "up" else "VolumeDown")] * min(int(match.group(2)), 30), delay=0.15)
@@ -1899,10 +2008,12 @@ def do_phrase(target, phrase, strict=False):
     if words in ("cancel sleep", "sleep off", "stop sleep timer", "cancel sleep timer"):
         set_sleep(target, 0)
         return "Sleep timer off."
-    if words in ("pause rules", "pause the rules", "rules off"):
+    if words in PAUSE_RULE_PHRASES:
+        if not rules_enforcing(tv_rules(display_address(target))):
+            return "No rules are on, so there's nothing to pause."
         pause_rules(display_address(target), 60)
         return "Rules are paused for an hour."
-    if words in ("resume rules", "rules on", "unpause rules"):
+    if words in RESUME_RULE_PHRASES:
         pause_rules(display_address(target), 0)
         return "Rules are back on."
     match = re.match(r"^(?:search for|search|find|look for|look up) (.+)$", words)
@@ -1938,7 +2049,7 @@ def do_phrase(target, phrase, strict=False):
         raise ValueError(f"There's no app or scene called {asked} on this TV.")
     text = (opening.group(1) if opening else phrase.strip())[:100]
     search(target, text)
-    return f"Searching the TV for {text}."
+    return f"Searching the TV for {text}" + ("" if text[-1:] in ".?!" else ".")
 
 
 def default_tv():
@@ -3110,6 +3221,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.run(lambda: self.from_tv_app(path, {}, body))
         if path.startswith(PIN_PATHS) and not self.pin_ok():
             return self.fail(403, "Enter the household PIN to change this.", pin=True)
+        if path == "/api/do" and fold_words(str(body.get("do", "")))[:120] in PAUSE_RULE_PHRASES and not self.pin_ok():
+            return self.fail(403, "Enter the household PIN to pause the rules.", pin=True)
         if path == "/api/pair":
             return self.run(lambda: self.pair(body))
         if not self.paired(allow_key=path == "/api/do"):
@@ -3316,7 +3429,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def save_rules(self, body):
         address = display_address(parse_target(body.get("tv")))
-        save_rules(address, clean_rules(body.get("rules")))
+        save_rules(address, keep_owned_fields(clean_rules(body.get("rules")), tv_rules(address)))
         self.send(200, WATCHER.status(address))
 
     def rules_pause(self, body):
