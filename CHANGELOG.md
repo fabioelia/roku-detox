@@ -65,3 +65,6 @@ Seven rounds of independent review; everything they confirmed is fixed:
 - The home screen's time never counts as viewing on TVs that give the home screen an app id.
 - The extension no longer gets the bedtime night wrong after a clock change.
 - The popup plays a pasted link.
+- Weekend limits: each check uses one moment for the day and its limit (no stray "time's up" at midnight
+  into Monday); the page and popup show today's amounts as the program or extension counts them (its
+  clock, not the browser's); turning limits off clears the weekend amounts too.

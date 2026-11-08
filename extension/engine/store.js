@@ -140,7 +140,7 @@ export function cleanSites(raw) {
   for (const item of raw) {
     if (!isPlainObject(item)) throw new ValueError("Bad site.");
     const name = cut(pyStr(item.name ?? "").trim(), 40);
-    const search = cut(pyStr(item.search ?? "").replace(/^[ \t\r\n]+|[ \t\r\n]+$/g, ""), 500);
+    const search = cut(pyStr(item.search ?? "").replace(/^[ \t\r\n\u00a0\ufeff]+|[ \t\r\n\u00a0\ufeff]+$/g, ""), 500);
     let parsed = null;
     try { parsed = new URL(search.replaceAll("{q}", "x")); } catch { parsed = null; }
     if (!name) throw new ValueError("Give each site a name.");

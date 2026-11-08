@@ -249,7 +249,7 @@ test("settings, scenes, undo list, sites and watch history", async () => {
 
 test("rules: save, status, and a blocked app gets closed", async () => {
   const status = await ok("POST", "/api/rules", { tv: TV, rules: { blocked: ["74519"], limits: { "41468": 30 } } });
-  assert.deepEqual(Object.keys(status).sort(), ["active", "app", "awake", "bedtimeNow", "events", "power", "rules", "usage", "watching"]);
+  assert.deepEqual(Object.keys(status).sort(), ["active", "app", "awake", "bedtimeNow", "events", "limitsToday", "power", "rules", "usage", "watching"]);
   assert.equal(status.active, true);
   assert.deepEqual(status.rules.blocked, ["74519"]);
   const bad = await api("POST", "/api/rules", { tv: TV, rules: { redirects: { a: "b", b: "a" } } });

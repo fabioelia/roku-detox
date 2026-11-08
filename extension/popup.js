@@ -185,7 +185,8 @@ async function loadNow() {
       try {
         const status = await api("GET", "/api/rules", { query: { tv } });
         const weekendDay = [0, 6].includes(new Date().getDay());
-        const limit = (weekendDay && status.rules?.weekendLimits?.[appId]) || status.rules?.limits?.[appId];
+        const limit = status.limitsToday ? status.limitsToday[appId]
+          : (weekendDay && status.rules?.weekendLimits?.[appId]) || status.rules?.limits?.[appId];
         const paused = (status.rules?.pausedUntil || 0) > Date.now() / 1000;   // nothing closes while paused
         if (limit && !paused) {
           const minutes = Math.round(limit - (status.usage?.[appId] || 0) / 60);

@@ -94,7 +94,7 @@ export function cleanRules(raw) {
   };
   for (const [k, v] of Object.entries(limits)) rules.limits[appId(k)] = boundedInt(v, 1, 720);
   for (const [k, v] of Object.entries(weekend)) { // a weekend amount only for an app with a daily limit
-    if (appId(k) in rules.limits) rules.weekendLimits[appId(k)] = boundedInt(v, 1, 720);
+    if (Object.hasOwn(rules.limits, appId(k))) rules.weekendLimits[appId(k)] = boundedInt(v, 1, 720);
   }
   rules.blocked = [...new Set(blockedRaw.slice(0, 50).map((a) => appId(a)))].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
   for (const [k, v] of Object.entries(redirects)) if (k !== v) rules.redirects[appId(k)] = appId(v);
@@ -123,8 +123,8 @@ export async function tvRules(address) {
 /** Minutes allowed on the app on moment's day: its weekend amount on Saturday and Sunday, if any (limit_today). */
 export function limitToday(rules, appId, moment) {
   const weekendDay = moment.getDay() === 0 || moment.getDay() === 6;
-  if (weekendDay && rules.weekendLimits && appId in rules.weekendLimits) return rules.weekendLimits[appId];
-  return rules.limits[appId];
+  if (weekendDay && rules.weekendLimits && Object.hasOwn(rules.weekendLimits, appId)) return rules.weekendLimits[appId];
+  return Object.hasOwn(rules.limits, appId) ? rules.limits[appId] : undefined;
 }
 
 /** Any rule that acts on the TV (the viewing log alone only watches). */
@@ -369,7 +369,7 @@ async function check(address, rules) {
     state.autopilot = null;
     state.idleSince = null;
     state.bedtimeWarned = null;
-    await tickUsage(address, state, null, t);
+    await tickUsage(address, state, null, t, local);
     return;
   }
 
@@ -384,7 +384,7 @@ async function check(address, rules) {
     state.onSince = t; // already on when we started watching
   }
 
-  await tickUsage(address, state, app, t);
+  await tickUsage(address, state, app, t, local);
   if (t < (rules.pausedUntil || 0)) { // paused: keep counting viewing time, enforce nothing,
     // and start fresh afterwards: a full bedtime warning and a new idle count
     state.bedtimeWarned = state.idleSince = null;
@@ -396,11 +396,11 @@ async function check(address, rules) {
   if (await bedtime(address, rules, state, target, local, t)) return;
   if (await nightGuard(address, rules, state, target, local, t)) return;
   await autopilot(address, rules, state, target, app, t);
-  await appRules(address, rules, state, target, app);
+  await appRules(address, rules, state, target, app, local);
 }
 
-async function tickUsage(address, state, app, t) {
-  const day = localDay();
+async function tickUsage(address, state, app, t, local = new Date()) {
+  const day = localDay(local); // the check's one moment: the same day as its limits
   if (state.usageDay !== day) {
     if (state.usageDay && Object.keys(state.usage).length) await saveUsage(address, state.usageDay, state.usage);
     state.usageDay = day;
@@ -512,7 +512,7 @@ async function autopilot(address, rules, state, target, app, t) {
   }
 }
 
-async function appRules(address, rules, state, target, app) {
+async function appRules(address, rules, state, target, app, local = new Date()) {
   const appId = app.id;
   if (!appId) return;
   const name = plainName(app);
@@ -526,7 +526,7 @@ async function appRules(address, rules, state, target, app) {
     }
     return;
   }
-  const limit = limitToday(rules, appId, new Date());
+  const limit = limitToday(rules, appId, local);
   if (limit !== undefined && (state.usage[appId] || 0) >= limit * 60) {
     if (await act(state, closeWith("Time's up", `${name} is done for today.`))) {
       await event(address, `Time's up for ${name} today (${limit} minute${limit !== 1 ? "s" : ""}). Closed it.`, "action", `limit-${appId}`, 900);
@@ -646,6 +646,7 @@ export async function rulesStatus(address) {
     app: state ? state.app : null,
     bedtimeNow: rules.bedtime.enabled && bedtimeNow(rules.bedtime, new Date()),
     usage: Object.fromEntries(Object.entries(usage).map(([k, v]) => [k, Math.trunc(v)])),
+    limitsToday: Object.fromEntries(Object.keys(rules.limits).map((id) => [id, limitToday(rules, id, new Date())])),
     events: mine.reverse(),
   };
 }

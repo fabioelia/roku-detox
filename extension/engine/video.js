@@ -905,6 +905,10 @@ export async function renderedPage(url) {
 }
 
 export async function searchSite(site, query, { closer = false } = {}) {
+  const authority = /^https?:\/\/([^/?#]+)/i.exec(site.search);
+  if (!authority || authority[1].includes("{q}") || /[\x00-\x20\x7f\\]/.test(site.search)) { // saved before that was checked
+    throw new ValueError("This site's search address needs fixing under My sites.");
+  }
   const url = site.search.replaceAll("{q}", quotePlus(query));
   const { finalUrl, page } = closer ? await renderedPage(url) : await fetchPage(url, { limit: 3_000_000 });
   if (page === null) return [];

@@ -1624,7 +1624,7 @@ class Watcher:
             state.autopilot = None
             state.idle_since = None
             state.bedtime_warned = None
-            self.tick_usage(address, state, None, now)
+            self.tick_usage(address, state, None, now, local)
             return
 
         app = active_app(target)
@@ -1637,7 +1637,7 @@ class Watcher:
         elif was is None:
             state.on_since = now  # already on when we started watching
 
-        self.tick_usage(address, state, app, now)
+        self.tick_usage(address, state, app, now, local)
         if now < rules.get("pausedUntil", 0):  # paused: keep counting viewing time, enforce nothing
             # and start fresh afterwards: a full bedtime warning and a new idle count
             state.bedtime_warned = state.idle_since = None
@@ -1651,12 +1651,12 @@ class Watcher:
         if self.night_guard(address, rules, state, target, local, now):
             return
         self.autopilot(address, rules, state, target, app, now)
-        self.app_rules(address, rules, state, target, app)
+        self.app_rules(address, rules, state, target, app, local)
 
     # Individual rules
 
-    def tick_usage(self, address, state, app, now):
-        day = datetime.now().strftime("%Y-%m-%d")
+    def tick_usage(self, address, state, app, now, local=None):
+        day = (local or datetime.now()).strftime("%Y-%m-%d")  # the check's one moment: the same day as its limits
         if state.usage_day != day:
             if state.usage_day and state.usage:
                 self.save_usage(address, state.usage_day, state.usage)
@@ -1753,7 +1753,7 @@ class Watcher:
             if is_home(app):
                 self.event(address, f"Couldn't open {name} after the TV turned on. It's on the home screen.", kind="alert")
 
-    def app_rules(self, address, rules, state, target, app):
+    def app_rules(self, address, rules, state, target, app, local=None):
         app_id = app.get("id")
         if not app_id:
             return
@@ -1762,7 +1762,7 @@ class Watcher:
             if self.act(state, lambda: friendly_notice(target, "Not on this TV", f"{name} is blocked.") or press(target, "Home")):
                 self.event(address, f"{name} is blocked. Closed it.", key=f"blocked-{app_id}", every=300)
             return
-        limit = limit_today(rules, app_id, datetime.now())
+        limit = limit_today(rules, app_id, local or datetime.now())
         if limit is not None and state.usage.get(app_id, 0) >= limit * 60:
             if self.act(state, lambda: friendly_notice(target, "Time's up", f"{name} is done for today.") or press(target, "Home")):
                 self.event(address, f"Time's up for {name} today ({limit} minute{'s' if limit != 1 else ''}). Closed it.", key=f"limit-{app_id}", every=900)
@@ -1790,6 +1790,8 @@ class Watcher:
             "app": state.app if state else None,
             "bedtimeNow": rules["bedtime"]["enabled"] and bedtime_now(rules["bedtime"], datetime.now()),
             "usage": {k: int(v) for k, v in usage.items()},
+            # Today's minutes per app by this computer's clock (weekend amounts on Saturday and Sunday).
+            "limitsToday": {app_id: limit_today(rules, app_id, datetime.now()) for app_id in rules["limits"]},
             "events": events[::-1],
         }
 
@@ -2897,7 +2899,7 @@ def clean_sites(raw):
         if not isinstance(item, dict):
             raise ValueError("Bad site.")
         name = str(item.get("name", "")).strip()[:40]
-        search = str(item.get("search", "")).strip(" \t\r\n")[:500]
+        search = str(item.get("search", "")).strip(" \t\r\n\u00a0\ufeff")[:500]
         parsed = urllib.parse.urlparse(search.replace("{q}", "x"))
         if not name:
             raise ValueError("Give each site a name.")
@@ -3216,7 +3218,7 @@ def read_results(final_url, page, query):
 def search_site(site, query, public_only=False):
     """Read a site's search results page and pick out the results."""
     authority = re.match(r"^https?://([^/?#]+)", site["search"], re.I)
-    if not authority or "{q}" in authority.group(1):  # saved before that was checked
+    if not authority or "{q}" in authority.group(1) or re.search(r"[\x00-\x20\x7f\\]", site["search"]):  # saved before
         raise ValueError("This site's search address needs fixing under My sites.")
     url = site["search"].replace("{q}", urllib.parse.quote_plus(query))
     final_url, page = fetch_page(url, limit=3_000_000, public_only=public_only)[:2]
@@ -3569,10 +3571,11 @@ class Handler(BaseHTTPRequestHandler):
         stored = site_list()
         known = {s["search"] for s in stored}
         with SETTINGS_LOCK:
-            from_phone = set(read_settings().get("phoneSites", []))  # kept for good: a stale page can't clear it
+            remembered = [u for u in read_settings().get("phoneSites", []) if isinstance(u, str)]
+        from_phone = set(remembered)  # kept for good: a stale page can't clear it
         from_phone |= {s["search"] for s in stored if s.get("fromPhone")}
         raw = body.get("sites") if isinstance(body.get("sites"), list) else []
-        from_phone |= {str(s.get("search", "")).strip(" \t\r\n")[:500] for s in raw if isinstance(s, dict) and s.get("fromPhone") is True}
+        from_phone |= {str(s.get("search", "")).strip(" \t\r\n\u00a0\ufeff")[:500] for s in raw if isinstance(s, dict) and s.get("fromPhone") is True}
         for site in sites:
             if self.on_lan and site["search"] not in known:
                 # From a phone: only sites on the internet, and searched with the same checks from now on,
@@ -3582,7 +3585,7 @@ class Handler(BaseHTTPRequestHandler):
                 from_phone.add(site["search"])
             if site["search"] in from_phone:
                 site["fromPhone"] = True
-        keep = sorted(from_phone)[-200:]
+        keep = (remembered + [u for u in sorted(from_phone) if u not in set(remembered)])[-200:]  # oldest drop off
         update_settings(lambda data: data.update(phoneSites=keep))
         update_settings(lambda data: data.update(sites=sites))
         self.send(200, {"sites": sites})

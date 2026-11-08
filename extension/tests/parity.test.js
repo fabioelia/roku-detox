@@ -178,7 +178,8 @@ test("clean_scenes, clean_sites, clean_favorites, clean_services", () => {
     [[{ id: "s1", name: "Host", search: "https://{q}.example.com/" }]], [[{ id: "s1", name: "Port", search: "https://example.com:{q}/" }]],
     ...["https:{q}.example.com/", "https:/{q}.example.com/", "https:\\\\{q}.example.com/", "https:///{q}.example.com/",
       "https:////{q}.example.com/", "https:\\/{q}.example.com/", "https:/\t/{q}.example.com/", "\u0001https://{q}.example.com/",
-      "h\ttps://example.com/{q}", " https://example.com/s?q={q} ", "https://user:{q}@example.com/", "https://example.com/a b?q={q}"]
+      "h\ttps://example.com/{q}", " https://example.com/s?q={q} ", "https://user:{q}@example.com/", "https://example.com/a b?q={q}",
+      "\u00a0https://example.com/s?q={q}\u00a0", "\ufeffhttps://example.com/s?q={q}", "https://example.com/s?q={q}\u001c"]
       .map((search) => [[{ id: "s1", name: "Odd", search }]]),
     [[{ id: "s1", name: "", search: "https://x.com/{q}" }]], [Array(21).fill({ id: "s", name: "x", search: "https://x.com/{q}" })],
   ]);
@@ -237,6 +238,8 @@ test("rules helpers", () => {
     [true, false, false, true, true, false, true]);
   // Weekend amounts: Saturday and Sunday (Nov 7 and 8, 2026), the daily one otherwise.
   const withWeekend = rules.cleanRules({ limits: { "12": 60, "837": 30 }, weekendLimits: { "12": 120 } });
+  same("clean_rules", rules.cleanRules, [[{ limits: { toString: 5 }, weekendLimits: { toString: 9, constructor: 3 } }], [{ limits: {}, weekendLimits: { toString: 5 } }]]);
+  assert.equal(rules.limitToday(rules.cleanRules({}), "constructor", new Date("2026-11-07T12:00:00")), undefined);
   same("limit_today", (r, when) => rules.limitToday(r, "12", new Date(when.replace(" ", "T") + ":00")) ?? null,
     ["2026-11-06 23:59", "2026-11-07 00:00", "2026-11-08 23:59", "2026-11-09 00:00"].map((when) => [withWeekend, when]));
   assert.deepEqual(["2026-11-06 12:00", "2026-11-07 12:00", "2026-11-08 12:00", "2026-11-09 12:00"]

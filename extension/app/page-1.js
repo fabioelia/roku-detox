@@ -2271,7 +2271,7 @@ async function importSettings(file) {
       done.push([change.favorites && "favorites", change.scenes && "scenes", change.services && "services"].filter(Boolean).join(", "));
     }
     if (data.rules && !isLite()) {
-      await api("/api/rules", { tv: state.tv, rules: data.rules });
+      await api("/api/rules", { tv: state.tv, rules: { weekendLimits: {}, ...data.rules } });   // a file from before weekend limits replaces them too
       done.push("rules");
     }
     if (Array.isArray(data.sites) && data.sites.length && !isLite()) {
@@ -2341,7 +2341,8 @@ state.limitStatus = null;   // {tv, limits: {appId: minutes}, usage: {appId: sec
 function noteLimits(status, tv = state.tv) {
   if (tv !== state.tv) return;   // switched TVs while this was loading
   state.limitStatus = status ? {
-    tv, limits: { ...(status.rules?.limits || {}), ...([0, 6].includes(new Date().getDay()) ? status.rules?.weekendLimits || {} : {}) },
+    // Today's amounts as the program or extension counts them (its clock), else worked out here.
+    tv, limits: status.limitsToday || { ...(status.rules?.limits || {}), ...([0, 6].includes(new Date().getDay()) ? status.rules?.weekendLimits || {} : {}) },
     usage: status.usage || {},
     bedtime: status.rules?.bedtime?.enabled ? status.rules.bedtime : null,
     pausedUntil: status.rules?.pausedUntil || 0,
@@ -3572,7 +3573,7 @@ function renderRuleList() {
   const limitRows = Object.entries(r.limits).map(([id, minutes]) => `<div class="line" data-limit="${esc(id)}">
       <select data-limit-app aria-label="App">${anyOptions(id)}</select>
       <input type="number" min="1" max="720" value="${minutes}" data-limit-minutes aria-label="Minutes per day"><span>minutes a day,</span>
-      <span class="weekend-limit"><input type="number" min="1" max="720" value="${r.weekendLimits[id] ?? ""}" placeholder="same" data-limit-weekend aria-label="Minutes a day on Saturdays and Sundays (empty: the same)"> on weekends</span>
+      <span class="weekend-limit" ${"weekendLimits" in (state.rulesStatus?.rules || {}) ? "" : "hidden"}><input type="number" min="1" max="720" value="${r.weekendLimits[id] ?? ""}" placeholder="same" data-limit-weekend aria-label="Minutes a day on Saturdays and Sundays (empty: the same)"> on weekends</span>
       <span class="used" data-used="${esc(id)}"></span>
       <button class="btn quiet" type="button" data-action="limit-remove">Remove</button></div>`).join("");
   const pendingLimit = state.pendingLimit ? `<div class="line" data-limit="">
@@ -3650,7 +3651,7 @@ $("#rule-list").addEventListener("change", (e) => {
   const t = e.target;
   const toggle = t.dataset.toggle;
   if (toggle) {
-    if (toggle === "limits") { state.limitsOpen = t.checked; if (!t.checked) { r.limits = {}; state.pendingLimit = null; } else if (!Object.keys(r.limits).length) state.pendingLimit = { minutes: 60 }; }
+    if (toggle === "limits") { state.limitsOpen = t.checked; if (!t.checked) { r.limits = {}; r.weekendLimits = {}; state.pendingLimit = null; } else if (!Object.keys(r.limits).length) state.pendingLimit = { minutes: 60 }; }
     else if (toggle === "blocked") { state.blockedOpen = t.checked; if (!t.checked) r.blocked = []; }
     else if (toggle === "redirects") { state.swapsOpen = t.checked; if (!t.checked) { r.redirects = {}; state.pendingSwap = null; } else if (!Object.keys(r.redirects).length) state.pendingSwap = { from: "", to: "" }; }
     else if (toggle === "log") r.log = t.checked;
@@ -3688,7 +3689,9 @@ $("#rule-list").addEventListener("change", (e) => {
     if (t.matches("[data-limit-app]") && t.value && t.value !== id) {
       r.limits[t.value] = r.limits[id];
       delete r.limits[id];
-      if (id in r.weekendLimits) { r.weekendLimits[t.value] = r.weekendLimits[id]; delete r.weekendLimits[id]; }
+      if (Object.hasOwn(r.weekendLimits, id)) r.weekendLimits[t.value] = r.weekendLimits[id];
+      else delete r.weekendLimits[t.value];   // the merged row keeps this row's amounts, not the other's
+      delete r.weekendLimits[id];
       state.rulesVersion += 1;
       renderRuleList();
     }
