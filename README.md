@@ -45,7 +45,9 @@ The page has six menus:
   night guard (turns the TV back off when it wakes itself up at night), and a viewing log.
   It checks the TV every 4 seconds and keeps the Mac from sleeping (`caffeinate`) while any rule is on.
   Alerts show as macOS notifications. Includes a connection check with plain-language fixes, and
-  screen time for the past days (total, daily average, top apps).
+  screen time for the past days (total, daily average, a bar for each day, top apps). Apps with a daily
+  limit show the time left today on the Remote menu and in the extension's popup, and an upcoming bedtime
+  shows there within the hour.
 - **Clean up**: remove channels, finish-up checklist, undo list, and "Move your settings" (save
   favorites, scenes, rules and sites to a file and load them in the extension or on another computer). With the viewing log on, each channel
   shows how long it was watched, and after a week "Select the ones not opened lately" picks the unused ones.
@@ -83,7 +85,7 @@ Videos locked by DRM (Netflix, Disney+ and most paid services) can't be sent thi
   YouTube or Netflix link to play it on the TV, or typing into a sign-in field on the TV. It also acts on
   clear commands, typed or spoken: "open Netflix", "watch YouTube", "HDMI 2", "sleep 30", or an app or scene's
   exact name. Anything else, even a show called "Home" or "It", is a search. "Live typing" sends each letter to
-  the TV as you type, for sign-in and search boxes on the TV.
+  the TV as you type, for sign-in and search boxes on the TV. Links you send are listed under the box to send again.
 - Phone remote: open the page on your phone over home Wi-Fi. A phone needs a one-time
   6-digit code from the Mac page. Shortcuts, scenes, rules and paired phones are kept in `remote-settings.json`;
   rule activity in `activity-log.json` and the viewing log in `viewing-log.json`.
