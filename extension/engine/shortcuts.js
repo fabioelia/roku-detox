@@ -154,6 +154,18 @@ async function appsForOmnibox() {
   return appCache.apps;
 }
 
+/** What a numbered or input phrase will do, in words, or "" (the same patterns as phrases.js). */
+function phraseLabel(folded) {
+  let m = /^(?:sleep|sleep timer|turn off in|off in|sleep in)(?: for)? (\d{1,3})(?: ?(?:m|min|mins|minute|minutes))?$/.exec(folded);
+  if (m) return Number(m[1]) ? `Turn the TV off in ${Number(m[1])} minutes` : "Turn the sleep timer off";
+  if (["cancel sleep", "sleep off", "stop sleep timer", "cancel sleep timer"].includes(folded)) return "Turn the sleep timer off";
+  m = /^(?:volume |turn it )?(up|down) (\d{1,2})$/.exec(folded);
+  if (m) return `Volume ${m[1]} ${m[2]}`;
+  m = /^(?:open |go to |switch to )?hdmi ?(\d)$/.exec(folded);
+  if (m) return `Switch to HDMI ${m[1]}`;
+  return "";
+}
+
 const xml = (text) => String(text).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 const isLink = (text) => /^https?:\/\/\S+$/i.test(text);
 const fold = (text) => text.toLowerCase().normalize("NFKD").replace(/[^\p{L}\p{N} ]+/gu, "").replace(/\s+/g, " ").trim();
@@ -176,6 +188,9 @@ export async function omniboxSuggestions(text) {
   for (const [names, key, label] of KEY_WORDS) {
     if (names.some((n) => n === folded)) out.push({ content: `key:${key}`, description: `${xml(label)} <dim>on the TV</dim>` });
   }
+  // Phrases with a number or an input ("sleep 30", "volume up 5", "hdmi 2", "cancel sleep").
+  const said = phraseLabel(folded);
+  if (said) out.push({ content: `do:${words}`, description: `${xml(said)} <dim>on the TV</dim>` });
   for (const scene of (await scenesForOmnibox()).filter((sc) => sc && typeof sc.name === "string" && fold(sc.name).includes(folded)).slice(0, 3)) {
     out.push({ content: `scene:${scene.id}`, description: `Run <match>${xml(scene.name)}</match> <dim>(your scene)</dim>` });
   }
@@ -205,7 +220,7 @@ export function setUpOmnibox() {
   });
   omnibox.onInputEntered.addListener(async (text, disposition) => {
     let choice = text.trim();
-    if (!/^(link|key|open|find|search|scene):/.test(choice)) choice = (await omniboxSuggestions(choice))[0]?.content || "";
+    if (!/^(link|key|open|find|search|scene|do):/.test(choice)) choice = (await omniboxSuggestions(choice))[0]?.content || "";
     const at = choice.indexOf(":");
     const kind = choice.slice(0, at);
     const value = choice.slice(at + 1);
@@ -220,6 +235,8 @@ export function setUpOmnibox() {
     } else if (kind === "open") {
       const app = appCache.apps.find((a) => a.id === value);
       await attempt(() => tvCall("POST", "/api/launch", { id: value }), `Opening ${app ? app.name : "it"} on the TV.`);
+    } else if (kind === "do") {
+      await attempt(() => tvCall("POST", "/api/do", { do: value }), (r) => r.done);
     } else if (kind === "scene") {
       const scene = sceneCache.scenes.find((sc) => sc.id === value);
       await attempt(() => tvCall("POST", "/api/scene", { id: value }), `Ran ${scene ? scene.name : "your scene"}.`);

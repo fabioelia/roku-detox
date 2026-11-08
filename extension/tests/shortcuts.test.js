@@ -62,3 +62,9 @@ test("only punctuation doesn't match every scene and app", async () => {
   const list = await shortcuts.omniboxSuggestions("+");
   assert.deepEqual(list.map((s) => s.content), ["search:+"]);
 });
+
+test("numbered phrases in the address bar do what they say", async () => {
+  assert.deepEqual((await shortcuts.omniboxSuggestions("sleep 30"))[0], { content: "do:sleep 30", description: "Turn the TV off in 30 minutes <dim>on the TV</dim>" });
+  assert.equal((await shortcuts.omniboxSuggestions("Volume up 5"))[0].content, "do:Volume up 5");
+  assert.equal((await shortcuts.omniboxSuggestions("hdmi 2"))[0].content, "do:hdmi 2");
+});
