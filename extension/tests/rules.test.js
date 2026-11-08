@@ -277,3 +277,26 @@ test("15 more minutes: for today only, for an app or all TV together, and kept w
   assert.equal(status.totalToday, 90);
   await setRules({});
 });
+
+test("15 more minutes goes where it's needed: the app's limit and the total, or bedtime", async () => {
+  const { handleMessage } = await import("../engine/router.js");
+  const say = async (text) => (await handleMessage({ type: "api", method: "POST", path: "/api/do", query: {}, body: { tv: TV, do: text } }, { internal: true })).data;
+  await setRules({ limits: { "12": 1 }, totalLimit: 90 });
+  await tv("/keypress/PowerOn");
+  await tv("/launch/12");
+  for (const at of ["14:00:00", "14:00:30", "14:01:00", "14:01:10"]) await roundAt(`2026-11-23T${at}`); // Netflix's minute: closed
+  assert.notEqual((await active()).id, "12");
+  mock.timers.setTime(new Date("2026-11-23T14:01:20").getTime());
+  const reply = await say("15 more minutes");
+  assert.equal(reply.done, "15 more minutes of Netflix today.", JSON.stringify(reply));
+  const status = await ok("GET", "/api/rules", { tv: TV });
+  assert.equal(status.limitsToday["12"], 16, "from the home screen, the app that was just closed");
+  assert.equal(status.totalToday, 105, "and all TV together");
+  // At bedtime it moves bedtime instead.
+  await setRules({ bedtime: { enabled: true, start: "21:00", end: "06:30" } });
+  mock.timers.setTime(new Date("2026-11-23T21:30:00").getTime());
+  assert.equal((await say("more time")).done, "Bedtime is 15 minutes later tonight.");
+  assert.ok((await ok("GET", "/api/rules", { tv: TV })).rules.bedtime.extendUntil > Date.now() / 1000 + 14 * 60);
+  await setRules({});
+  await tv("/keypress/Home");
+});

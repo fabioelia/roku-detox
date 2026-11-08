@@ -1413,7 +1413,10 @@ def detox_home_playing(target):
 
 
 def time_used_up(rules, usage, app_id, moment):
-    """The app's own limit or all TV together is used up for moment's day."""
+    """The app's own limit or all TV together is used up for moment's day. Never for Detox Home: its own
+    screens don't count, so skip-home can always open it."""
+    if app_id == "dev":
+        return False
     limit = limit_today(rules, app_id, moment)
     total = total_limit_today(rules, moment)
     return (limit is not None and usage.get(app_id, 0) >= limit * 60) or bool(total and watched_today(usage) >= total * 60)
@@ -1517,6 +1520,7 @@ class TVWatch:
         self.alerted = set()
         self.said = {}             # message key -> last time, to avoid repeating
         self.dev_playing = False   # Detox Home is playing a video (its own screens count as the home screen)
+        self.timed_out = None      # the last app closed for time (what "15 more minutes" from the home screen means)
         self.usage_day = None
         self.usage = {}
         self.last_tick = None
@@ -1789,16 +1793,16 @@ class Watcher:
             state.home_polls += 1
             if state.home_polls < 2:
                 return  # wait for a second check, in case it's still switching inputs
+            if time_used_up(rules, state.usage, rule["target"], datetime.now()):  # before "skip next time" is used up
+                state.autopilot = None
+                self.event(address, f"TV turned on. {app_label(target, rule['target'])} has no time left today, so it stayed on the home screen.", kind="info")
+                return
             if rule["skipNext"]:
                 state.autopilot = None
                 def consume(data):
                     data["tvs"][address]["rules"]["autopilot"]["skipNext"] = False
                 update_settings(consume)
                 self.event(address, "Skipped opening an app this time, as asked.", kind="info")
-                return
-            if time_used_up(rules, state.usage, rule["target"], datetime.now()):
-                state.autopilot = None
-                self.event(address, f"TV turned on. {app_label(target, rule['target'])} has no time left today, so it stayed on the home screen.", kind="info")
                 return
             if self.act(state, lambda: launch(target, rule["target"])):
                 state.autopilot = ("verify", now, 1)
@@ -1828,13 +1832,15 @@ class Watcher:
                 self.event(address, f"{name} is blocked. Closed it.", key=f"blocked-{app_id}", every=300)
             return
         limit = limit_today(rules, app_id, local or datetime.now())
-        if limit is not None and state.usage.get(app_id, 0) >= limit * 60:
+        if limit is not None and (app_id != "dev" or state.dev_playing) and state.usage.get(app_id, 0) >= limit * 60:
+            state.timed_out = app_id  # "15 more minutes" from the home screen means this one
             if self.act(state, lambda: friendly_notice(target, "Time's up", f"{name} is done for today.") or press(target, "Home")):
                 self.event(address, f"Time's up for {name} today ({limit} minute{'s' if limit != 1 else ''}). Closed it.", key=f"limit-{app_id}", every=900)
             return
         total = total_limit_today(rules, local or datetime.now())
         # All apps together; Detox Home only while it plays a video (its notice and launcher are the home screen).
         if total and (app_id != "dev" or state.dev_playing) and not is_home(app) and watched_today(state.usage) >= total * 60:
+            state.timed_out = app_id
             if self.act(state, lambda: friendly_notice(target, "Time's up", "That's all the TV for today.") or press(target, "Home")):
                 self.event(address, f"Time's up for TV today ({total} minute{'s' if total != 1 else ''} in all). Closed {name}.", key="limit-total", every=900)
             return
@@ -1864,6 +1870,7 @@ class Watcher:
             # Today's minutes per app by this computer's clock (weekend amounts on Saturday and Sunday).
             "limitsToday": {app_id: limit_today(rules, app_id, datetime.now()) for app_id in rules["limits"]},
             "totalToday": total_limit_today(rules, datetime.now()),
+            "timedOut": state.timed_out if state else None,
             "events": events[::-1],
         }
 
@@ -2102,18 +2109,26 @@ def say_screen_time(target):
 
 
 def say_more_time(target, minutes):
-    """"15 more minutes": for all TV together if there's a total today, else for the app that's on."""
+    """"15 more minutes": at bedtime, bedtime moves; otherwise the time goes to whatever would stop what's on (or
+    what was last closed for time, from the home screen): its own limit and all TV together, both if both apply."""
     address = display_address(target)
     status = WATCHER.status(address)
     rules, now = status["rules"], datetime.now()
+    if status["bedtimeNow"]:
+        extend_bedtime(address, minutes)
+        return f"Bedtime is {minutes} minutes later tonight."
+    app = status.get("app") or active_app(target, deliver=False)
+    app_id = app.get("id") if app and not is_home(app) and app.get("id") != "dev" else status.get("timedOut")
+    gave = []
+    if app_id and limit_today(rules, app_id, now) is not None:
+        give_more_time(address, app_id, minutes)
+        gave.append(app_label(target, app_id))
     if total_limit_today(rules, now):
         give_more_time(address, "*", minutes)
-        return f"{minutes} more minutes of TV today."
-    app = status.get("app") or active_app(target, deliver=False)
-    if app and app.get("id") and limit_today(rules, app["id"], now) is not None:
-        give_more_time(address, app["id"], minutes)
-        return f"{minutes} more minutes of {plain_name(app)} today."
-    raise ValueError("There's no time limit on what's on, so there's nothing to add to.")
+        gave.append("TV")
+    if not gave:
+        raise ValueError("There's no time limit on what's on, so there's nothing to add to.")
+    return f"{minutes} more minutes of {gave[0]} today."
 
 
 def say_time_left(target):
@@ -2131,7 +2146,7 @@ def say_time_left(target):
 
     def app_left(app_id):  # no app gets more than all TV together has left
         left = limit_today(rules, app_id, today) * 60 - status["usage"].get(app_id, 0)
-        return min(left, total_left) if total_left is not None and app_id != "dev" else left
+        return min(left, total_left) if total_left is not None else left
     for name, left in sorted((app_label(target, app_id), app_left(app_id)) for app_id in rules["limits"]):
         parts.append(f"{name}: time's up for today." if left <= 0 else f"{name}: {say_duration(left)} left.")
     bedtime = rules["bedtime"]

@@ -4,7 +4,7 @@
 import { activeApp, deviceInfo, launch, listApps, nowPlaying, press, pressSequence, runScene, search } from "./ecp.js";
 import { setSleep } from "./sleep.js";
 import { parseLink } from "./video.js";
-import { appLabel, giveMoreTime, isHome, limitToday, nextBedtimeOn, pauseRules, plainName, rulesEnforcing, rulesStatus, totalLimitToday, tvRules, watchedToday } from "./rules.js";
+import { appLabel, extendBedtime, giveMoreTime, isHome, limitToday, nextBedtimeOn, pauseRules, plainName, rulesEnforcing, rulesStatus, totalLimitToday, tvRules, watchedToday } from "./rules.js";
 import { tvSettings } from "./store.js";
 import { ValueError, boundedInt, cut, displayAddress, pyLen } from "./util.js";
 
@@ -73,21 +73,31 @@ async function sayScreenTime(target) {
   return `${sayDuration(total)} of TV today. The most: ${name}, ${sayDuration(topSeconds)}.`;
 }
 
-/** "15 more minutes": for all TV together if there's a total today, else for the app that's on (say_more_time). */
+/**
+ * "15 more minutes" (say_more_time): at bedtime, bedtime moves; otherwise the time goes to whatever would stop
+ * what's on (or what was last closed for time, from the home screen): its own limit and all TV together.
+ */
 async function sayMoreTime(target, minutes) {
   const address = displayAddress(target);
   const status = await rulesStatus(address);
   const now = new Date();
-  if (totalLimitToday(status.rules, now)) {
-    await giveMoreTime(address, "*", minutes);
-    return `${minutes} more minutes of TV today.`;
+  if (status.bedtimeNow) {
+    await extendBedtime(address, minutes);
+    return `Bedtime is ${minutes} minutes later tonight.`;
   }
   const app = status.app || (await activeApp(target, { deliver: false }));
-  if (app && app.id && limitToday(status.rules, app.id, now) !== undefined) {
-    await giveMoreTime(address, app.id, minutes);
-    return `${minutes} more minutes of ${plainName(app)} today.`;
+  const appId = app && !isHome(app) && app.id !== "dev" ? app.id : status.timedOut;
+  const gave = [];
+  if (appId && limitToday(status.rules, appId, now) !== undefined) {
+    await giveMoreTime(address, appId, minutes);
+    gave.push(await appLabel(target, appId));
   }
-  throw new ValueError("There's no time limit on what's on, so there's nothing to add to.");
+  if (totalLimitToday(status.rules, now)) {
+    await giveMoreTime(address, "*", minutes);
+    gave.push("TV");
+  }
+  if (!gave.length) throw new ValueError("There's no time limit on what's on, so there's nothing to add to.");
+  return `${minutes} more minutes of ${gave[0]} today.`;
 }
 
 async function sayTimeLeft(target) {
@@ -104,7 +114,7 @@ async function sayTimeLeft(target) {
   for (const appId of Object.keys(rules.limits)) {
     const left = limitToday(rules, appId, today) * 60 - (status.usage[appId] || 0);
     // No app gets more than all TV together has left.
-    limits.push([await appLabel(target, appId), totalLeft !== null && appId !== "dev" ? Math.min(left, totalLeft) : left]);
+    limits.push([await appLabel(target, appId), totalLeft !== null ? Math.min(left, totalLeft) : left]);
   }
   limits.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : a[1] - b[1]));
   for (const [name, left] of limits) parts.push(left <= 0 ? `${name}: time's up for today.` : `${name}: ${sayDuration(left)} left.`);

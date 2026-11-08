@@ -1319,7 +1319,8 @@ const ServerEngine = {
   async request(path, body, withPin = false) {
     const options = { headers: { "X-Detox": "1" } };
     // Only the changes that need it carry it (and renew its hour): rules, the TV app, sites, phone settings.
-    const needsPin = /^\/api\/(rules|tvapp|sites|phone|household)\b/.test(path) || (path === "/api/do" && /rules/i.test(String(body?.do ?? "")));
+    const needsPin = /^\/api\/(rules|tvapp|sites|phone|household)\b/.test(path)
+      || (path === "/api/do" && /rules|more (time|minute)/i.test(String(body?.do ?? "")));
     const pin = body !== undefined && (needsPin || withPin) ? pinGet() : "";
     if (pin) options.headers["X-Detox-Pin"] = pin;
     if (body !== undefined) {
@@ -2232,7 +2233,7 @@ async function loadUsage() {
 }
 function usageNote(app) {
   const u = state.usage;
-  if (!u || u.tv !== state.tv || !u.days) return "";
+  if (!u || u.tv !== state.tv || !u.days || app.id === "dev") return "";   // Detox Home's screens count as home
   const seconds = u.totals[app.id] || 0;
   if (seconds >= 60) {
     const h = Math.floor(seconds / 3600);
@@ -2244,7 +2245,8 @@ function usageNote(app) {
 function unusedApps() {
   const u = state.usage;
   if (!u || u.tv !== state.tv || u.days < UNUSED_AFTER_DAYS) return [];
-  return state.apps.filter((a) => removable(a) && (u.totals[a.id] || 0) < 60);
+  // Detox Home is left out: its own screens count as the home screen, so a family using it as one looks unused.
+  return state.apps.filter((a) => removable(a) && a.id !== "dev" && (u.totals[a.id] || 0) < 60);
 }
 
 function tileHTML(app, fixed) {
@@ -5299,7 +5301,7 @@ function takeDoLink() {
   // A link to play is never run from an address: any site could open one. ("Send to TV" asks first.)
   if (phrase && /^\s*(https?:|www\.)/i.test(phrase)) return null;
   // Nor pause the rules: on this computer that needs no PIN, and any site could open the link.
-  if (phrase && /^(pause( the)? rules|rules off|unpause rules|resume rules|rules on)$/i.test(phrase.replace(/\s+/g, " ").trim())) return null;
+  if (phrase && /^(pause( the)? rules|rules off|unpause rules|resume rules|rules on)$|more time|more minute/i.test(phrase.replace(/\s+/g, " ").trim())) return null;
   return phrase;
 }
 if (/^#do=/.test(location.hash)) {

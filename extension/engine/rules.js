@@ -10,7 +10,7 @@ import {
   APP_ID_RE, HttpError, ParseError, TVError, ValueError, boundedInt, displayAddress, friendlyTime,
   isPlainObject, keepAlive, localClock, localDay, nowIso, parseTarget, pyStr, sleep, targetKey, truthy,
 } from "./util.js";
-import { activeApp, deviceInfo, friendlyNotice, launch, listApps, nowPlaying, press, runScene } from "./ecp.js";
+import { activeApp, deviceInfo, ecp, friendlyNotice, launch, listApps, nowPlaying, parseMediaPlayer, press, runScene } from "./ecp.js";
 import { getLocal, locked, readSettings, saveTvSettings, setLocal, tvEntry, updateSettings, TIME_RE } from "./store.js";
 import { discover, rangeOf } from "./discover.js";
 
@@ -157,7 +157,8 @@ export function bonusMinutes(rules, key, moment) {
 /** Detox Home is playing a video (not showing its launcher, clock or a notice): detox_home_playing. */
 async function detoxHomePlaying(target) {
   try {
-    return ["play", "buffer", "pause"].includes((await nowPlaying(target)).state);
+    const { status, text } = await ecp(target, "query/media-player"); // one request (nowPlaying also asks what's open)
+    return status === 200 && ["play", "buffer", "pause"].includes(parseMediaPlayer(text).state);
   } catch {
     return false;
   }
@@ -165,6 +166,7 @@ async function detoxHomePlaying(target) {
 
 /** The app's own limit or all TV together is used up for moment's day (time_used_up). */
 export function timeUsedUp(rules, usage, appId, moment) {
+  if (appId === "dev") return false; // Detox Home's own screens don't count, so skip-home can always open it
   const limit = limitToday(rules, appId, moment);
   const total = totalLimitToday(rules, moment);
   return (limit !== undefined && (usage[appId] || 0) >= limit * 60) || Boolean(total && watchedToday(usage) >= total * 60);
@@ -288,7 +290,7 @@ function newWatch() {
     power: null, reachable: null, control: null, app: { id: "", name: "" }, onSince: null,
     autopilot: null, // null, "pending", or {verify: started, tries}
     homePolls: 0, idleSince: null, bedtimeWarned: null, lastAction: 0, lastSeen: 0,
-    unreachableSince: null, said: {}, usageDay: null, usage: {}, lastTick: null, lastSaved: 0, devPlaying: false,
+    unreachableSince: null, said: {}, usageDay: null, usage: {}, lastTick: null, lastSaved: 0, devPlaying: false, timedOut: null,
   };
 }
 
@@ -546,6 +548,11 @@ async function autopilot(address, rules, state, target, app, t) {
     }
     state.homePolls += 1;
     if (state.homePolls < 2) return; // wait for a second check, in case it's still switching inputs
+    if (timeUsedUp(rules, state.usage, rule.target, new Date())) { // before "skip next time" is used up
+      state.autopilot = null;
+      await event(address, `TV turned on. ${await appLabel(target, rule.target)} has no time left today, so it stayed on the home screen.`, "info");
+      return;
+    }
     if (rule.skipNext) {
       state.autopilot = null;
       await updateSettings((data) => {
@@ -553,11 +560,6 @@ async function autopilot(address, rules, state, target, app, t) {
         if (saved) saved.skipNext = false;
       });
       await event(address, "Skipped opening an app this time, as asked.", "info");
-      return;
-    }
-    if (timeUsedUp(rules, state.usage, rule.target, new Date())) {
-      state.autopilot = null;
-      await event(address, `TV turned on. ${await appLabel(target, rule.target)} has no time left today, so it stayed on the home screen.`, "info");
       return;
     }
     if (await act(state, () => launch(target, rule.target))) state.autopilot = { verify: t, tries: 1 };
@@ -592,7 +594,8 @@ async function appRules(address, rules, state, target, app, local = new Date()) 
     return;
   }
   const limit = limitToday(rules, appId, local);
-  if (limit !== undefined && (state.usage[appId] || 0) >= limit * 60) {
+  if (limit !== undefined && (appId !== "dev" || state.devPlaying) && (state.usage[appId] || 0) >= limit * 60) {
+    state.timedOut = appId; // "15 more minutes" from the home screen means this one
     if (await act(state, closeWith("Time's up", `${name} is done for today.`))) {
       await event(address, `Time's up for ${name} today (${limit} minute${limit !== 1 ? "s" : ""}). Closed it.`, "action", `limit-${appId}`, 900);
     }
@@ -601,6 +604,7 @@ async function appRules(address, rules, state, target, app, local = new Date()) 
   const total = totalLimitToday(rules, local);
   // All apps together; Detox Home only while it plays a video (its notice and launcher are the home screen).
   if (total && (appId !== "dev" || state.devPlaying) && !isHome(app) && watchedToday(state.usage) >= total * 60) {
+    state.timedOut = appId;
     if (await act(state, closeWith("Time's up", "That's all the TV for today."))) {
       await event(address, `Time's up for TV today (${total} minute${total !== 1 ? "s" : ""} in all). Closed ${name}.`, "action", "limit-total", 900);
     }
@@ -721,6 +725,7 @@ export async function rulesStatus(address) {
     usage: Object.fromEntries(Object.entries(usage).map(([k, v]) => [k, Math.trunc(v)])),
     limitsToday: Object.fromEntries(Object.keys(rules.limits).map((id) => [id, limitToday(rules, id, new Date())])),
     totalToday: totalLimitToday(rules, new Date()),
+    timedOut: state ? state.timedOut || null : null,
     events: mine.reverse(),
   };
 }
