@@ -248,6 +248,8 @@
     border: 1px solid var(--line); border-radius: 999px; background: var(--raised); cursor: pointer; font-size: 15px;
   }
   .chip img { width: 36px; height: 27px; border-radius: 5px; object-fit: cover; }
+  .fav-suggest { display: grid; gap: 10px; align-content: center; }
+  .shortcuts .fav-suggest:not(:first-child) { padding-left: 6px; }
   .chip[aria-pressed="true"] { border-color: var(--keep); background: var(--keep-soft); font-weight: 600; }
   .chip[aria-pressed="false"] { color: var(--muted); text-decoration: line-through; }
   .results { list-style: none; padding: 0; margin: 22px 0 0; max-width: 80ch; }

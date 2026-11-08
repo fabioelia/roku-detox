@@ -1495,6 +1495,20 @@ async function saveSettings(change) {
   state.services = data.services || {};
 }
 
+// Well-known streaming apps, most used first: offered as one-tap favorites while there are none.
+const POPULAR_APPS = ["12", "837", "13", "291097", "2285", "61322", "593099", "31440", "551012", "195316", "151908", "41468", "74519", "46041", "22297"];
+function favoriteSuggestions(apps, current) {
+  const taken = new Set(current.map((a) => a.id));
+  const free = apps.filter((a) => !taken.has(a.id));
+  const byId = new Map(free.map((a) => [a.id, a]));
+  const picks = POPULAR_APPS.map((id) => byId.get(id)).filter(Boolean);
+  for (const a of free.slice().sort((x, y) => x.name.localeCompare(y.name))) if (picks.length < 4 && !picks.includes(a)) picks.push(a);
+  const top = picks.slice(0, 4 - current.length);
+  if (!top.length) return current.length ? "" : `<p class="empty">Pick the apps you open most to keep them up here.</p>`;
+  return `<div class="fav-suggest"><p class="empty">${current.length ? "Add more:" : "Pick the apps you open most to keep them up here. One tap to start:"}</p>
+    <div class="chips">${top.map((a) => `<button type="button" class="chip" data-fav-add="${esc(a.id)}"><img ${iconAttrs(a.id)} alt="" data-drop-on-error>Add ${esc(plain(a.name))}</button>`).join("")}</div></div>`;
+}
+
 function renderShortcuts() {
   const show = Boolean(state.reachable && state.control);
   $("#shortcuts").hidden = !show;
@@ -1506,9 +1520,8 @@ function renderShortcuts() {
   $("#fav-row").hidden = editing;
   $("#fav-edit").hidden = editing;
   $("#fav-edit").textContent = favorites.length ? "Change favorites" : "Choose favorites";
-  $("#fav-row").innerHTML = favorites.length
-    ? favorites.map((a) => `<button type="button" class="shortcut" data-launch="${esc(a.id)}">${artHTML(a)}<span class="shortcut-name">${esc(plain(a.name))}</span></button>`).join("")
-    : `<p class="empty">Pick the apps you open most to keep them up here.</p>`;
+  $("#fav-row").innerHTML = favorites.map((a) => `<button type="button" class="shortcut" data-launch="${esc(a.id)}">${artHTML(a)}<span class="shortcut-name">${esc(plain(a.name))}</span></button>`).join("")
+    + favoriteSuggestions(apps, favorites);
   $("#app-grid").innerHTML = apps.slice().sort((a, b) => a.name.localeCompare(b.name)).map((a) =>
     `<button type="button" class="tile" data-launch="${esc(a.id)}" aria-label="Open ${esc(plain(a.name))}">${artHTML(a)}<span class="tile-name">${esc(plain(a.name))}</span></button>`
   ).join("");
@@ -1743,7 +1756,19 @@ $("#fav-save").addEventListener("click", async () => {
 });
 $("#fav-cancel").addEventListener("click", () => { state.draftFavorites = null; renderShortcuts(); });
 
-$("#shortcuts").addEventListener("click", (e) => {
+$("#shortcuts").addEventListener("click", async (e) => {
+  const add = e.target.closest("[data-fav-add]");
+  if (add) {
+    add.disabled = true;
+    try {
+      await saveSettings({ favorites: [...state.favorites, add.dataset.favAdd] });
+      renderShortcuts();
+    } catch (err) {
+      add.disabled = false;
+      toast(err.message);
+    }
+    return;
+  }
   const launchBtn = e.target.closest("[data-launch]");
   if (launchBtn) return launchApp(launchBtn.dataset.launch, launchBtn);
   const template = e.target.closest("[data-template]")?.dataset.template;
