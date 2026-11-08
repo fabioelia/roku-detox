@@ -2916,7 +2916,8 @@ class Handler(BaseHTTPRequestHandler):
     def on_lan(self):
         return getattr(self.server, "lan", False)
 
-    def paired(self):
+    def paired(self, allow_key=False):
+        """A phone that entered the code (cookie). allow_key: a Shortcuts key also counts (only /api/do)."""
         if not self.on_lan or household()["open"]:
             return True
         cookies = dict(
@@ -2924,7 +2925,8 @@ class Handler(BaseHTTPRequestHandler):
             for part in self.headers.get("Cookie", "").split(";")
             if "=" in part
         )
-        return self.server.phone.is_paired(cookies.get("detox_token") or self.headers.get("X-Detox-Key"))
+        token = cookies.get("detox_token") or (self.headers.get("X-Detox-Key") if allow_key else None)
+        return self.server.phone.is_paired(token)
 
     def run(self, fn):
         try:
@@ -3017,7 +3019,7 @@ class Handler(BaseHTTPRequestHandler):
             return self.fail(403, "Enter the household PIN to change this.", pin=True)
         if path == "/api/pair":
             return self.run(lambda: self.pair(body))
-        if not self.paired():
+        if not self.paired(allow_key=path == "/api/do"):
             if shortcut:
                 return self.fail(401, "That Shortcuts key doesn't work anymore. Make a new one in Roku Detox on your Mac (Phone menu).")
             return self.fail(401, "Enter the code from your Mac first.", pair=True)
