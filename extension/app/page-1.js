@@ -3608,7 +3608,7 @@ function renderRuleList() {
       <span class="used" data-used-total></span>
       ${canGiveMore && r.totalLimit ? `<button class="btn quiet" type="button" data-action="more" data-more-app="" title="Just for today">+15 min today</button>` : ""}</div>` : "";
   const limits = ruleHTML("limits", "Daily time limits",
-    "When an app or input reaches its time for the day, the TV is sent to the home screen each time it's opened again. \"All apps together\" counts everything but the home screen (and Detox Home's own screens; its videos count). Counts reset at midnight. Leave \"on weekends\" empty for the same time on Saturdays and Sundays.",
+    "Once an app or input has had its time for the day, it's closed each time it opens. \"All apps together\" counts everything but the home screen. Counts start over at midnight; leave \"on weekends\" empty for the same every day.",
     Object.keys(r.limits).length > 0 || r.totalLimit > 0 || state.limitsOpen,
     `${totalLine}${limitRows}${pendingLimit}<div class="line"><button class="btn quiet" type="button" data-action="limit-add" ${state.pendingLimit ? "hidden" : ""}>Add a time limit</button></div>`);
 
