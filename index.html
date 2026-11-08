@@ -247,6 +247,24 @@
   .cast-banner .row { display: flex; flex-wrap: wrap; gap: 8px; }
   .cast-banner .btn.quiet { color: var(--bg); }
 
+  /* Keyboard shortcuts list (press ?) */
+  .keys-help {
+    width: min(460px, calc(100vw - 32px)); max-height: calc(100vh - 48px); padding: 20px 22px 18px;
+    border: 1px solid var(--line); border-radius: var(--radius-m); background: var(--raised); color: var(--ink);
+    box-shadow: 0 24px 60px -20px rgba(0, 0, 0, .55);
+  }
+  .keys-help::backdrop { background: rgba(10, 14, 20, .45); }
+  .keys-help h2 { margin: 0 0 4px; font-size: 19px; }
+  .keys-help .muted { margin: 12px 0 6px; color: var(--muted); font-size: 14px; }
+  .keys-list { display: grid; grid-template-columns: auto 1fr; gap: 7px 14px; margin: 0; align-items: baseline; }
+  .keys-list dt { white-space: nowrap; }
+  .keys-list dd { margin: 0; }
+  .keys-list .off { color: var(--muted); }
+  .keys-help kbd { display: inline-block; min-width: 1.6em; padding: 0 5px; text-align: center; border: 1px solid var(--line);
+    border-bottom-width: 2px; border-radius: 5px; background: var(--surface); font: inherit; font-size: 14px; }
+  .keys-help .actions { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 16px; }
+  .keys-help .actions .primary { margin-left: auto; }
+
   /* My sites */
   .find-source { margin: 0 0 16px; }
   .site-group + .site-group { margin-top: 26px; }
@@ -1047,7 +1065,7 @@
         </div>
       </section>
       <p class="remote-error" id="remote-error" aria-live="assertive" hidden></p>
-      <p class="remote-note">Your keyboard works too: arrow keys to move, Enter for OK, Backspace for Back, H for Home, + and − for volume, M to mute, / to search.</p>
+      <p class="remote-note">Your keyboard works too: arrow keys to move, Enter for OK, Backspace for Back. <button class="btn quiet" type="button" data-keys-help>All the keys (press ?)</button></p>
       <form class="smart" id="smart-form">
         <label for="smart-input">Search, say what to do, or paste a link</label>
         <div class="smart-field">
@@ -1077,6 +1095,31 @@
   </div>
 </div>
 
+<dialog class="keys-help" id="keys-help" aria-labelledby="keys-help-title">
+  <h2 id="keys-help-title">Keyboard shortcuts</h2>
+  <p class="muted">On this page, when you're not typing in a box:</p>
+  <dl class="keys-list">
+    <dt><kbd>←</kbd> <kbd>↑</kbd> <kbd>→</kbd> <kbd>↓</kbd></dt><dd>Move</dd>
+    <dt><kbd>Enter</kbd></dt><dd>OK</dd>
+    <dt><kbd>Space</kbd></dt><dd>Play or pause</dd>
+    <dt><kbd>Backspace</kbd> <kbd>Esc</kbd></dt><dd>Back</dd>
+    <dt><kbd>H</kbd></dt><dd>Home</dd>
+    <dt><kbd>*</kbd></dt><dd>Options (the remote's * button)</dd>
+    <dt><kbd>+</kbd> <kbd>−</kbd></dt><dd>Volume up, down</dd>
+    <dt><kbd>M</kbd></dt><dd>Mute</dd>
+    <dt><kbd>Page Up</kbd> <kbd>Page Down</kbd></dt><dd>Channel up, down (Live TV)</dd>
+    <dt><kbd>/</kbd></dt><dd>Jump to the search box</dd>
+    <dt><kbd>?</kbd></dt><dd>This list</dd>
+  </dl>
+  <div id="keys-help-chrome" hidden>
+    <p class="muted">From any tab in Chrome:</p>
+    <dl class="keys-list" id="keys-help-commands"></dl>
+  </div>
+  <form method="dialog" class="actions">
+    <button class="btn quiet" type="button" id="keys-help-edit" hidden>Change Chrome's shortcuts</button>
+    <button class="btn primary" value="done">Done</button>
+  </form>
+</dialog>
 <div class="cast-banner" id="cast-banner" hidden role="dialog" aria-label="Send a video to the TV">
   <p id="cast-text"></p>
   <div class="row">
@@ -2414,8 +2457,8 @@ function pressKey(key) {
     btn.classList.add("sent");
     setTimeout(() => btn.classList.remove("sent"), 220);
   }
-  if (COARSE.matches && navigator.vibrate && !key.startsWith("Lit_")) navigator.vibrate(8);
-  if (key.startsWith("Power")) setTimeout(refreshDevice, 2500);   // show "The TV is off" / back on soon   // a small buzz, like a real remote's click
+  if (COARSE.matches && navigator.vibrate && !key.startsWith("Lit_")) navigator.vibrate(8);   // a small buzz, like a real remote's click
+  if (key.startsWith("Power")) setTimeout(refreshDevice, 2500);   // show "The TV is off" / back on soon
   // One at a time, so fast presses reach the TV in order.
   keysPending += 1;
   keyChain = keyChain.then(() => api("/api/key", { tv: state.tv, key }))
@@ -2627,9 +2670,15 @@ $("#remote").addEventListener("click", (e) => {
   pressKey(btn.dataset.key);
 });
 document.addEventListener("keydown", (e) => {
-  if (e.metaKey || e.ctrlKey || e.altKey || !state.control) return;
+  if (e.metaKey || e.ctrlKey || e.altKey || $("#keys-help").open) return;
   const target = e.target;
-  if (target.closest("input, select, textarea")) return;
+  if (target.closest("input, select, textarea, [contenteditable]")) return;
+  if (e.key === "?") {
+    e.preventDefault();
+    openKeysHelp();
+    return;
+  }
+  if (!state.control) return;
   // Page Up/Down change channels only while the channel buttons show (Live TV); otherwise they scroll.
   if ((e.key === "PageUp" || e.key === "PageDown") && $("#ch-row").hidden) return;
   if (e.key === "/") {   // jump to the search box
@@ -2646,7 +2695,41 @@ document.addEventListener("keydown", (e) => {
   }
   if (!key) return;
   e.preventDefault();
+  // A held key repeats about 30 times a second; send only what the TV keeps up with, so it stops
+  // when you let go (and none through the relay, which allows about 30 requests a minute).
+  if (e.repeat && (keysPending >= 2 || state.engine?.kind === "relay")) return;
   pressKey(key);
+});
+
+// The keyboard shortcuts list. In the extension it also lists Chrome's own shortcuts as set now.
+async function openKeysHelp() {
+  const dialog = $("#keys-help");
+  if (dialog.open) return;
+  const inExtension = state.engine?.kind === "extension" && location.protocol === "chrome-extension:";
+  $("#keys-help-edit").hidden = !inExtension;
+  let commands = [];
+  if (inExtension) {
+    try {
+      commands = (await chrome.commands.getAll()).filter((c) => c.name !== "_execute_action" && c.description)
+        .sort((a, b) => (Number(!a.shortcut) - Number(!b.shortcut)) || a.description.localeCompare(b.description));
+    } catch { /* not available here */ }
+  }
+  $("#keys-help-chrome").hidden = !commands.length;
+  $("#keys-help-commands").innerHTML = commands.map((c) =>
+    `<dt><kbd${c.shortcut ? "" : ' class="off"'}>${esc(c.shortcut || "not set")}</kbd></dt><dd${c.shortcut ? "" : ' class="off"'}>${esc(c.description)}</dd>`).join("");
+  if (!dialog.open) dialog.showModal();
+}
+document.addEventListener("click", (e) => {
+  if (e.target.closest("[data-keys-help]")) openKeysHelp();
+});
+$("#keys-help").addEventListener("click", (e) => {   // a click on the dimmed backdrop closes it
+  if (e.target === e.currentTarget) {
+    const r = e.currentTarget.getBoundingClientRect();
+    if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) e.currentTarget.close();
+  }
+});
+$("#keys-help-edit").addEventListener("click", () => {
+  try { chrome.tabs.create({ url: "chrome://extensions/shortcuts" }); } catch { /* only in the extension */ }
 });
 const looksLikeLink = (text) => /^\s*(https?:\/\/|www\.|m\.|youtu\.be\/|(music\.)?youtube\.com\/|netflix\.com\/)/i.test(text) || /^\s*[a-z0-9-]+(\.[a-z0-9-]+)+\/\S*$/i.test(text);
 // Links sent from this box, newest first, to send again with one tap (kept in this browser).

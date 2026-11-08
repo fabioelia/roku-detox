@@ -127,6 +127,18 @@ async function main() {
     for (const v of ['a', 'a"', 'a"b']) { input.value = v; input.dispatchEvent(new Event("input", { bubbles: true })); }
     await new Promise((r) => setTimeout(r, 400)); api = real; document.querySelector("#smart-live").click(); return sent.join(" "); })()`);
   check("live typing sends quotes too", quoted === 'Lit_a Lit_" Lit_b', quoted);
+  const keysHelp = await page(`(async () => {
+    const sent = []; const real = api;
+    api = (path, body) => { if (path === "/api/key") { sent.push(body.key); return new Promise((r) => setTimeout(() => r({ ok: true }), 300)); } return real(path, body); };
+    const key = (k, more = {}) => document.body.dispatchEvent(new KeyboardEvent("keydown", { key: k, bubbles: true, cancelable: true, ...more }));
+    key("?"); const opened = document.querySelector("#keys-help").open;
+    key("ArrowDown");   // while the list is open, keys stay on the page
+    document.querySelector("#keys-help").close();
+    key("ArrowDown"); for (let i = 0; i < 20; i++) key("ArrowDown", { repeat: true });
+    await new Promise((r) => setTimeout(r, 200)); api = real;
+    return { opened, sent: sent.length }; })()`);
+  check("? lists the keys, and keys wait while it's open", keysHelp.opened && keysHelp.sent > 0, JSON.stringify(keysHelp));
+  check("a held key doesn't pile up presses", keysHelp.sent <= 3, JSON.stringify(keysHelp));
 
   // Phrases in the search box, the sleep timer, favorites suggestions.
   const phrase = await page(`(async () => { const r = await api("/api/do", { tv: state.tv, do: "open netflix" }); return r.done; })()`);

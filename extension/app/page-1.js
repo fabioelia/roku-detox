@@ -1314,8 +1314,8 @@ function pressKey(key) {
     btn.classList.add("sent");
     setTimeout(() => btn.classList.remove("sent"), 220);
   }
-  if (COARSE.matches && navigator.vibrate && !key.startsWith("Lit_")) navigator.vibrate(8);
-  if (key.startsWith("Power")) setTimeout(refreshDevice, 2500);   // show "The TV is off" / back on soon   // a small buzz, like a real remote's click
+  if (COARSE.matches && navigator.vibrate && !key.startsWith("Lit_")) navigator.vibrate(8);   // a small buzz, like a real remote's click
+  if (key.startsWith("Power")) setTimeout(refreshDevice, 2500);   // show "The TV is off" / back on soon
   // One at a time, so fast presses reach the TV in order.
   keysPending += 1;
   keyChain = keyChain.then(() => api("/api/key", { tv: state.tv, key }))
@@ -1527,9 +1527,15 @@ $("#remote").addEventListener("click", (e) => {
   pressKey(btn.dataset.key);
 });
 document.addEventListener("keydown", (e) => {
-  if (e.metaKey || e.ctrlKey || e.altKey || !state.control) return;
+  if (e.metaKey || e.ctrlKey || e.altKey || $("#keys-help").open) return;
   const target = e.target;
-  if (target.closest("input, select, textarea")) return;
+  if (target.closest("input, select, textarea, [contenteditable]")) return;
+  if (e.key === "?") {
+    e.preventDefault();
+    openKeysHelp();
+    return;
+  }
+  if (!state.control) return;
   // Page Up/Down change channels only while the channel buttons show (Live TV); otherwise they scroll.
   if ((e.key === "PageUp" || e.key === "PageDown") && $("#ch-row").hidden) return;
   if (e.key === "/") {   // jump to the search box
@@ -1546,7 +1552,41 @@ document.addEventListener("keydown", (e) => {
   }
   if (!key) return;
   e.preventDefault();
+  // A held key repeats about 30 times a second; send only what the TV keeps up with, so it stops
+  // when you let go (and none through the relay, which allows about 30 requests a minute).
+  if (e.repeat && (keysPending >= 2 || state.engine?.kind === "relay")) return;
   pressKey(key);
+});
+
+// The keyboard shortcuts list. In the extension it also lists Chrome's own shortcuts as set now.
+async function openKeysHelp() {
+  const dialog = $("#keys-help");
+  if (dialog.open) return;
+  const inExtension = state.engine?.kind === "extension" && location.protocol === "chrome-extension:";
+  $("#keys-help-edit").hidden = !inExtension;
+  let commands = [];
+  if (inExtension) {
+    try {
+      commands = (await chrome.commands.getAll()).filter((c) => c.name !== "_execute_action" && c.description)
+        .sort((a, b) => (Number(!a.shortcut) - Number(!b.shortcut)) || a.description.localeCompare(b.description));
+    } catch { /* not available here */ }
+  }
+  $("#keys-help-chrome").hidden = !commands.length;
+  $("#keys-help-commands").innerHTML = commands.map((c) =>
+    `<dt><kbd${c.shortcut ? "" : ' class="off"'}>${esc(c.shortcut || "not set")}</kbd></dt><dd${c.shortcut ? "" : ' class="off"'}>${esc(c.description)}</dd>`).join("");
+  if (!dialog.open) dialog.showModal();
+}
+document.addEventListener("click", (e) => {
+  if (e.target.closest("[data-keys-help]")) openKeysHelp();
+});
+$("#keys-help").addEventListener("click", (e) => {   // a click on the dimmed backdrop closes it
+  if (e.target === e.currentTarget) {
+    const r = e.currentTarget.getBoundingClientRect();
+    if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) e.currentTarget.close();
+  }
+});
+$("#keys-help-edit").addEventListener("click", () => {
+  try { chrome.tabs.create({ url: "chrome://extensions/shortcuts" }); } catch { /* only in the extension */ }
 });
 const looksLikeLink = (text) => /^\s*(https?:\/\/|www\.|m\.|youtu\.be\/|(music\.)?youtube\.com\/|netflix\.com\/)/i.test(text) || /^\s*[a-z0-9-]+(\.[a-z0-9-]+)+\/\S*$/i.test(text);
 // Links sent from this box, newest first, to send again with one tap (kept in this browser).
