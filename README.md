@@ -4,7 +4,7 @@ Find a Roku TV on your Wi-Fi and clean it up from a web page on your computer.
 
 <p>
   <img src="docs/remote.png" alt="The Remote menu: favorites, inputs and an on-screen remote" width="560">
-  <img src="docs/phone.png" alt="On a phone: the remote with the swipe pad" width="180">
+  <img src="docs/phone.png" alt="On a phone, Just the remote: the swipe pad, what's on, and the sleep timer" width="180">
 </p>
 <p><img src="docs/clean-up.png" alt="Clean up: each channel shows how long it was watched" width="560"></p>
 
