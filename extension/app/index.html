@@ -200,6 +200,8 @@
   .usage li:last-child, .activity li:last-child, .checks li:last-child { border-bottom: 0; }
   .usage li span:first-child { flex: 1; }
   .usage li span:last-child { font-weight: 600; font-variant-numeric: tabular-nums; }
+  .screen-time { margin-top: 26px; }
+  .screen-time-sum { margin: 4px 0 8px; font-weight: 600; }
   .activity time { flex: none; width: 92px; color: var(--muted); font-size: 14px; padding-top: 2px; }
   .activity li.alert span { color: var(--remove); font-weight: 600; }
   .checks .mark { flex: none; width: 22px; font-weight: 800; color: var(--keep); }
@@ -755,6 +757,11 @@
         <h2>Today</h2>
         <p class="intro" id="usage-intro">How long the TV spent on each app or input today. Turn on a rule or the viewing log to start counting.</p>
         <ul class="usage" id="usage-list"></ul>
+        <div class="screen-time" id="screen-time" hidden>
+          <h3 class="subhead" id="screen-time-title">Past days</h3>
+          <p class="screen-time-sum" id="screen-time-sum"></p>
+          <ul class="usage" id="screen-time-list"></ul>
+        </div>
       </section>
       <section class="section needs-engine">
         <h2>Activity</h2>

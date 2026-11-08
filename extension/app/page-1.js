@@ -763,7 +763,7 @@ async function connect(address) {
   await refreshDevice();
   await loadSettings();
   loadSleep();
-  if (state.view === "cleanup") loadUsage();
+  if (["cleanup", "rules"].includes(state.view)) loadUsage();
   loadHistory();
   pollNow();
   if (state.view === "rules") loadRules();
@@ -937,6 +937,7 @@ async function loadUsage() {
     state.usage = null;
   }
   renderApps();
+  renderScreenTime();
 }
 function usageNote(app) {
   const u = state.usage;
@@ -2818,10 +2819,24 @@ $("#find").addEventListener("change", (e) => {
 function minutesText(seconds) {
   const minutes = Math.round(seconds / 60);
   if (minutes < 60) return `${minutes} min`;
-  return `${Math.floor(minutes / 60)} h ${minutes % 60} min`;
+  return minutes % 60 ? `${Math.floor(minutes / 60)} h ${minutes % 60} min` : `${minutes / 60} h`;
 }
 
 function usageLabel(id) { return id === "home" ? "Home screen" : appLabel(id) || id; }
+
+// Screen time over the days on record: total, a daily average, and the apps that took the most.
+function renderScreenTime() {
+  const u = state.usage && state.usage.tv === state.tv ? state.usage : null;
+  const box = $("#screen-time");
+  const watched = u ? Object.entries(u.totals).filter(([id, s]) => id !== "home" && s >= 60).sort((a, b) => b[1] - a[1]) : [];
+  box.hidden = !u || u.days < 2 || !watched.length;
+  if (box.hidden) return;
+  const total = watched.reduce((n, [, s]) => n + s, 0);
+  $("#screen-time-title").textContent = `Past ${u.days} days`;
+  $("#screen-time-sum").textContent = `${minutesText(total)} in all, about ${minutesText(total / u.days)} a day.`;
+  $("#screen-time-list").innerHTML = watched.slice(0, 6).map(([id, seconds]) =>
+    `<li><span>${esc(usageLabel(id))}</span><span>${minutesText(seconds)}</span></li>`).join("");
+}
 
 async function loadRules() {
   if (!state.tv || !state.reachable || isLite()) return;
@@ -2856,6 +2871,7 @@ function renderRules() {
 
   const usage = Object.entries(status.usage).filter(([, s]) => s >= 30).sort((a, b) => b[1] - a[1]);
   $("#usage-list").innerHTML = usage.map(([id, seconds]) => `<li><span>${esc(usageLabel(id))}</span><span>${minutesText(seconds)}</span></li>`).join("");
+  renderScreenTime();
   $("#usage-intro").textContent = usage.length
     ? "How long the TV spent on each app or input today, counted while rules are on."
     : "How long the TV spent on each app or input today. Turn on a rule or the viewing log to start counting.";
@@ -3364,7 +3380,7 @@ $("#views").addEventListener("click", (e) => {
   state.view = view;
   store.set("detox.view", view);
   renderViews();
-  if (view === "rules") loadRules();
+  if (view === "rules") { loadRules(); loadUsage(); }
   if (view === "tvapp") loadTvApp();
   if (view === "find") loadHistory();
   if (view === "cleanup") loadUsage();
