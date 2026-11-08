@@ -200,6 +200,8 @@ class Handler(BaseHTTPRequestHandler):
                     return self.reply(404, "")
                 fake.active = ("dev", "Detox Home")
                 fake.last_dev_params = dict(urllib.parse.parse_qsl(url.query))
+                # A video plays; a notice, message or the launcher doesn't.
+                fake.playing_since = time.time() if fake.last_dev_params.get("mediaType") == "video" else None
                 print(f"  Detox Home got {url.path} {fake.last_dev_params}")
                 return self.reply(200, "")
             if url.path.startswith("/launch/"):

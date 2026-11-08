@@ -94,7 +94,7 @@ export function cleanRules(raw) {
     log: truthy(raw.log),
     pausedUntil: boundedInt(raw.pausedUntil, 0, 4_102_444_800),
     totalLimit: boundedInt(raw.totalLimit, 0, 1440),
-    totalWeekendLimit: boundedInt(raw.totalWeekendLimit, 0, 1440),
+    totalWeekendLimit: boundedInt(raw.totalLimit, 0, 1440) ? boundedInt(raw.totalWeekendLimit, 0, 1440) : 0,
   };
   for (const [k, v] of Object.entries(limits)) rules.limits[appId(k)] = boundedInt(v, 1, 720);
   for (const [k, v] of Object.entries(weekend)) { // a weekend amount only for an app with a daily limit
@@ -128,6 +128,22 @@ export async function tvRules(address) {
 export function totalLimitToday(rules, moment) {
   const weekend = (moment.getDay() === 0 || moment.getDay() === 6) && rules.totalWeekendLimit;
   return (weekend ? rules.totalWeekendLimit : rules.totalLimit) || null;
+}
+
+/** Detox Home is playing a video (not showing its launcher, clock or a notice): detox_home_playing. */
+async function detoxHomePlaying(target) {
+  try {
+    return ["play", "buffer", "pause"].includes((await nowPlaying(target)).state);
+  } catch {
+    return false;
+  }
+}
+
+/** The app's own limit or all TV together is used up for moment's day (time_used_up). */
+export function timeUsedUp(rules, usage, appId, moment) {
+  const limit = limitToday(rules, appId, moment);
+  const total = totalLimitToday(rules, moment);
+  return (limit !== undefined && (usage[appId] || 0) >= limit * 60) || Boolean(total && watchedToday(usage) >= total * 60);
 }
 
 /** Seconds on apps and inputs today (the home screen doesn't count). */
@@ -245,7 +261,7 @@ function newWatch() {
     power: null, reachable: null, control: null, app: { id: "", name: "" }, onSince: null,
     autopilot: null, // null, "pending", or {verify: started, tries}
     homePolls: 0, idleSince: null, bedtimeWarned: null, lastAction: 0, lastSeen: 0,
-    unreachableSince: null, said: {}, usageDay: null, usage: {}, lastTick: null, lastSaved: 0,
+    unreachableSince: null, said: {}, usageDay: null, usage: {}, lastTick: null, lastSaved: 0, devPlaying: false,
   };
 }
 
@@ -390,6 +406,7 @@ async function check(address, rules) {
 
   const app = await activeApp(target);
   state.app = app;
+  state.devPlaying = app.id === "dev" && (await detoxHomePlaying(target));
   if (was === "standby" || was === "off") { // it just turned on
     state.onSince = t;
     state.homePolls = 0;
@@ -423,7 +440,8 @@ async function tickUsage(address, state, app, t, local = new Date()) {
     state.lastTick = null;
   }
   if (app !== null && state.lastTick !== null) {
-    const key = isHome(app) ? "home" : app.id; // newer TVs give the home screen an id
+    // Newer TVs give the home screen an id; Detox Home counts as the home screen unless it plays a video.
+    const key = isHome(app) || (app.id === "dev" && !state.devPlaying) ? "home" : app.id;
     state.usage[key] = (state.usage[key] || 0) + Math.min(t - state.lastTick, USAGE_GAP_MAX);
   }
   state.lastTick = app !== null ? t : null;
@@ -510,6 +528,11 @@ async function autopilot(address, rules, state, target, app, t) {
       await event(address, "Skipped opening an app this time, as asked.", "info");
       return;
     }
+    if (timeUsedUp(rules, state.usage, rule.target, new Date())) {
+      state.autopilot = null;
+      await event(address, `TV turned on. ${await appLabel(target, rule.target)} has no time left today, so it stayed on the home screen.`, "info");
+      return;
+    }
     if (await act(state, () => launch(target, rule.target))) state.autopilot = { verify: t, tries: 1 };
     return;
   }
@@ -549,8 +572,8 @@ async function appRules(address, rules, state, target, app, local = new Date()) 
     return;
   }
   const total = totalLimitToday(rules, local);
-  // All apps together (not Detox Home itself: it shows the notice, and that would close it again).
-  if (total && appId !== "dev" && !isHome(app) && watchedToday(state.usage) >= total * 60) {
+  // All apps together; Detox Home only while it plays a video (its notice and launcher are the home screen).
+  if (total && (appId !== "dev" || state.devPlaying) && !isHome(app) && watchedToday(state.usage) >= total * 60) {
     if (await act(state, closeWith("Time's up", "That's all the TV for today."))) {
       await event(address, `Time's up for TV today (${total} minute${total !== 1 ? "s" : ""} in all). Closed ${name}.`, "action", "limit-total", 900);
     }

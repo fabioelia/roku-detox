@@ -80,13 +80,15 @@ async function sayTimeLeft(target) {
   const parts = [];
   if (nowSeconds < (rules.pausedUntil || 0)) parts.push("Rules are paused, so nothing closes for now.");
   const total = totalLimitToday(rules, new Date());
-  if (total) {
-    const left = total * 60 - watchedToday(status.usage);
-    parts.push(left > 0 ? `All TV together: ${sayDuration(left)} left.` : "All TV together: time's up for today.");
-  }
+  const totalLeft = total ? total * 60 - watchedToday(status.usage) : null;
+  if (total) parts.push(totalLeft > 0 ? `All TV together: ${sayDuration(totalLeft)} left.` : "All TV together: time's up for today.");
   const limits = [];
   const today = new Date();
-  for (const appId of Object.keys(rules.limits)) limits.push([await appLabel(target, appId), limitToday(rules, appId, today) * 60 - (status.usage[appId] || 0)]);
+  for (const appId of Object.keys(rules.limits)) {
+    const left = limitToday(rules, appId, today) * 60 - (status.usage[appId] || 0);
+    // No app gets more than all TV together has left.
+    limits.push([await appLabel(target, appId), totalLeft !== null && appId !== "dev" ? Math.min(left, totalLeft) : left]);
+  }
   limits.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : a[1] - b[1]));
   for (const [name, left] of limits) parts.push(left <= 0 ? `${name}: time's up for today.` : `${name}: ${sayDuration(left)} left.`);
   if (rules.bedtime.enabled && rules.bedtime.start !== rules.bedtime.end) {

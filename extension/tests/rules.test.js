@@ -227,3 +227,35 @@ test("all TV together: once the day's total is used, any app or input is closed"
   assert.equal((await ok("GET", "/api/rules", { tv: TV })).rules.totalLimit, 0);
   await tv("/keypress/Home");
 });
+
+test("all TV together: Detox Home's own screens don't count, its videos do", async () => {
+  await setRules({ totalLimit: 1 });
+  await tv("/keypress/PowerOn");
+  // Wednesday, Nov 18: two minutes on Detox Home's launcher (it counts as the home screen).
+  await tv("/input"); // Detox Home with nothing to show: its launcher
+  for (const at of ["12:00:00", "12:00:30", "12:01:00", "12:01:30", "12:02:00"]) await roundAt(`2026-11-18T${at}`);
+  assert.equal((await active()).id, "dev");
+  assert.equal((await ok("GET", "/api/rules", { tv: TV })).usage.dev, undefined);
+  // A video in Detox Home counts, and is stopped once the minute is used.
+  await tv("/input?contentId=inline&mediaType=video&url=https%3A%2F%2Fcdn.example.com%2Fv.mp4");
+  for (const at of ["12:02:30", "12:03:00", "12:03:30", "12:03:40"]) await roundAt(`2026-11-18T${at}`);
+  assert.ok((await ok("GET", "/api/rules", { tv: TV })).usage.dev >= 60);
+  assert.equal((await messages())[0], "Time's up for TV today (1 minute in all). Closed Detox Home.");
+  await setRules({});
+  await tv("/keypress/Home");
+});
+
+test("skip the home screen stays home when that app has no time left", async () => {
+  await setRules({ limits: { "12": 1 }, autopilot: { enabled: true, target: "12" } });
+  await tv("/keypress/Home");
+  await tv("/launch/12");
+  for (const at of ["13:00:00", "13:00:30", "13:01:00", "13:01:10"]) await roundAt(`2026-11-18T${at}`); // Netflix's minute is used
+  await tv("/keypress/PowerOff");
+  await roundAt("2026-11-18T13:02:00");
+  await tv("/keypress/PowerOn");
+  await tv("/keypress/Home");
+  for (const at of ["13:03:00", "13:03:05", "13:03:10", "13:03:20"]) await roundAt(`2026-11-18T${at}`);
+  assert.equal((await active()).id || "home", "home", "stayed on the home screen");
+  assert.ok((await messages()).includes("TV turned on. Netflix has no time left today, so it stayed on the home screen."));
+  await setRules({});
+});

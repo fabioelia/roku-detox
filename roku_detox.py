@@ -1336,7 +1336,7 @@ def clean_rules(raw):
         "log": bool(raw.get("log")),
         "pausedUntil": bounded_int(raw.get("pausedUntil"), 0, 4_102_444_800),
         "totalLimit": bounded_int(raw.get("totalLimit"), 0, 1440),
-        "totalWeekendLimit": bounded_int(raw.get("totalWeekendLimit"), 0, 1440),
+        "totalWeekendLimit": bounded_int(raw.get("totalWeekendLimit"), 0, 1440) if bounded_int(raw.get("totalLimit"), 0, 1440) else 0,
     }
     for k, v in weekend.items():
         if app_id(k) in rules["limits"]:  # a weekend amount only for an app with a daily limit
@@ -1374,6 +1374,22 @@ def total_limit_today(rules, moment):
     """Minutes of TV allowed on moment's day for all apps and inputs together, or None."""
     weekend = moment.weekday() >= 5 and rules.get("totalWeekendLimit")
     return (rules.get("totalWeekendLimit") if weekend else rules.get("totalLimit")) or None
+
+
+def detox_home_playing(target):
+    """Detox Home is playing a video (not showing its launcher, clock or a notice)."""
+    try:
+        status, body, _ = ecp(target, "query/media-player")
+        return status == 200 and ET.fromstring(body).get("state", "") in ("play", "buffer", "pause")
+    except (TVError, ET.ParseError):
+        return False
+
+
+def time_used_up(rules, usage, app_id, moment):
+    """The app's own limit or all TV together is used up for moment's day."""
+    limit = limit_today(rules, app_id, moment)
+    total = total_limit_today(rules, moment)
+    return (limit is not None and usage.get(app_id, 0) >= limit * 60) or bool(total and watched_today(usage) >= total * 60)
 
 
 def watched_today(usage):
@@ -1473,6 +1489,7 @@ class TVWatch:
         self.unreachable_since = None
         self.alerted = set()
         self.said = {}             # message key -> last time, to avoid repeating
+        self.dev_playing = False   # Detox Home is playing a video (its own screens count as the home screen)
         self.usage_day = None
         self.usage = {}
         self.last_tick = None
@@ -1644,6 +1661,7 @@ class Watcher:
 
         app = active_app(target)
         state.app = app
+        state.dev_playing = app.get("id") == "dev" and detox_home_playing(target)
         if was in ("standby", "off"):  # it just turned on
             state.on_since = now
             state.home_polls = 0
@@ -1679,7 +1697,8 @@ class Watcher:
             state.usage = self.load_usage(address, day)
             state.last_tick = None
         if app is not None and state.last_tick is not None:
-            key = "home" if is_home(app) else app["id"]  # newer TVs give the home screen an id
+            # Newer TVs give the home screen an id; Detox Home counts as the home screen unless it plays a video.
+            key = "home" if is_home(app) or (app.get("id") == "dev" and not state.dev_playing) else app["id"]
             state.usage[key] = state.usage.get(key, 0) + min(now - state.last_tick, POLL_SECONDS * 3)
         state.last_tick = now if app is not None else None
         if now - state.last_saved > 60:
@@ -1750,6 +1769,10 @@ class Watcher:
                 update_settings(consume)
                 self.event(address, "Skipped opening an app this time, as asked.", kind="info")
                 return
+            if time_used_up(rules, state.usage, rule["target"], datetime.now()):
+                state.autopilot = None
+                self.event(address, f"TV turned on. {app_label(target, rule['target'])} has no time left today, so it stayed on the home screen.", kind="info")
+                return
             if self.act(state, lambda: launch(target, rule["target"])):
                 state.autopilot = ("verify", now, 1)
             return
@@ -1783,8 +1806,8 @@ class Watcher:
                 self.event(address, f"Time's up for {name} today ({limit} minute{'s' if limit != 1 else ''}). Closed it.", key=f"limit-{app_id}", every=900)
             return
         total = total_limit_today(rules, local or datetime.now())
-        # All apps together (not Detox Home itself: it shows the notice, and that would close it again).
-        if total and app_id != "dev" and not is_home(app) and watched_today(state.usage) >= total * 60:
+        # All apps together; Detox Home only while it plays a video (its notice and launcher are the home screen).
+        if total and (app_id != "dev" or state.dev_playing) and not is_home(app) and watched_today(state.usage) >= total * 60:
             if self.act(state, lambda: friendly_notice(target, "Time's up", "That's all the TV for today.") or press(target, "Home")):
                 self.event(address, f"Time's up for TV today ({total} minute{'s' if total != 1 else ''} in all). Closed {name}.", key="limit-total", every=900)
             return
@@ -2045,12 +2068,15 @@ def say_time_left(target):
     if time.time() < rules.get("pausedUntil", 0):
         parts.append("Rules are paused, so nothing closes for now.")
     total = total_limit_today(rules, datetime.now())
+    total_left = total * 60 - watched_today(status["usage"]) if total else None
     if total:
-        left = total * 60 - watched_today(status["usage"])
-        parts.append(f"All TV together: {say_duration(left)} left." if left > 0 else "All TV together: time's up for today.")
+        parts.append(f"All TV together: {say_duration(total_left)} left." if total_left > 0 else "All TV together: time's up for today.")
     today = datetime.now()
-    for name, left in sorted((app_label(target, app_id), limit_today(rules, app_id, today) * 60 - status["usage"].get(app_id, 0))
-                             for app_id in rules["limits"]):
+
+    def app_left(app_id):  # no app gets more than all TV together has left
+        left = limit_today(rules, app_id, today) * 60 - status["usage"].get(app_id, 0)
+        return min(left, total_left) if total_left is not None and app_id != "dev" else left
+    for name, left in sorted((app_label(target, app_id), app_left(app_id)) for app_id in rules["limits"]):
         parts.append(f"{name}: time's up for today." if left <= 0 else f"{name}: {say_duration(left)} left.")
     bedtime = rules["bedtime"]
     if bedtime["enabled"] and bedtime["start"] != bedtime["end"]:

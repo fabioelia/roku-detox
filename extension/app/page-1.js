@@ -2271,7 +2271,8 @@ async function importSettings(file) {
       done.push([change.favorites && "favorites", change.scenes && "scenes", change.services && "services"].filter(Boolean).join(", "));
     }
     if (data.rules && !isLite()) {
-      await api("/api/rules", { tv: state.tv, rules: { weekendLimits: {}, ...data.rules } });   // a file from before weekend limits replaces them too
+      // A file from before weekend limits or the total replaces them too.
+      await api("/api/rules", { tv: state.tv, rules: { weekendLimits: {}, totalLimit: 0, totalWeekendLimit: 0, ...data.rules } });
       done.push("rules");
     }
     if (Array.isArray(data.sites) && data.sites.length && !isLite()) {
@@ -3435,7 +3436,7 @@ function renderRulesPause(status) {
   const until = status.rules.pausedUntil || 0;
   const r = status.rules;
   const enforcing = (r.autopilot.enabled && r.autopilot.target) || r.bedtime.enabled || r.nightGuard.enabled
-    || Object.keys(r.limits).length || r.blocked.length || Object.keys(r.redirects).length;
+    || Object.keys(r.limits).length || r.blocked.length || Object.keys(r.redirects).length || r.totalLimit;
   box.hidden = !enforcing && until * 1000 <= Date.now();   // the viewing log alone has nothing to pause
   if (box.hidden) return;
   if (until * 1000 > Date.now()) {
@@ -3554,7 +3555,7 @@ function renderRuleList() {
       el.textContent = `used ${minutesText(seconds)} today`;
     }
     const totalUsed = box.querySelector("[data-used-total]");
-    if (totalUsed) totalUsed.textContent = `${minutesText(watchedSeconds(state.rulesStatus.usage))} today`;
+    if (totalUsed) totalUsed.textContent = `used ${minutesText(watchedSeconds(state.rulesStatus.usage))} today`;
     const extend = $("#bedtime-extend");
     if (extend) extend.hidden = !state.rulesStatus.bedtimeNow || (state.rulesStatus.rules?.pausedUntil || 0) * 1000 > Date.now();
     return;
@@ -3591,10 +3592,10 @@ function renderRuleList() {
   const hasTotal = "totalLimit" in (state.rulesStatus?.rules || {});   // an older program has no total
   const totalLine = hasTotal ? `<div class="line total-limit"><span>All apps together:</span>
       <input type="number" min="0" max="1440" value="${r.totalLimit || ""}" placeholder="none" data-total="totalLimit" aria-label="Minutes of TV a day, all apps and inputs together (empty: no total)"><span>minutes a day,</span>
-      <span class="weekend-limit"><input type="number" min="0" max="1440" value="${r.totalWeekendLimit || ""}" placeholder="same" data-total="totalWeekendLimit" aria-label="Minutes of TV a day on Saturdays and Sundays (empty: the same)"> on weekends</span>
+      <span class="weekend-limit"><input type="number" min="0" max="1440" value="${r.totalWeekendLimit || ""}" placeholder="same" data-total="totalWeekendLimit" ${r.totalLimit ? "" : "disabled"} aria-label="Minutes of TV a day on Saturdays and Sundays (empty: the same)"> on weekends</span>
       <span class="used" data-used-total></span></div>` : "";
   const limits = ruleHTML("limits", "Daily time limits",
-    "When an app or input reaches its time for the day, the TV is sent to the home screen each time it's opened again. \"All apps together\" counts everything but the home screen. Counts reset at midnight. Leave \"on weekends\" empty for the same time on Saturdays and Sundays.",
+    "When an app or input reaches its time for the day, the TV is sent to the home screen each time it's opened again. \"All apps together\" counts everything but the home screen (and Detox Home's own screens; its videos count). Counts reset at midnight. Leave \"on weekends\" empty for the same time on Saturdays and Sundays.",
     Object.keys(r.limits).length > 0 || r.totalLimit > 0 || state.limitsOpen,
     `${totalLine}${limitRows}${pendingLimit}<div class="line"><button class="btn quiet" type="button" data-action="limit-add" ${state.pendingLimit ? "hidden" : ""}>Add a time limit</button></div>`);
 
@@ -3682,6 +3683,11 @@ $("#rule-list").addEventListener("change", (e) => {
   }
   if (t.dataset.total) {
     r[t.dataset.total] = Math.min(1440, Math.max(0, Math.round(Number(t.value) || 0)));
+    const weekendBox = $('[data-total="totalWeekendLimit"]');
+    if (t.dataset.total === "totalLimit" && weekendBox) {   // a weekend amount only with a daily one
+      weekendBox.disabled = !r.totalLimit;
+      if (!r.totalLimit) { r.totalWeekendLimit = 0; weekendBox.value = ""; }
+    }
     return saveRulesSoon();
   }
   const limitRow = t.closest("[data-limit]");
