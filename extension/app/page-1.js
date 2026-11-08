@@ -3095,6 +3095,40 @@ function minutesText(seconds) {
 
 function usageLabel(id) { return id === "home" ? "Home screen" : appLabel(id) || id; }
 
+// One bar per day on record (the bars' labels say the date and time watched on hover or focus).
+function dayLabel(day, long = false) {
+  const date = new Date(`${day}T12:00:00`);
+  const now = new Date();   // the viewing log uses this computer's local dates
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}` === day;
+  if (today) return "Today";
+  return date.toLocaleDateString(undefined, long ? { weekday: "long", month: "short", day: "numeric" } : { month: "short", day: "numeric" });
+}
+function renderDayChart(perDay) {
+  const bars = $("#day-bars");
+  const max = Math.max(...perDay.map((d) => d.seconds), 1);
+  const peak = perDay.reduce((best, d) => (d.seconds > (best?.seconds ?? -1) ? d : best), null);
+  bars.innerHTML = perDay.map((d) => {
+    const h = Math.round((d.seconds / max) * 100);
+    const words = `${dayLabel(d.day, true)}: ${d.seconds >= 60 ? minutesText(d.seconds) : "nothing"}`;
+    return `<div class="day-bar${d.seconds < 60 ? " none" : ""}" tabindex="0" data-tip="${esc(words)}" aria-label="${esc(words)}" style="--h:${h}%">
+      <span style="height:${h}%"></span>${peak && d === peak && d.seconds >= 60 ? `<span class="peak">${esc(minutesText(d.seconds))}</span>` : ""}</div>`;
+  }).join("");
+  $("#day-axis").innerHTML = perDay.length ? `<span>${esc(dayLabel(perDay[0].day))}</span><span>${esc(dayLabel(perDay.at(-1).day))}</span>` : "";
+}
+{
+  const tip = $("#day-tip");
+  const show = (bar) => {
+    if (!bar) { tip.hidden = true; return; }
+    const chart = $("#day-chart").getBoundingClientRect();
+    const box = bar.getBoundingClientRect();
+    tip.textContent = bar.dataset.tip;
+    tip.style.left = `${box.left - chart.left + box.width / 2}px`;
+    tip.hidden = false;
+  };
+  for (const type of ["pointerover", "focusin"]) $("#day-bars").addEventListener(type, (e) => show(e.target.closest(".day-bar")));
+  for (const type of ["pointerleave", "focusout"]) $("#day-bars").addEventListener(type, () => show(null));
+}
+
 // Screen time over the days on record: total, a daily average, and the apps that took the most.
 function renderScreenTime() {
   const u = state.usage && state.usage.tv === state.tv ? state.usage : null;
@@ -3105,6 +3139,7 @@ function renderScreenTime() {
   const total = watched.reduce((n, [, s]) => n + s, 0);
   $("#screen-time-title").textContent = `Past ${u.days} days`;
   $("#screen-time-sum").textContent = `${minutesText(total)} in all, about ${minutesText(total / u.days)} a day.`;
+  renderDayChart(u.perDay || []);
   $("#screen-time-list").innerHTML = watched.slice(0, 6).map(([id, seconds]) =>
     `<li><span>${esc(usageLabel(id))}</span><span>${minutesText(seconds)}</span></li>`).join("");
 }

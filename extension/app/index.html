@@ -203,6 +203,19 @@
   .usage li span:last-child { font-weight: 600; font-variant-numeric: tabular-nums; }
   .screen-time { margin-top: 26px; }
   .screen-time-sum { margin: 4px 0 8px; font-weight: 600; }
+  /* Viewing time per day: one hue, thin bars from one baseline, a label only on the busiest day. */
+  .day-chart { position: relative; max-width: 74ch; margin: 14px 0 16px; }
+  .day-bars { display: flex; align-items: flex-end; gap: 2px; height: 84px; padding-top: 18px; border-bottom: 1px solid var(--line); }
+  .day-bar { position: relative; flex: 1 1 0; display: flex; justify-content: center; align-items: flex-end; height: 100%; cursor: default; }
+  .day-bar:focus-visible { outline: 2px solid var(--keep); outline-offset: 2px; border-radius: 4px; }
+  .day-bar span { display: block; width: 100%; max-width: 24px; min-height: 2px; border-radius: 4px 4px 0 0; background: var(--keep); }
+  .day-bar.none span { background: var(--line); }
+  .day-bar .peak { position: absolute; bottom: calc(var(--h) + 4px); white-space: nowrap; font-size: 12px; color: var(--muted); width: auto; max-width: none; min-height: 0; background: none; }
+  .day-axis { display: flex; justify-content: space-between; margin-top: 4px; font-size: 12px; color: var(--muted); }
+  .day-tip {
+    position: absolute; top: -8px; transform: translateX(-50%); padding: 4px 8px; border-radius: 6px; pointer-events: none;
+    background: var(--ink); color: var(--bg); font-size: 13px; white-space: nowrap; z-index: 2;
+  }
   .activity time { flex: none; width: 92px; color: var(--muted); font-size: 14px; padding-top: 2px; }
   .activity li.alert span { color: var(--remove); font-weight: 600; }
   .checks .mark { flex: none; width: 22px; font-weight: 800; color: var(--keep); }
@@ -793,6 +806,11 @@
         <div class="screen-time" id="screen-time" hidden>
           <h3 class="subhead" id="screen-time-title">Past days</h3>
           <p class="screen-time-sum" id="screen-time-sum"></p>
+          <div class="day-chart" id="day-chart">
+            <div class="day-bars" id="day-bars" role="group" aria-label="Viewing time each day"></div>
+            <div class="day-axis" id="day-axis" aria-hidden="true"></div>
+            <div class="day-tip" id="day-tip" role="status" hidden></div>
+          </div>
           <ul class="usage" id="screen-time-list"></ul>
         </div>
       </section>

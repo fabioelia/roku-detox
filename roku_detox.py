@@ -1234,13 +1234,17 @@ def usage_summary(target):
         except (FileNotFoundError, json.JSONDecodeError, AttributeError):
             days = {}
     totals = {}
-    for usage in days.values():
+    per_day = {}  # day -> seconds on apps and inputs (the home screen doesn't count)
+    for day, usage in days.items():
         if isinstance(usage, dict):
             for app_id, seconds in usage.items():
                 if isinstance(seconds, (int, float)):
                     totals[app_id] = totals.get(app_id, 0) + int(seconds)
+                    if app_id != "home":
+                        per_day[day] = per_day.get(day, 0) + int(seconds)
     tracked = sorted(day for day in days if isinstance(days[day], dict))
-    return {"days": len(tracked), "since": tracked[0] if tracked else None, "totals": totals}
+    return {"days": len(tracked), "since": tracked[0] if tracked else None, "totals": totals,
+            "perDay": [{"day": day, "seconds": per_day.get(day, 0)} for day in tracked]}
 
 
 def run_scheduled(address, scene):

@@ -219,13 +219,19 @@ export async function usageSummary(address) {
   const data = await getLocal("usage", {});
   const days = isPlainObject(data) && isPlainObject(data[address]) ? data[address] : {};
   const totals = {};
+  const perDay = []; // seconds on apps and inputs each day (the home screen doesn't count)
   const tracked = Object.keys(days).filter((day) => isPlainObject(days[day])).sort();
   for (const day of tracked) {
+    let watched = 0;
     for (const [appId, seconds] of Object.entries(days[day])) {
-      if (typeof seconds === "number" && Number.isFinite(seconds)) totals[appId] = (totals[appId] || 0) + Math.trunc(seconds);
+      if (typeof seconds === "number" && Number.isFinite(seconds)) {
+        totals[appId] = (totals[appId] || 0) + Math.trunc(seconds);
+        if (appId !== "home") watched += Math.trunc(seconds);
+      }
     }
+    perDay.push({ day, seconds: watched });
   }
-  return { days: tracked.length, since: tracked[0] || null, totals };
+  return { days: tracked.length, since: tracked[0] || null, totals, perDay };
 }
 
 async function saveUsage(address, day, usage) {
