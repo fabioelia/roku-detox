@@ -54,8 +54,30 @@ async function loadTv() {
   $("#tv").textContent = tv ? `TV: ${tv}` : "No TV yet";
 }
 
+// More than one TV found: a small menu to switch (unless the options page fixes one TV).
+async function loadTvPicker() {
+  try {
+    const { discovered = [], tvOverride = "" } = await chrome.storage.local.get(["discovered", "tvOverride"]);
+    const tvs = (Array.isArray(discovered) ? discovered : []).filter((t) => t && typeof t.address === "string");
+    if (tvOverride || tvs.length < 2) return false;
+    if (tv && !tvs.some((t) => t.address === tv)) tvs.unshift({ address: tv, name: tv });
+    const pick = document.createElement("select");
+    pick.id = "tv-pick";
+    pick.setAttribute("aria-label", "Which TV");
+    pick.append(...tvs.map((t) => new Option(t.name || t.address, t.address, false, t.address === tv)));
+    pick.addEventListener("change", async () => {
+      await chrome.storage.local.set({ lastTv: pick.value });
+      location.reload();   // everything below follows the TV
+    });
+    $("#tv").replaceChildren(pick);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function loadTvName() {
-  if (!tv) return;
+  if (!tv || $("#tv-pick")) return;
   try {
     const { device } = await api("GET", "/api/device", { query: { tv } });
     $("#tv").textContent = device.name;
@@ -247,6 +269,7 @@ async function main() {
   await tvReady;
   render();
   setUpQuickRemote();
+  await loadTvPicker();
   loadTvName();
   loadNow();
   loadLaunchers();
