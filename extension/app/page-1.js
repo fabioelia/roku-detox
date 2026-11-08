@@ -3528,7 +3528,7 @@ const NIGHT_NAMES = [["sun", "Sun", "Sunday"], ["mon", "Mon", "Monday"], ["tue",
 function nightsText(days) {
   const set = new Set(days);
   if (ALL_NIGHTS.every((d) => set.has(d))) return "Every night.";
-  if (set.size === 5 && SCHOOL_NIGHTS.every((d) => set.has(d))) return "School nights: Sunday to Thursday. Friday and Saturday nights are free.";
+  if (set.size === 5 && SCHOOL_NIGHTS.every((d) => set.has(d))) return "School nights: Sunday to Thursday.";
   if (set.size === 2 && set.has("fri") && set.has("sat")) return "Only Friday and Saturday nights.";
   if (set.size === 6) return `Every night except ${NIGHT_NAMES.find(([k]) => !set.has(k))[2]}.`;
   return `Only ${NIGHT_NAMES.filter(([k]) => set.has(k)).map(([, , long]) => long).join(", ").replace(/, ([^,]*)$/, " and $1")} nights.`;
@@ -3540,12 +3540,16 @@ function nightsHTML(days, start = "21:00") {
     <div class="line nights-presets">
       <span class="note" id="nights-note">${esc(nightsText(days))}</span>
       <span class="note" id="nights-early" ${start < "12:00" ? "" : "hidden"}>It starts after midnight or in the morning, so each counts as the night before: Sunday night is early Monday.</span>
-      <button class="btn quiet" type="button" data-nights="school">School nights</button>
-      <button class="btn quiet" type="button" data-nights="all">Every night</button>
+      <button class="btn quiet" type="button" data-nights="school" ${sameNights(days, SCHOOL_NIGHTS) ? "hidden" : ""}>School nights</button>
+      <button class="btn quiet" type="button" data-nights="all" ${sameNights(days, ALL_NIGHTS) ? "hidden" : ""}>Every night</button>
     </div>`;
 }
+const sameNights = (a, b) => a.length === b.length && b.every((d) => a.includes(d));
 function syncNights() {
   const days = state.rules?.bedtime?.days || ALL_NIGHTS;
+  for (const preset of document.querySelectorAll("[data-nights]")) {   // no button for what's already picked
+    preset.hidden = sameNights(days, preset.dataset.nights === "school" ? SCHOOL_NIGHTS : ALL_NIGHTS);
+  }
   for (const chip of document.querySelectorAll("[data-night]")) chip.setAttribute("aria-pressed", String(days.includes(chip.dataset.night)));
   const note = $("#nights-note");
   if (note) note.textContent = nightsText(days);
@@ -3792,6 +3796,7 @@ $("#rule-list").addEventListener("click", async (e) => {
     if (!days.size) { toast("Pick at least one night, or turn Bedtime off."); return; }
     r.bedtime.days = ALL_NIGHTS.filter((d) => days.has(d));
     syncNights();
+    if (preset) document.querySelector("[data-nights]:not([hidden])")?.focus();   // the button pressed is gone now
     return saveRulesSoon();
   }
   const action = e.target.closest("[data-action]")?.dataset.action;
