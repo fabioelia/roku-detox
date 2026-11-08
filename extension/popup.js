@@ -91,9 +91,10 @@ function render() {
   const send = $("#send");
   const pick = $("#video-pick");
   const web = tab && /^https?:\/\//.test(tab.url || "");
+  $("#video-card").classList.toggle("idle", !web);
   if (!web) {
-    $("#video-title").textContent = "Nothing to send from this tab.";
-    $("#video-meta").textContent = "Open a page with a video, start it playing, then click the Roku Detox button.";
+    $("#video-title").textContent = "Nothing to send from this tab. Start a video on a page, then click Roku Detox.";
+    $("#video-meta").textContent = "";
     send.disabled = true;
     return;
   }

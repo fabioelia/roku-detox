@@ -18,6 +18,11 @@
   footer { display: flex; justify-content: space-between; gap: 10px; margin-top: 12px; font-size: 12.5px; }
   footer .links { display: flex; gap: 12px; }
   .quick { margin-top: 10px; }
+  /* Nothing to send from this tab: one quiet line instead of a big disabled button. */
+  .video-card.idle { padding-top: 10px; padding-bottom: 10px; }
+  .video-card.idle h2, .video-card.idle .actions, .video-card.idle .video-meta { display: none; }
+  .video-card.idle .video-title { margin: 0; font-weight: 400; color: var(--muted); font-size: 12.5px; }
+  .status:empty { display: none; }
   .now { font-size: 12.5px; color: var(--muted); margin: 0 0 8px; min-height: 1.2em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .keys { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
   .key {
@@ -53,7 +58,7 @@
     <p class="tv muted" id="tv">No TV yet</p>
   </header>
 
-  <section class="card" aria-labelledby="video-heading">
+  <section class="card video-card" id="video-card" aria-labelledby="video-heading">
     <h2 id="video-heading">Video on this tab</h2>
     <p class="video-title" id="video-title">Looking…</p>
     <p class="video-meta" id="video-meta"></p>
