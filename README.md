@@ -22,6 +22,21 @@ Find a Roku TV on your Wi-Fi and clean it up from a web page on your computer.
 Then try: tap an app, hold Volume up, press `/` and type "open Netflix", set a sleep timer. With the
 extension: type `tv pause` in Chrome's address bar, or right-click a video and pick "Play this video on the TV".
 
+## Ways to control it
+
+| From | How |
+| --- | --- |
+| The page | Tap apps, inputs, scenes and the on-screen remote; type a phrase or a link in the box under it. |
+| The keyboard | Arrows, Enter, Backspace; `1`–`9` open favorites; `/` jumps to the search box; `?` lists every key. |
+| A phone | Open the page over home Wi-Fi (Phone menu), or use "Just the remote" for a full-screen remote. |
+| Siri and Shortcuts | "Pause the TV", "open Netflix", "what's on", "time left", "15 more minutes" (Phone menu > Siri and Shortcuts). |
+| The iPhone share sheet | Share a YouTube or Netflix link to a shortcut and it plays on the TV. |
+| Home-screen buttons | Links like `#do=open%20Netflix` that do one thing after a 2-second pause (Phone menu). |
+| Chrome's address bar | `tv` then a space: `tv netflix`, `tv pause`, `tv what's on`, `tv the bear` (extension). |
+| Right-click | "Play this video on the TV" on videos and links (extension). |
+| The toolbar popup | A small remote, what's on, time left, the sleep timer, and a phrase box (extension). |
+| Keyboard shortcuts anywhere in Chrome | Play/pause, send this tab's video, volume (extension; change them in chrome://extensions/shortcuts). |
+
 ## What's in it
 
 The page has six menus:
