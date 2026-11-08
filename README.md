@@ -133,3 +133,12 @@ python3 mock_roku.py
 ```
 
 Then enter `127.0.0.1:9060` as the TV address. Add `--limited` to see what a locked-down TV looks like.
+
+To check the page itself in a real browser (headless Chrome, a pretend TV and a throwaway copy of the
+program; your settings and TV aren't touched):
+
+```bash
+node tools/ui-smoke.mjs
+```
+
+The extension has its own tests: see `extension/README.md`.
