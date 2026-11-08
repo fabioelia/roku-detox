@@ -128,6 +128,8 @@
   .tv[data-state="offline"] .screen span { background: var(--remove); }
   .tv-name { font-size: clamp(26px, 3.6vw, 36px); font-weight: 800; letter-spacing: -0.02em; overflow-wrap: anywhere; }
   .tv-status { margin-top: 6px; font-weight: 600; }
+  .tv-hint { margin-top: 4px; max-width: 70ch; font-size: 15px; color: var(--muted); }
+  #wake-btn { margin-top: 10px; }
   .tv-facts { display: flex; flex-wrap: wrap; gap: 4px 26px; margin: 10px 0 0; font-size: 15px; }
   .tv-facts div { display: flex; gap: 6px; }
   .tv-facts dt { color: var(--muted); }
@@ -179,7 +181,7 @@
   .rule { padding: 18px 0; border-bottom: 1px solid var(--line); }
   .rule:last-child { border-bottom: 0; }
   .rule-head { display: flex; align-items: center; gap: 12px; cursor: pointer; }
-  .rule-head input { width: 22px; height: 22px; accent-color: var(--keep); flex: none; }
+  .rule-head input { width: 24px; height: 24px; accent-color: var(--keep); flex: none; }
   .rule-head strong { font-size: 18px; font-weight: 700; }
   .rule > .note { margin: 4px 0 0 34px; }
   .rule-body { margin: 12px 0 0 34px; display: grid; gap: 10px; }
@@ -379,7 +381,7 @@
   .steps { list-style: none; padding: 0; margin: 0; max-width: 74ch; }
   .steps li { display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 2px 14px; padding: 16px 0; border-bottom: 1px solid var(--line); }
   .steps li:last-child { border-bottom: 0; }
-  .steps input[type="checkbox"] { width: 22px; height: 22px; margin: 3px 0 0; accent-color: var(--keep); }
+  .steps input[type="checkbox"] { width: 24px; height: 24px; margin: 2px 0 0; accent-color: var(--keep); }
   .steps label { cursor: pointer; }
   .steps strong { display: block; font-weight: 600; }
   .steps .path { display: block; color: var(--muted); font-size: 15px; margin-top: 2px; }
@@ -601,6 +603,8 @@
     <div>
       <h2 class="tv-name" id="tv-name">No TV connected yet</h2>
       <p class="tv-status" id="tv-status" role="status">Looking for Roku TVs on your Wi-Fi.</p>
+      <p class="tv-hint" id="tv-hint" hidden>If the TV is off: Roku TVs only stay reachable while off when Fast TV start is on (on the TV: Settings, System, Power).</p>
+      <button class="btn" id="wake-btn" type="button" hidden>Try to wake it</button>
       <p class="engine-badge" id="engine-badge" hidden></p>
       <dl class="tv-facts" id="tv-facts"></dl>
       <p class="engine-warn" id="https-note" hidden>This page is secure (https), so your browser may block it from talking to the TV. Use the http:// link instead.</p>

@@ -786,6 +786,10 @@ async function refreshDevice() {
     state.reachable = false;
     state.control = false;
     state.deviceError = err.message;
+    if (state.engine?.kind === "server" && state.wake?.tv !== state.tv) {
+      const tv = state.tv;
+      api(`/api/wake?tv=${enc(tv)}`).then((info) => { state.wake = { tv, ...info }; renderTV(); }, () => {});
+    }
   }
   const changed = hadControl !== state.control || hadReachable !== state.reachable;
   if (state.control && (!hadControl || !state.apps.length)) {
@@ -864,6 +868,8 @@ $("#picker-toggle").addEventListener("click", () => {
 
 function renderTV() {
   renderPickerMode();
+  $("#tv-hint").hidden = true;
+  $("#wake-btn").hidden = true;
   const tv = $("#tv");
   const facts = $("#tv-facts");
   const d = state.device;
@@ -888,7 +894,10 @@ function renderTV() {
   if (!state.reachable) {
     tv.dataset.state = "offline";
     $("#tv-name").textContent = d?.name || state.tv;
-    $("#tv-status").textContent = `Not answering. ${state.deviceError || ""} Retrying every 15 seconds.`;
+    const why = (state.deviceError || "").replace(/^The TV didn't answer\.\s*/, "");
+    $("#tv-status").textContent = `Not answering. ${why} Retrying every 15 seconds.`.replace(/\s+/g, " ");
+    $("#tv-hint").hidden = false;
+    $("#wake-btn").hidden = !(state.engine?.kind === "server" && state.wake?.tv === state.tv && state.wake.known);
     return;
   }
   tv.dataset.state = state.control ? "ready" : "limited";
@@ -1821,6 +1830,25 @@ function clock(ms) {
   const sec = String(total % 60).padStart(2, "0");
   return h ? `${h}:${String(m).padStart(2, "0")}:${sec}` : `${m}:${sec}`;
 }
+
+/* ---------- Waking a TV in deep sleep (the program sends a Wake-on-LAN packet) ---------- */
+
+$("#wake-btn").addEventListener("click", async (e) => {
+  const btn = e.target;
+  btn.disabled = true;
+  btn.textContent = "Waking…";
+  try {
+    const { wlan } = await api("/api/wake", { tv: state.tv });
+    toast(wlan ? "Sent a wake-up signal. If the TV listens for it, it turns on in a few seconds."
+      : "Sent a wake-up signal. This TV may not listen for it while it's off.");
+    setTimeout(refreshDevice, 6000);
+    setTimeout(refreshDevice, 15000);
+  } catch (err) {
+    toast(err.message);
+  } finally {
+    setTimeout(() => { btn.disabled = false; btn.textContent = "Try to wake it"; }, 6000);
+  }
+});
 
 /* ---------- Sleep timer (kept by the program at home or the extension, so the page can close) ---------- */
 

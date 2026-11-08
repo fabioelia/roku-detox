@@ -128,6 +128,8 @@
   .tv[data-state="offline"] .screen span { background: var(--remove); }
   .tv-name { font-size: clamp(26px, 3.6vw, 36px); font-weight: 800; letter-spacing: -0.02em; overflow-wrap: anywhere; }
   .tv-status { margin-top: 6px; font-weight: 600; }
+  .tv-hint { margin-top: 4px; max-width: 70ch; font-size: 15px; color: var(--muted); }
+  #wake-btn { margin-top: 10px; }
   .tv-facts { display: flex; flex-wrap: wrap; gap: 4px 26px; margin: 10px 0 0; font-size: 15px; }
   .tv-facts div { display: flex; gap: 6px; }
   .tv-facts dt { color: var(--muted); }
@@ -601,6 +603,8 @@
     <div>
       <h2 class="tv-name" id="tv-name">No TV connected yet</h2>
       <p class="tv-status" id="tv-status" role="status">Looking for Roku TVs on your Wi-Fi.</p>
+      <p class="tv-hint" id="tv-hint" hidden>If the TV is off: Roku TVs only stay reachable while off when Fast TV start is on (on the TV: Settings, System, Power).</p>
+      <button class="btn" id="wake-btn" type="button" hidden>Try to wake it</button>
       <p class="engine-badge" id="engine-badge" hidden></p>
       <dl class="tv-facts" id="tv-facts"></dl>
       <p class="engine-warn" id="https-note" hidden>This page is secure (https), so your browser may block it from talking to the TV. Use the http:// link instead.</p>
@@ -1721,6 +1725,10 @@ async function refreshDevice() {
     state.reachable = false;
     state.control = false;
     state.deviceError = err.message;
+    if (state.engine?.kind === "server" && state.wake?.tv !== state.tv) {
+      const tv = state.tv;
+      api(`/api/wake?tv=${enc(tv)}`).then((info) => { state.wake = { tv, ...info }; renderTV(); }, () => {});
+    }
   }
   const changed = hadControl !== state.control || hadReachable !== state.reachable;
   if (state.control && (!hadControl || !state.apps.length)) {
@@ -1799,6 +1807,8 @@ $("#picker-toggle").addEventListener("click", () => {
 
 function renderTV() {
   renderPickerMode();
+  $("#tv-hint").hidden = true;
+  $("#wake-btn").hidden = true;
   const tv = $("#tv");
   const facts = $("#tv-facts");
   const d = state.device;
@@ -1823,7 +1833,10 @@ function renderTV() {
   if (!state.reachable) {
     tv.dataset.state = "offline";
     $("#tv-name").textContent = d?.name || state.tv;
-    $("#tv-status").textContent = `Not answering. ${state.deviceError || ""} Retrying every 15 seconds.`;
+    const why = (state.deviceError || "").replace(/^The TV didn't answer\.\s*/, "");
+    $("#tv-status").textContent = `Not answering. ${why} Retrying every 15 seconds.`.replace(/\s+/g, " ");
+    $("#tv-hint").hidden = false;
+    $("#wake-btn").hidden = !(state.engine?.kind === "server" && state.wake?.tv === state.tv && state.wake.known);
     return;
   }
   tv.dataset.state = state.control ? "ready" : "limited";
@@ -2756,6 +2769,25 @@ function clock(ms) {
   const sec = String(total % 60).padStart(2, "0");
   return h ? `${h}:${String(m).padStart(2, "0")}:${sec}` : `${m}:${sec}`;
 }
+
+/* ---------- Waking a TV in deep sleep (the program sends a Wake-on-LAN packet) ---------- */
+
+$("#wake-btn").addEventListener("click", async (e) => {
+  const btn = e.target;
+  btn.disabled = true;
+  btn.textContent = "Waking…";
+  try {
+    const { wlan } = await api("/api/wake", { tv: state.tv });
+    toast(wlan ? "Sent a wake-up signal. If the TV listens for it, it turns on in a few seconds."
+      : "Sent a wake-up signal. This TV may not listen for it while it's off.");
+    setTimeout(refreshDevice, 6000);
+    setTimeout(refreshDevice, 15000);
+  } catch (err) {
+    toast(err.message);
+  } finally {
+    setTimeout(() => { btn.disabled = false; btn.textContent = "Try to wake it"; }, 6000);
+  }
+});
 
 /* ---------- Sleep timer (kept by the program at home or the extension, so the page can close) ---------- */
 

@@ -1732,6 +1732,61 @@ def doctor(target):
     return {"checks": checks, "moved": None}
 
 
+# --- Waking a TV that's in deep sleep (Wake-on-LAN) -----------------------------------------
+# A browser can't send this, so it's only offered by the program. The TV's network address is
+# remembered while it's on; whether the TV listens while off depends on the model and its settings.
+
+MAC_RE = re.compile(r"^([0-9a-f]{2}:){5}[0-9a-f]{2}$")
+
+
+def remember_wake_info(target, info):
+    mac = (info.get("wifi-mac") if info.get("network-type") != "ethernet" else info.get("ethernet-mac")) \
+        or info.get("wifi-mac") or info.get("ethernet-mac") or ""
+    mac = mac.strip().lower()
+    if not MAC_RE.match(mac):
+        return
+    wake = {"mac": mac, "wlan": info.get("supports-wake-on-wlan") == "true"}
+    address = display_address(target)
+    with SETTINGS_LOCK:
+        known = read_settings().get("tvs", {}).get(address, {}).get("wake")
+    if known != wake:
+        update_settings(lambda data: data.setdefault("tvs", {}).setdefault(address, {}).update(wake=wake))
+
+
+def wake_info(target):
+    with SETTINGS_LOCK:
+        wake = read_settings().get("tvs", {}).get(display_address(target), {}).get("wake") or {}
+    return {"known": bool(MAC_RE.match(str(wake.get("mac", "")))), "wlan": bool(wake.get("wlan"))}
+
+
+def wake_tv(target):
+    """Send a Wake-on-LAN packet to the TV. Returns {"sent": True, "wlan": bool}."""
+    with SETTINGS_LOCK:
+        wake = read_settings().get("tvs", {}).get(display_address(target), {}).get("wake") or {}
+    mac = str(wake.get("mac", ""))
+    if not MAC_RE.match(mac):
+        raise ValueError("Roku Detox hasn't seen this TV's network details yet. Turn it on once with its remote.")
+    packet = b"\xff" * 6 + bytes.fromhex(mac.replace(":", "")) * 16
+    host = target[0]
+    broadcasts = {"255.255.255.255"}
+    if re.match(r"^\d+\.\d+\.\d+\.\d+$", host) and not host.startswith("127."):
+        broadcasts.add(".".join(host.split(".")[:3] + ["255"]))
+        broadcasts.add(host)
+    sent = False
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+        for address in broadcasts:
+            for port in (9, 7):
+                try:
+                    sock.sendto(packet, (address, port))
+                    sent = True
+                except OSError:
+                    pass
+    if not sent:
+        raise TVError("Couldn't send the wake-up signal from this computer.")
+    return {"sent": True, "wlan": bool(wake.get("wlan"))}
+
+
 def token_hash(token):
     return hashlib.sha256(token.encode()).hexdigest()
 
@@ -2830,6 +2885,7 @@ class Handler(BaseHTTPRequestHandler):
             "/api/find/history": lambda: self.send(200, find_history(display_address(target()))),
             "/api/rules": lambda: self.send(200, WATCHER.status(display_address(target()))),
             "/api/sleep": lambda: self.send(200, sleep_status(target())),
+            "/api/wake": lambda: self.send(200, wake_info(target())),
             "/api/doctor": lambda: self.send(200, doctor(target())),
             "/api/tvapp": lambda: self.send(200, tv_app_status(target())),
             "/api/sites": lambda: self.send(200, {"sites": site_list()}),
@@ -2891,6 +2947,7 @@ class Handler(BaseHTTPRequestHandler):
             "/api/settings": lambda: self.save_settings(body),
             "/api/scene": lambda: self.scene(body),
             "/api/sleep": lambda: self.send(200, set_sleep(target(), body.get("minutes"))),
+            "/api/wake": lambda: self.send(200, wake_tv(target())),
             "/api/rules": lambda: self.save_rules(body),
             "/api/rules/extend": lambda: self.rules_extend(body),
             "/api/rules/skip": lambda: self.rules_skip(body),
@@ -2917,7 +2974,9 @@ class Handler(BaseHTTPRequestHandler):
 
     def device(self, query):
         target = parse_target(query.get("tv"))
-        info = summarize(target, device_info(target))
+        raw = device_info(target)
+        remember_wake_info(target, raw)
+        info = summarize(target, raw)
         self.send(200, {"device": info, "control": can_control(target)})
 
     def icon(self, query):

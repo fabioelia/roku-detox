@@ -261,6 +261,9 @@ def device_info():
 \t<uptime>{uptime}</uptime>
 \t<power-mode>{fake.power}</power-mode>
 \t<ecp-setting-mode>{mode}</ecp-setting-mode>
+\t<network-type>wifi</network-type>
+\t<wifi-mac>02:00:00:00:00:01</wifi-mac>
+\t<supports-wake-on-wlan>true</supports-wake-on-wlan>
 </device-info>
 """
 
