@@ -77,7 +77,7 @@ test("screen time and time left read today's viewing log and limits, like the pr
   const usage = { "12": 1500, "837": 400, home: 900 };
   const soon = new Date(Date.now() + 2 * 3600 * 1000);   // bedtime in two hours, so it isn't now
   const hhmm = (d) => `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-  const setup = { limits: { "12": 30, "837": 5 }, bedtime: { enabled: true, start: hhmm(soon), end: hhmm(new Date(soon.getTime() + 60000)) } };
+  const setup = { totalLimit: 45, limits: { "12": 30, "837": 5 }, bedtime: { enabled: true, start: hhmm(soon), end: hhmm(new Date(soon.getTime() + 60000)) } };
   await globalThis.chrome.storage.local.set({ usage: { [TV]: { [day]: usage } } });
   await handleMessage({ type: "api", method: "POST", path: "/api/rules", query: {}, body: { tv: TV, rules: setup } }, { internal: true });
   const asked = ["screen time", "time left"];
@@ -92,7 +92,7 @@ print(json.dumps([rd.do_phrase(("127.0.0.1", 9072), p) for p in json.loads(sys.a
   const expected = JSON.parse(execFileSync("python3", ["-c", code, JSON.stringify(usage), JSON.stringify(setup), JSON.stringify(asked)], { encoding: "utf8" }));
   assert.deepEqual(got, expected);
   assert.equal(got[0], "31 minutes of TV today. The most: Netflix, 25 minutes.");
-  assert.equal(got[1], `Netflix: 5 minutes left. YouTube: time's up for today. Bedtime is at ${(await import("../engine/phrases.js")).sayClock(setup.bedtime.start)}.`);
+  assert.equal(got[1], `All TV together: 13 minutes left. Netflix: 5 minutes left. YouTube: time's up for today. Bedtime is at ${(await import("../engine/phrases.js")).sayClock(setup.bedtime.start)}.`);
   await handleMessage({ type: "api", method: "POST", path: "/api/rules", query: {}, body: { tv: TV, rules: {} } }, { internal: true });
 });
 

@@ -185,11 +185,16 @@ async function loadNow() {
       try {
         const status = await api("GET", "/api/rules", { query: { tv } });
         const weekendDay = [0, 6].includes(new Date().getDay());
-        const limit = status.limitsToday ? status.limitsToday[appId]
+        const appLimit = status.limitsToday ? status.limitsToday[appId]
           : (weekendDay && status.rules?.weekendLimits?.[appId]) || status.rules?.limits?.[appId];
+        // All TV together counts too: whichever runs out first.
+        const watched = Object.entries(status.usage || {}).reduce((n, [k, v]) => n + (k === "home" ? 0 : v), 0);
+        const lefts = [];
+        if (appLimit) lefts.push(appLimit - (status.usage?.[appId] || 0) / 60);
+        if (status.totalToday && appId !== "dev") lefts.push(status.totalToday - watched / 60);
         const paused = (status.rules?.pausedUntil || 0) > Date.now() / 1000;   // nothing closes while paused
-        if (limit && !paused) {
-          const minutes = Math.round(limit - (status.usage?.[appId] || 0) / 60);
+        if (lefts.length && !paused) {
+          const minutes = Math.round(Math.min(...lefts));
           left = minutes > 0 ? ` (${minutes} min left today)` : " (time's up for today)";
         }
       } catch { /* no rules: no note */ }

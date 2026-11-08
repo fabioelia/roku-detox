@@ -20,6 +20,8 @@ export const RULES_DEFAULT = {
   bedtime: { enabled: false, start: "21:00", end: "06:30", days: ["mon", "tue", "wed", "thu", "fri", "sat", "sun"], extendUntil: 0 },
   nightGuard: { enabled: false, start: "00:30", end: "06:00", idleMinutes: 3 },
   pausedUntil: 0, // epoch seconds: every rule rests until then (guests over, movie night)
+  totalLimit: 0, // minutes of TV a day, all apps and inputs together (0: none)
+  totalWeekendLimit: 0, // ... on Saturdays and Sundays instead (0: the same)
   limits: {},    // app id -> minutes per day
   weekendLimits: {}, // app id -> minutes on Saturdays and Sundays instead (only apps with a daily limit)
   blocked: [],   // app ids sent back to the home screen
@@ -91,6 +93,8 @@ export function cleanRules(raw) {
     redirects: {},
     log: truthy(raw.log),
     pausedUntil: boundedInt(raw.pausedUntil, 0, 4_102_444_800),
+    totalLimit: boundedInt(raw.totalLimit, 0, 1440),
+    totalWeekendLimit: boundedInt(raw.totalWeekendLimit, 0, 1440),
   };
   for (const [k, v] of Object.entries(limits)) rules.limits[appId(k)] = boundedInt(v, 1, 720);
   for (const [k, v] of Object.entries(weekend)) { // a weekend amount only for an app with a daily limit
@@ -120,6 +124,17 @@ export async function tvRules(address) {
   }
 }
 
+/** Minutes of TV allowed on moment's day for all apps and inputs together, or null (total_limit_today). */
+export function totalLimitToday(rules, moment) {
+  const weekend = (moment.getDay() === 0 || moment.getDay() === 6) && rules.totalWeekendLimit;
+  return (weekend ? rules.totalWeekendLimit : rules.totalLimit) || null;
+}
+
+/** Seconds on apps and inputs today (the home screen doesn't count). */
+export function watchedToday(usage) {
+  return Object.entries(usage).reduce((n, [k, v]) => n + (k === "home" ? 0 : v), 0);
+}
+
 /** Minutes allowed on the app on moment's day: its weekend amount on Saturday and Sunday, if any (limit_today). */
 export function limitToday(rules, appId, moment) {
   const weekendDay = moment.getDay() === 0 || moment.getDay() === 6;
@@ -132,7 +147,7 @@ export function rulesEnforcing(rules) {
   return Boolean(
     (rules.autopilot.enabled && rules.autopilot.target)
     || rules.bedtime.enabled || rules.nightGuard.enabled
-    || Object.keys(rules.limits).length || rules.blocked.length || Object.keys(rules.redirects).length,
+    || Object.keys(rules.limits).length || rules.blocked.length || Object.keys(rules.redirects).length || rules.totalLimit,
   );
 }
 
@@ -149,7 +164,7 @@ export function rulesActive(rules) {
   return Boolean(
     (rules.autopilot.enabled && rules.autopilot.target)
     || rules.bedtime.enabled || rules.nightGuard.enabled
-    || Object.keys(rules.limits).length || rules.blocked.length || Object.keys(rules.redirects).length || rules.log,
+    || Object.keys(rules.limits).length || rules.blocked.length || Object.keys(rules.redirects).length || rules.log || rules.totalLimit,
   );
 }
 
@@ -343,7 +358,7 @@ async function check(address, rules) {
     state.reachable = false;
     state.unreachableSince = state.unreachableSince || t;
     if (t - state.unreachableSince > 180 && t >= (rules.pausedUntil || 0)
-      && (rules.bedtime.enabled || Object.keys(rules.limits).length || rules.blocked.length)) {
+      && (rules.bedtime.enabled || Object.keys(rules.limits).length || rules.blocked.length || rules.totalLimit)) {
       await event(address, "Can't reach the TV. If it's on, rules aren't working. Check it's on the same Wi-Fi, and that Fast TV start is on.", "alert", "unreachable", 3600);
     }
     return;
@@ -533,6 +548,14 @@ async function appRules(address, rules, state, target, app, local = new Date()) 
     }
     return;
   }
+  const total = totalLimitToday(rules, local);
+  // All apps together (not Detox Home itself: it shows the notice, and that would close it again).
+  if (total && appId !== "dev" && !isHome(app) && watchedToday(state.usage) >= total * 60) {
+    if (await act(state, closeWith("Time's up", "That's all the TV for today."))) {
+      await event(address, `Time's up for TV today (${total} minute${total !== 1 ? "s" : ""} in all). Closed ${name}.`, "action", "limit-total", 900);
+    }
+    return;
+  }
   const instead = rules.redirects[appId];
   if (instead) {
     if (await act(state, () => launch(target, instead))) {
@@ -647,6 +670,7 @@ export async function rulesStatus(address) {
     bedtimeNow: rules.bedtime.enabled && bedtimeNow(rules.bedtime, new Date()),
     usage: Object.fromEntries(Object.entries(usage).map(([k, v]) => [k, Math.trunc(v)])),
     limitsToday: Object.fromEntries(Object.keys(rules.limits).map((id) => [id, limitToday(rules, id, new Date())])),
+    totalToday: totalLimitToday(rules, new Date()),
     events: mine.reverse(),
   };
 }

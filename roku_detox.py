@@ -1270,6 +1270,8 @@ RULES_DEFAULT = {
                 "days": ["mon", "tue", "wed", "thu", "fri", "sat", "sun"], "extendUntil": 0},
     "nightGuard": {"enabled": False, "start": "00:30", "end": "06:00", "idleMinutes": 3},
     "pausedUntil": 0,  # epoch seconds: every rule rests until then (guests over, movie night)
+    "totalLimit": 0,         # minutes of TV a day, all apps and inputs together (0: none)
+    "totalWeekendLimit": 0,  # ... on Saturdays and Sundays instead (0: the same)
     "limits": {},      # app id -> minutes per day
     "weekendLimits": {},  # app id -> minutes on Saturdays and Sundays instead (only apps with a daily limit)
     "blocked": [],     # app ids sent back to the home screen
@@ -1333,6 +1335,8 @@ def clean_rules(raw):
         "redirects": {app_id(k): app_id(v) for k, v in redirects.items() if k != v},
         "log": bool(raw.get("log")),
         "pausedUntil": bounded_int(raw.get("pausedUntil"), 0, 4_102_444_800),
+        "totalLimit": bounded_int(raw.get("totalLimit"), 0, 1440),
+        "totalWeekendLimit": bounded_int(raw.get("totalWeekendLimit"), 0, 1440),
     }
     for k, v in weekend.items():
         if app_id(k) in rules["limits"]:  # a weekend amount only for an app with a daily limit
@@ -1366,12 +1370,23 @@ def limit_today(rules, app_id, moment):
     return rules["limits"].get(app_id)
 
 
+def total_limit_today(rules, moment):
+    """Minutes of TV allowed on moment's day for all apps and inputs together, or None."""
+    weekend = moment.weekday() >= 5 and rules.get("totalWeekendLimit")
+    return (rules.get("totalWeekendLimit") if weekend else rules.get("totalLimit")) or None
+
+
+def watched_today(usage):
+    """Seconds on apps and inputs today (the home screen doesn't count)."""
+    return sum(v for k, v in usage.items() if k != "home")
+
+
 def rules_enforcing(rules):
     """Any rule that acts on the TV (the viewing log alone only watches)."""
     return bool(
         (rules["autopilot"]["enabled"] and rules["autopilot"]["target"])
         or rules["bedtime"]["enabled"] or rules["nightGuard"]["enabled"]
-        or rules["limits"] or rules["blocked"] or rules["redirects"]
+        or rules["limits"] or rules["blocked"] or rules["redirects"] or rules.get("totalLimit")
     )
 
 
@@ -1379,7 +1394,7 @@ def rules_active(rules):
     return bool(
         (rules["autopilot"]["enabled"] and rules["autopilot"]["target"])
         or rules["bedtime"]["enabled"] or rules["nightGuard"]["enabled"]
-        or rules["limits"] or rules["blocked"] or rules["redirects"] or rules["log"]
+        or rules["limits"] or rules["blocked"] or rules["redirects"] or rules["log"] or rules.get("totalLimit")
     )
 
 
@@ -1600,7 +1615,7 @@ class Watcher:
             state.reachable = False
             state.unreachable_since = state.unreachable_since or now
             if now - state.unreachable_since > 180 and now >= rules.get("pausedUntil", 0) \
-                    and (rules["bedtime"]["enabled"] or rules["limits"] or rules["blocked"]):
+                    and (rules["bedtime"]["enabled"] or rules["limits"] or rules["blocked"] or rules.get("totalLimit")):
                 self.event(address, "Can't reach the TV. If it's on, rules aren't working. Check it's on the same Wi-Fi, and that Fast TV start is on.", kind="alert", key="unreachable", every=3600)
             return
         state.reachable = True
@@ -1767,6 +1782,12 @@ class Watcher:
             if self.act(state, lambda: friendly_notice(target, "Time's up", f"{name} is done for today.") or press(target, "Home")):
                 self.event(address, f"Time's up for {name} today ({limit} minute{'s' if limit != 1 else ''}). Closed it.", key=f"limit-{app_id}", every=900)
             return
+        total = total_limit_today(rules, local or datetime.now())
+        # All apps together (not Detox Home itself: it shows the notice, and that would close it again).
+        if total and app_id != "dev" and not is_home(app) and watched_today(state.usage) >= total * 60:
+            if self.act(state, lambda: friendly_notice(target, "Time's up", "That's all the TV for today.") or press(target, "Home")):
+                self.event(address, f"Time's up for TV today ({total} minute{'s' if total != 1 else ''} in all). Closed {name}.", key="limit-total", every=900)
+            return
         instead = rules["redirects"].get(app_id)
         if instead:
             if self.act(state, lambda: launch(target, instead)):
@@ -1792,6 +1813,7 @@ class Watcher:
             "usage": {k: int(v) for k, v in usage.items()},
             # Today's minutes per app by this computer's clock (weekend amounts on Saturday and Sunday).
             "limitsToday": {app_id: limit_today(rules, app_id, datetime.now()) for app_id in rules["limits"]},
+            "totalToday": total_limit_today(rules, datetime.now()),
             "events": events[::-1],
         }
 
@@ -2022,6 +2044,10 @@ def say_time_left(target):
     parts = []
     if time.time() < rules.get("pausedUntil", 0):
         parts.append("Rules are paused, so nothing closes for now.")
+    total = total_limit_today(rules, datetime.now())
+    if total:
+        left = total * 60 - watched_today(status["usage"])
+        parts.append(f"All TV together: {say_duration(left)} left." if left > 0 else "All TV together: time's up for today.")
     today = datetime.now()
     for name, left in sorted((app_label(target, app_id), limit_today(rules, app_id, today) * 60 - status["usage"].get(app_id, 0))
                              for app_id in rules["limits"]):
@@ -3684,6 +3710,8 @@ class Handler(BaseHTTPRequestHandler):
         raw_bedtime = body["rules"].get("bedtime") if isinstance(body.get("rules"), dict) else None
         if isinstance(raw_bedtime, dict) and "days" not in raw_bedtime:  # a page from before bedtime nights
             rules["bedtime"]["days"] = stored["bedtime"].get("days", list(BEDTIME_DAYS))
+        if isinstance(body.get("rules"), dict) and "totalLimit" not in body["rules"]:  # ... or total TV time
+            rules["totalLimit"], rules["totalWeekendLimit"] = stored.get("totalLimit", 0), stored.get("totalWeekendLimit", 0)
         if isinstance(body.get("rules"), dict) and "weekendLimits" not in body["rules"]:  # ... or weekend limits
             rules["weekendLimits"] = {k: v for k, v in stored.get("weekendLimits", {}).items() if k in rules["limits"]}
         save_rules(address, rules)

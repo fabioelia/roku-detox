@@ -205,3 +205,21 @@ test("a weekend amount replaces the daily limit on Saturday and Sunday", async (
   await setRules({});
   await tv("/keypress/Home");
 });
+
+test("all TV together: once the day's total is used, any app or input is closed", async () => {
+  await setRules({ totalLimit: 2 });
+  await tv("/keypress/PowerOn");
+  await ok("POST", "/api/launch", { tv: TV, id: "41468" });
+  // Tuesday, Nov 17: a minute on Tubi, then a switch to YouTube for the rest.
+  for (const at of ["12:00:00", "12:00:30", "12:01:00"]) await roundAt(`2026-11-17T${at}`);
+  await ok("POST", "/api/launch", { tv: TV, id: "837" });
+  for (const at of ["12:01:20", "12:01:50"]) await roundAt(`2026-11-17T${at}`);
+  assert.equal((await active()).id, "837", "under two minutes in all: still on");
+  for (const at of ["12:02:10", "12:02:20"]) await roundAt(`2026-11-17T${at}`);
+  assert.notEqual((await active()).id, "837", "over two minutes in all: closed");
+  assert.equal((await messages())[0], "Time's up for TV today (2 minutes in all). Closed YouTube.");
+  const status = await ok("GET", "/api/rules", { tv: TV });
+  assert.equal(status.totalToday, 2);
+  await setRules({});
+  await tv("/keypress/Home");
+});

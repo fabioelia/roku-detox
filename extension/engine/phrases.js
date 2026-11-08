@@ -4,7 +4,7 @@
 import { deviceInfo, launch, listApps, nowPlaying, press, pressSequence, runScene, search } from "./ecp.js";
 import { setSleep } from "./sleep.js";
 import { parseLink } from "./video.js";
-import { appLabel, isHome, limitToday, nextBedtimeOn, pauseRules, plainName, rulesEnforcing, rulesStatus, tvRules } from "./rules.js";
+import { appLabel, isHome, limitToday, nextBedtimeOn, pauseRules, plainName, rulesEnforcing, rulesStatus, totalLimitToday, tvRules, watchedToday } from "./rules.js";
 import { tvSettings } from "./store.js";
 import { ValueError, cut, displayAddress, pyLen } from "./util.js";
 
@@ -79,6 +79,11 @@ async function sayTimeLeft(target) {
   const nowSeconds = Date.now() / 1000;
   const parts = [];
   if (nowSeconds < (rules.pausedUntil || 0)) parts.push("Rules are paused, so nothing closes for now.");
+  const total = totalLimitToday(rules, new Date());
+  if (total) {
+    const left = total * 60 - watchedToday(status.usage);
+    parts.push(left > 0 ? `All TV together: ${sayDuration(left)} left.` : "All TV together: time's up for today.");
+  }
   const limits = [];
   const today = new Date();
   for (const appId of Object.keys(rules.limits)) limits.push([await appLabel(target, appId), limitToday(rules, appId, today) * 60 - (status.usage[appId] || 0)]);

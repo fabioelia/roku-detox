@@ -2346,6 +2346,7 @@ function noteLimits(status, tv = state.tv) {
     usage: status.usage || {},
     bedtime: status.rules?.bedtime?.enabled ? status.rules.bedtime : null,
     pausedUntil: status.rules?.pausedUntil || 0,
+    total: status.totalToday ?? null,   // all apps together, as the program or extension counts it
   } : null;
 }
 // Rules are paused: no limit or bedtime notes, since nothing will happen until the pause ends.
@@ -2377,14 +2378,18 @@ async function loadLimits() {
 }
 function limitNote(appId) {
   const l = state.limitStatus;
-  if (!appId || !l || l.tv !== state.tv || !l.limits[appId] || limitsPaused()) return "";
-  const left = Math.round(l.limits[appId] - (l.usage[appId] || 0) / 60);
+  if (!appId || !l || l.tv !== state.tv || limitsPaused()) return "";
+  const lefts = [];   // minutes left on this app, and on all TV together: whichever runs out first
+  if (l.limits[appId]) lefts.push(l.limits[appId] - (l.usage[appId] || 0) / 60);
+  if (l.total && appId !== "dev") lefts.push(l.total - watchedSeconds(l.usage) / 60);
+  if (!lefts.length) return "";
+  const left = Math.round(Math.min(...lefts));
   return left > 0 ? `${minutesText(left * 60)} left today` : "time's up for today";
 }
 setInterval(() => {
   const l = state.limitStatus;
   // Nothing known yet (the TV wasn't answering, or limits were set elsewhere), or something to keep fresh.
-  if (!document.hidden && (!l || l.tv !== state.tv || Object.keys(l.limits).length || l.bedtime)) loadLimits();
+  if (!document.hidden && (!l || l.tv !== state.tv || Object.keys(l.limits).length || l.total || l.bedtime)) loadLimits();
 }, 60000);
 
 async function pollNow() {
@@ -3538,6 +3543,7 @@ function ruleHTML(key, title, description, enabled, body) {
 }
 
 function anyOptions(selected) { return targetOptions(selected); }
+const watchedSeconds = (usage) => Object.entries(usage || {}).reduce((n, [k, v]) => n + (k === "home" ? 0 : v), 0);
 
 function renderRuleList() {
   const box = $("#rule-list");
@@ -3547,6 +3553,8 @@ function renderRuleList() {
       const seconds = state.rulesStatus.usage[el.dataset.used] || 0;
       el.textContent = `used ${minutesText(seconds)} today`;
     }
+    const totalUsed = box.querySelector("[data-used-total]");
+    if (totalUsed) totalUsed.textContent = `${minutesText(watchedSeconds(state.rulesStatus.usage))} today`;
     const extend = $("#bedtime-extend");
     if (extend) extend.hidden = !state.rulesStatus.bedtimeNow || (state.rulesStatus.rules?.pausedUntil || 0) * 1000 > Date.now();
     return;
@@ -3580,10 +3588,15 @@ function renderRuleList() {
       <select data-limit-app aria-label="App">${anyOptions("")}</select>
       <input type="number" min="1" max="720" value="${state.pendingLimit.minutes}" data-limit-minutes aria-label="Minutes per day"><span>minutes a day</span>
       <button class="btn quiet" type="button" data-action="limit-remove">Remove</button></div>` : "";
+  const hasTotal = "totalLimit" in (state.rulesStatus?.rules || {});   // an older program has no total
+  const totalLine = hasTotal ? `<div class="line total-limit"><span>All apps together:</span>
+      <input type="number" min="0" max="1440" value="${r.totalLimit || ""}" placeholder="none" data-total="totalLimit" aria-label="Minutes of TV a day, all apps and inputs together (empty: no total)"><span>minutes a day,</span>
+      <span class="weekend-limit"><input type="number" min="0" max="1440" value="${r.totalWeekendLimit || ""}" placeholder="same" data-total="totalWeekendLimit" aria-label="Minutes of TV a day on Saturdays and Sundays (empty: the same)"> on weekends</span>
+      <span class="used" data-used-total></span></div>` : "";
   const limits = ruleHTML("limits", "Daily time limits",
-    "When an app or input reaches its time for the day, the TV is sent to the home screen each time it's opened again. Counts reset at midnight. Leave \"on weekends\" empty for the same time on Saturdays and Sundays.",
-    Object.keys(r.limits).length > 0 || state.limitsOpen,
-    `${limitRows}${pendingLimit}<div class="line"><button class="btn quiet" type="button" data-action="limit-add" ${state.pendingLimit ? "hidden" : ""}>Add a time limit</button></div>`);
+    "When an app or input reaches its time for the day, the TV is sent to the home screen each time it's opened again. \"All apps together\" counts everything but the home screen. Counts reset at midnight. Leave \"on weekends\" empty for the same time on Saturdays and Sundays.",
+    Object.keys(r.limits).length > 0 || r.totalLimit > 0 || state.limitsOpen,
+    `${totalLine}${limitRows}${pendingLimit}<div class="line"><button class="btn quiet" type="button" data-action="limit-add" ${state.pendingLimit ? "hidden" : ""}>Add a time limit</button></div>`);
 
   const blocked = ruleHTML("blocked", "Blocked apps",
     "These get sent back to the home screen whenever they open.",
@@ -3651,7 +3664,7 @@ $("#rule-list").addEventListener("change", (e) => {
   const t = e.target;
   const toggle = t.dataset.toggle;
   if (toggle) {
-    if (toggle === "limits") { state.limitsOpen = t.checked; if (!t.checked) { r.limits = {}; r.weekendLimits = {}; state.pendingLimit = null; } else if (!Object.keys(r.limits).length) state.pendingLimit = { minutes: 60 }; }
+    if (toggle === "limits") { state.limitsOpen = t.checked; if (!t.checked) { r.limits = {}; r.weekendLimits = {}; r.totalLimit = 0; r.totalWeekendLimit = 0; state.pendingLimit = null; } else if (!Object.keys(r.limits).length) state.pendingLimit = { minutes: 60 }; }
     else if (toggle === "blocked") { state.blockedOpen = t.checked; if (!t.checked) r.blocked = []; }
     else if (toggle === "redirects") { state.swapsOpen = t.checked; if (!t.checked) { r.redirects = {}; state.pendingSwap = null; } else if (!Object.keys(r.redirects).length) state.pendingSwap = { from: "", to: "" }; }
     else if (toggle === "log") r.log = t.checked;
@@ -3665,6 +3678,10 @@ $("#rule-list").addEventListener("change", (e) => {
     r[rule][field] = t.type === "number" ? Number(t.value) || 1 : t.value;
     if (rule === "autopilot") { state.rulesVersion += 1; renderRuleList(); }
     if (rule === "bedtime" && field === "start" && $("#nights-early")) $("#nights-early").hidden = !(t.value < "12:00");
+    return saveRulesSoon();
+  }
+  if (t.dataset.total) {
+    r[t.dataset.total] = Math.min(1440, Math.max(0, Math.round(Number(t.value) || 0)));
     return saveRulesSoon();
   }
   const limitRow = t.closest("[data-limit]");
