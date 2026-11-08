@@ -114,7 +114,7 @@ const ServerEngine = {
     for (let tries = 0; ; tries++) {
       const hadPin = Boolean(pinGet());
       try {
-        return await ServerEngine.request(path, body);
+        return await ServerEngine.request(path, body, tries > 0);   // after asking, send it whatever the phrase
       } catch (err) {
         if (!err.pin || tries >= 3) throw err;
         const pin = await askPin(hadPin ? "That PIN didn't work. Try again." : "");
@@ -123,11 +123,11 @@ const ServerEngine = {
       }
     }
   },
-  async request(path, body) {
+  async request(path, body, withPin = false) {
     const options = { headers: { "X-Detox": "1" } };
     // Only the changes that need it carry it (and renew its hour): rules, the TV app, sites, phone settings.
     const needsPin = /^\/api\/(rules|tvapp|sites|phone|household)\b/.test(path) || (path === "/api/do" && /rules/i.test(String(body?.do ?? "")));
-    const pin = body !== undefined && needsPin ? pinGet() : "";
+    const pin = body !== undefined && (needsPin || withPin) ? pinGet() : "";
     if (pin) options.headers["X-Detox-Pin"] = pin;
     if (body !== undefined) {
       options.method = "POST";

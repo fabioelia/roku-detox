@@ -263,6 +263,7 @@ export function isLocalHost(host) {
 }
 
 export async function findVideo(pageUrl, direct = null, sniffed = [], { publicOnly = false } = {}) {
+  if (/[\x00-\x20\x7f\\]/.test(pageUrl)) throw new ValueError("Paste the whole link, starting with https://");
   if (publicOnly) sniffed = []; // videos this browser played are its own business
   if (direct && publicOnly && isLocalHost(urlParts(direct).host)) throw new ValueError(LOCAL_LINK_ERROR);
   if (direct && /^https?:\/\//.test(direct) && direct.length < 4000 && !isAdUrl(direct)) {

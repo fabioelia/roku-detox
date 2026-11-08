@@ -140,12 +140,15 @@ export function cleanSites(raw) {
   for (const item of raw) {
     if (!isPlainObject(item)) throw new ValueError("Bad site.");
     const name = cut(pyStr(item.name ?? "").trim(), 40);
-    const search = cut(pyStr(item.search ?? "").trim(), 500);
+    const search = cut(pyStr(item.search ?? "").replace(/^[ \t\r\n]+|[ \t\r\n]+$/g, ""), 500);
     let parsed = null;
     try { parsed = new URL(search.replaceAll("{q}", "x")); } catch { parsed = null; }
     if (!name) throw new ValueError("Give each site a name.");
+    if (/[\x00-\x20\x7f\\]/.test(search)) throw new ValueError(`The search address for "${name}" has a space or an odd character in it.`);
+    const authority = /^https?:\/\/([^/?#]+)/i.exec(search);
+    if (!authority) throw new ValueError(`The search address for "${name}" needs to start with https://`);
     // The words never pick the site's address.
-    if (/^[a-z]+:\/\/[^/?#]*\{q\}/i.test(search)) throw new ValueError(`The {q} for "${name}" goes after the site's name, in the search part of the address.`);
+    if (authority[1].includes("{q}")) throw new ValueError(`The {q} for "${name}" goes after the site's name, in the search part of the address.`);
     if (!parsed || !["http:", "https:"].includes(parsed.protocol) || !parsed.hostname) {
       throw new ValueError(`The search address for "${name}" needs to start with https://`);
     }

@@ -24,6 +24,7 @@ import secrets
 import shutil
 import socket
 import subprocess
+import sys
 import threading
 import time
 import urllib.error
@@ -2151,6 +2152,13 @@ def set_household(open_access=None, pin=None):
 
 def local_name():
     """This computer's Bonjour name (like my-mac.local), if it has one."""
+    if sys.platform == "darwin" and shutil.which("scutil"):
+        try:  # what other devices find it by, even when the host name says something else (like mac.lan)
+            bonjour = subprocess.run(["scutil", "--get", "LocalHostName"], capture_output=True, text=True, timeout=2).stdout.strip()
+            if re.match(r"^[A-Za-z0-9-]{1,63}$", bonjour):
+                return bonjour.lower() + ".local"
+        except (OSError, subprocess.SubprocessError):
+            pass
     name = socket.gethostname().strip().lower()
     if not name or name == "localhost":
         return None
@@ -2702,7 +2710,7 @@ class PublicRedirects(urllib.request.HTTPRedirectHandler):
 def public_opener():
     """http and https only (no ftp, file or data), no proxies, every connection checked (public_socket)."""
     opener = urllib.request.OpenerDirector()
-    for handler in (PublicHTTPHandler(), PublicHTTPSHandler(), PublicRedirects(),
+    for handler in (PublicHTTPHandler(), PublicHTTPSHandler(), PublicRedirects(), urllib.request.UnknownHandler(),
                     urllib.request.HTTPDefaultErrorHandler(), urllib.request.HTTPErrorProcessor()):
         opener.add_handler(handler)
     return opener
@@ -2787,6 +2795,8 @@ def pick_video(candidates):
 
 def find_video(page_url, direct=None, public_only=False):
     """Find a playable video file for a web page. Returns {url, title, format, how, referer}."""
+    if re.search(r"[\x00-\x20\x7f\\]", page_url):  # spaces, tabs or control characters: not a whole link
+        raise ValueError("Paste the whole link, starting with https://")
     if public_only:
         for link in (page_url, direct):
             host = urllib.parse.urlparse(link).hostname if link else None
@@ -2871,11 +2881,16 @@ def clean_sites(raw):
         if not isinstance(item, dict):
             raise ValueError("Bad site.")
         name = str(item.get("name", "")).strip()[:40]
-        search = str(item.get("search", "")).strip()[:500]
+        search = str(item.get("search", "")).strip(" \t\r\n")[:500]
         parsed = urllib.parse.urlparse(search.replace("{q}", "x"))
         if not name:
             raise ValueError("Give each site a name.")
-        if re.match(r"^[a-z]+://[^/?#]*\{q\}", search, re.I):  # the words never pick the site's address
+        if re.search(r"[\x00-\x20\x7f\\]", search):
+            raise ValueError(f'The search address for "{name}" has a space or an odd character in it.')
+        authority = re.match(r"^https?://([^/?#]+)", search, re.I)
+        if not authority:
+            raise ValueError(f'The search address for "{name}" needs to start with https://')
+        if "{q}" in authority.group(1):  # the words never pick the site's address
             raise ValueError(f'The {{q}} for "{name}" goes after the site\'s name, in the search part of the address.')
         if parsed.scheme not in ("http", "https") or not parsed.hostname:
             raise ValueError(f'The search address for "{name}" needs to start with https://')
@@ -3184,6 +3199,9 @@ def read_results(final_url, page, query):
 
 def search_site(site, query, public_only=False):
     """Read a site's search results page and pick out the results."""
+    authority = re.match(r"^https?://([^/?#]+)", site["search"], re.I)
+    if not authority or "{q}" in authority.group(1):  # saved before that was checked
+        raise ValueError("This site's search address needs fixing under My sites.")
     url = site["search"].replace("{q}", urllib.parse.quote_plus(query))
     final_url, page = fetch_page(url, limit=3_000_000, public_only=public_only)[:2]
     if page is None:
@@ -3534,7 +3552,11 @@ class Handler(BaseHTTPRequestHandler):
         sites = clean_sites(body.get("sites"))
         stored = site_list()
         known = {s["search"] for s in stored}
-        from_phone = {s["search"] for s in stored if s.get("fromPhone")}
+        with SETTINGS_LOCK:
+            from_phone = set(read_settings().get("phoneSites", []))  # kept for good: a stale page can't clear it
+        from_phone |= {s["search"] for s in stored if s.get("fromPhone")}
+        raw = body.get("sites") if isinstance(body.get("sites"), list) else []
+        from_phone |= {str(s.get("search", "")).strip(" \t\r\n")[:500] for s in raw if isinstance(s, dict) and s.get("fromPhone") is True}
         for site in sites:
             if self.on_lan and site["search"] not in known:
                 # From a phone: only sites on the internet, and searched with the same checks from now on,
@@ -3544,6 +3566,8 @@ class Handler(BaseHTTPRequestHandler):
                 from_phone.add(site["search"])
             if site["search"] in from_phone:
                 site["fromPhone"] = True
+        keep = sorted(from_phone)[-200:]
+        update_settings(lambda data: data.update(phoneSites=keep))
         update_settings(lambda data: data.update(sites=sites))
         self.send(200, {"sites": sites})
 

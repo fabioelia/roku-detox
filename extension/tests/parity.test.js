@@ -174,6 +174,10 @@ test("clean_scenes, clean_sites, clean_favorites, clean_services", () => {
     [[{ id: "s1", name: "Archive", search: "https://archive.org/search?query={q}" }]],
     [[{ id: "s1", name: "No q", search: "https://example.com/search" }]], [[{ id: "s1", name: "Bad", search: "ftp://x/{q}" }]],
     [[{ id: "s1", name: "Host", search: "https://{q}.example.com/" }]], [[{ id: "s1", name: "Port", search: "https://example.com:{q}/" }]],
+    ...["https:{q}.example.com/", "https:/{q}.example.com/", "https:\\\\{q}.example.com/", "https:///{q}.example.com/",
+      "https:////{q}.example.com/", "https:\\/{q}.example.com/", "https:/\t/{q}.example.com/", "\u0001https://{q}.example.com/",
+      "h\ttps://example.com/{q}", " https://example.com/s?q={q} ", "https://user:{q}@example.com/", "https://example.com/a b?q={q}"]
+      .map((search) => [[{ id: "s1", name: "Odd", search }]]),
     [[{ id: "s1", name: "", search: "https://x.com/{q}" }]], [Array(21).fill({ id: "s", name: "x", search: "https://x.com/{q}" })],
   ]);
   same("clean_favorites", store.cleanFavorites, [[["12", 837, "12", "tvinput.hdmi1"]], [["bad id!"]], ["x"]]);
