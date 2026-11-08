@@ -93,6 +93,8 @@ export function parseTarget(value) {
   if (!isPrivateIPv4(host)) throw new ValueError("That address isn't on your home network.");
   const port = /^\d+$/.test(portText) ? Number(portText) : ECP_PORT;
   if (!(port > 0 && port < 65536)) throw new ValueError("That port number isn't valid.");
+  // Other ports only for a pretend TV on this computer.
+  if (port !== ECP_PORT && !host.startsWith("127.")) throw new ValueError("Roku TVs answer on port 8060. Leave the port off.");
   return { host, port };
 }
 

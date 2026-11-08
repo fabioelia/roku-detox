@@ -150,17 +150,29 @@ function cleanDays(raw) {
   return days.length ? days : [...BEDTIME_DAYS];
 }
 
-/** A day's key: "mon" for a Monday (getDay() counts from Sunday). */
-export const dayKey = (moment) => BEDTIME_DAYS[(moment.getDay() + 6) % 7];
+/** Monday = 0, like Python's weekday() (getDay() counts from Sunday). */
+const weekday = (moment) => (moment.getDay() + 6) % 7;
+
+/** The night a bedtime starting on weekday belongs to: a start before noon counts as the night before (night_of). */
+export function nightOf(day, start) {
+  return BEDTIME_DAYS[(((day - (start < "12:00" ? 1 : 0)) % 7) + 7) % 7];
+}
 
 /**
- * Inside the bedtime hours of a night it applies to (bedtime_now). A night counts from its start time,
- * so with 21:00-06:30 on school nights, Thursday night runs into Friday morning, but Friday night is free.
+ * Inside the bedtime hours of a night it applies to (bedtime_now). With 21:00-06:30 on school nights,
+ * Thursday night runs into Friday morning, but Friday night is free. Weekday arithmetic, not date maths,
+ * so a 23- or 25-hour day around a clock change doesn't move it.
  */
 export function bedtimeNow(rule, moment) {
   if (!inWindow(rule.start, rule.end, moment)) return false;
-  const started = rule.start <= rule.end || localClock(moment) >= rule.start ? moment : new Date(moment.getTime() - 86400000);
-  return (rule.days || BEDTIME_DAYS).includes(dayKey(started));
+  const startedYesterday = rule.start > rule.end && localClock(moment) < rule.start;
+  return (rule.days || BEDTIME_DAYS).includes(nightOf(weekday(moment) - (startedYesterday ? 1 : 0), rule.start));
+}
+
+/** Whether the next bedtime (today's start if still ahead, else tomorrow's) is on one of its nights (next_bedtime_on). */
+export function nextBedtimeOn(rule, moment) {
+  const ahead = localClock(moment) >= rule.start ? 1 : 0;
+  return (rule.days || BEDTIME_DAYS).includes(nightOf(weekday(moment) + ahead, rule.start));
 }
 
 export function inWindow(start, end, moment) {

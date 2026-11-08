@@ -73,7 +73,9 @@ Rules stop when Chrome is closed. The Mac program keeps them running all the tim
 ## Use it from a web page
 
 The page can also run from `http://localhost` or `http://127.0.0.1` (any port) and use this
-extension instead of the program. Only those addresses can talk to it (`externally_connectable`).
+extension instead of the program, once "Let pages on this computer use it" is turned on in the extension's
+settings (it's off by default: any local web app could otherwise work the TV). Only those addresses can talk
+to it (`externally_connectable`), and even then they can't add sites or use Look closer.
 The page has to know the extension's id: the settings page (right-click the toolbar button,
 Options) shows it, with the one line to paste into that page's browser console. Published copies
 of the page have the id built into `<meta name="roku-detox-extension">`;

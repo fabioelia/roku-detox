@@ -45,6 +45,12 @@ $("#tv-clear").addEventListener("click", async () => {
   loadTv();
 });
 
+chrome.storage.local.get("allowLocalPages").then(({ allowLocalPages }) => { $("#allow-local").checked = allowLocalPages === true; });
+$("#allow-local").addEventListener("change", async (e) => {
+  await chrome.storage.local.set({ allowLocalPages: e.target.checked });
+  setStatus($("#id-status"), e.target.checked ? "Pages on this computer can use the extension now." : "Only the extension's own pages can use it now.", "ok");
+});
+
 const id = chrome.runtime.id;
 $("#ext-id").textContent = id;
 $("#snippet").textContent = `localStorage.setItem("detox.extensionId", "${id}")`;

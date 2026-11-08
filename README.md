@@ -78,7 +78,8 @@ The page has six menus:
 bookmark from the TV app menu. YouTube and Netflix links open in their own apps. For other pages the Mac
 looks for the video file (direct links, `<video>` tags, page metadata) and plays it in Detox Home. If
 [yt-dlp](https://github.com/yt-dlp/yt-dlp) is installed it's used for sites the built-in finder can't read.
-Videos locked by DRM (Netflix, Disney+ and most paid services) can't be sent this way.
+Videos locked by DRM (Netflix, Disney+ and most paid services) can't be sent this way. Links sent from a phone
+or another device can't point at addresses on your home network (only links typed on this computer can).
 
 - Finds Roku TVs on the network automatically, or connect by IP address.
 - Shows every channel with its icon, labeled: free-with-ads, made by Roku, or part of the TV (inputs).

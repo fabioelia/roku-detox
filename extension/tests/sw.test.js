@@ -31,6 +31,9 @@ test("the worker registers its listeners and sets up the alarm and the TV header
 
 test("pages get answers; other senders don't", async () => {
   assert.deepEqual(await fromPage({ type: "ping" }), { ok: true, version: "1.0.0", engine: "extension" });
+  // Pages on this computer only after "Let pages on this computer use it" is turned on.
+  assert.equal((await fromSite({ type: "ping" }, "http://localhost:8642")).status, 403);
+  await chrome.storage.local.set({ allowLocalPages: true });
   assert.deepEqual(await fromSite({ type: "ping" }, "http://localhost:8642"), { ok: true, version: "1.0.0", engine: "extension" });
   assert.deepEqual(await fromSite({ type: "ping" }, "http://127.0.0.1:8642"), { ok: true, version: "1.0.0", engine: "extension" });
   assert.deepEqual(await fromSite({ type: "ping" }, "https://evil.example.com"), { status: 403, data: { error: "Forbidden." } });

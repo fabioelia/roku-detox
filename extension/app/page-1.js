@@ -65,8 +65,7 @@ const PIN_IDLE_MS = 60 * 60 * 1000;
 function pinGet() {
   try {
     const saved = JSON.parse(sessionStorage.getItem(PIN_KEY) || "null");
-    if (!saved || typeof saved.pin !== "string" || !(Date.now() - saved.at < PIN_IDLE_MS)) return "";
-    sessionStorage.setItem(PIN_KEY, JSON.stringify({ pin: saved.pin, at: Date.now() }));   // in use: keep it
+    if (!saved || typeof saved.pin !== "string" || !/^[0-9]{4,8}$/.test(saved.pin) || !(Date.now() - saved.at < PIN_IDLE_MS)) return "";
     return saved.pin;
   } catch { return ""; }
 }
@@ -136,8 +135,7 @@ const ServerEngine = {
     let res;
     try {
       res = await fetch(path, options);
-    } catch (err) {
-      if (pin && err instanceof TypeError && pinGet() === pin) pinSet("");   // a PIN the browser can't send
+    } catch {
       throw new Error("This page lost touch with the Roku Detox program. Is it still running?");
     }
     const data = await res.json().catch(() => ({}));
@@ -151,6 +149,7 @@ const ServerEngine = {
       if (err.pin && pin && pinGet() === pin) pinSet("");   // the saved one is wrong (or was changed on the computer)
       throw err;
     }
+    if (pin && pinGet() === pin) pinSet(pin);   // a change went through with it: the hour starts again
     return data;
   },
   iconSrc(tv, id) { return `/api/icon?tv=${enc(tv)}&id=${enc(id)}`; },
@@ -2360,7 +2359,9 @@ function bedtimeNote() {
   const start = new Date(now);
   start.setHours(h, m, 0, 0);
   if (start < now) start.setDate(start.getDate() + 1);
-  if (!(b.days || ALL_NIGHTS).includes(nightOf(start))) return "";   // not one of its nights
+  if (b.start === b.end) return "";
+  const night = ALL_NIGHTS[(((start.getDay() + 6) % 7 - (b.start < "12:00" ? 1 : 0)) + 7) % 7];   // an early start is the night before
+  if (!(b.days || ALL_NIGHTS).includes(night)) return "";   // not one of its nights
   const minutes = (start - now) / 60000;
   return minutes <= 60 ? `bedtime at ${formatClock(b.start)}` : "";
 }
@@ -3499,7 +3500,6 @@ const ALL_NIGHTS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
 const SCHOOL_NIGHTS = ["mon", "tue", "wed", "thu", "sun"];
 const NIGHT_NAMES = [["sun", "Sun", "Sunday"], ["mon", "Mon", "Monday"], ["tue", "Tue", "Tuesday"], ["wed", "Wed", "Wednesday"],
   ["thu", "Thu", "Thursday"], ["fri", "Fri", "Friday"], ["sat", "Sat", "Saturday"]];
-const nightOf = (date) => ALL_NIGHTS[(date.getDay() + 6) % 7];
 function nightsText(days) {
   const set = new Set(days);
   if (ALL_NIGHTS.every((d) => set.has(d))) return "Every night.";
@@ -4038,7 +4038,10 @@ function takeDoLink() {
   let phrase = null;
   try { phrase = decodeURIComponent(match[1]).trim().slice(0, 120) || null; } catch { return null; }
   // A link to play is never run from an address: any site could open one. ("Send to TV" asks first.)
-  return phrase && /^\s*(https?:|www\.)/i.test(phrase) ? null : phrase;
+  if (phrase && /^\s*(https?:|www\.)/i.test(phrase)) return null;
+  // Nor pause the rules: on this computer that needs no PIN, and any site could open the link.
+  if (phrase && /^(pause( the)? rules|rules off|unpause rules|resume rules|rules on)$/i.test(phrase.replace(/\s+/g, " ").trim())) return null;
+  return phrase;
 }
 if (/^#do=/.test(location.hash)) {
   // A saved button should open in the browser (already paired there), not as a separate home-screen app.

@@ -166,7 +166,8 @@ const POST_ROUTES = {
     const target = c.target();
     return cast(target, cut(pyStr(c.body.url ?? ""), 4000),
       cut(truthy(c.body.video) ? pyStr(c.body.video) : "", 4000) || null,
-      cut(truthy(c.body.title) ? pyStr(c.body.title) : "", 200) || null);
+      cut(truthy(c.body.title) ? pyStr(c.body.title) : "", 200) || null,
+      { publicOnly: !c.internal }); // from a phone (relay) or a web page: no home-network addresses
   },
   "/api/watch": async (c) => {
     const target = c.target();
@@ -202,7 +203,11 @@ const POST_ROUTES = {
   },
   "/api/rules": async (c) => {
     const address = c.address();
-    await saveRules(address, keepOwnedFields(cleanRules(c.body.rules), await tvRules(address)));
+    const stored = await tvRules(address);
+    const rules = keepOwnedFields(cleanRules(c.body.rules), stored);
+    const rawBedtime = isPlainObject(c.body.rules) ? c.body.rules.bedtime : null;
+    if (isPlainObject(rawBedtime) && !("days" in rawBedtime)) rules.bedtime.days = stored.bedtime.days; // a page from before bedtime nights
+    await saveRules(address, rules);
     return rulesStatus(address);
   },
   "/api/rules/extend": async (c) => {
@@ -280,7 +285,7 @@ function readQuery(rawPath, query) {
 }
 
 /** One API request: {method, path, query, body} -> {status, data}. */
-export async function apiRequest({ method = "GET", path, query, body } = {}) {
+export async function apiRequest({ method = "GET", path, query, body } = {}, { internal = true } = {}) {
   try {
     if (method !== "GET" && method !== "POST") return { status: 404, data: { error: "Not found." } };
     if (typeof path !== "string" || path.length > 4500 || !path.startsWith("/")) return { status: 400, data: { error: "Bad request." } };
@@ -306,7 +311,7 @@ export async function apiRequest({ method = "GET", path, query, body } = {}) {
       used = displayAddress(t);
       return t;
     };
-    const context = { query: q, body: b, target, address: () => displayAddress(target()) };
+    const context = { query: q, body: b, target, address: () => displayAddress(target()), internal };
     const data = await keepAlive(handler(context));
     // Actions pick "the TV" for the toolbar, shortcuts and address bar; the page's polling (GETs) only
     // fills it in when there's none, so switching TVs in the popup sticks while the page is open.
@@ -333,13 +338,23 @@ async function iconMessage(msg) {
  * Every message the extension answers. internal = from this extension's own pages
  * (popup, options, side panel, app tab); external = from an allowed web page.
  */
-export async function handleMessage(msg, { internal = false } = {}) {
+// What a web page (onMessageExternal) may not do even when allowed: save sites or open pages in hidden tabs
+// ("Look closer" reads pages with your sign-ins, and a saved "deep" site would do it on every search).
+function isNotForWebPages(msg) {
+  const route = String(msg.path || "").split("?")[0];
+  return route === "/api/sites/look" || route === "/api/sites/search" || (route === "/api/sites" && msg.method === "POST");
+}
+
+export async function handleMessage(msg, { internal = false, web = false } = {}) {
   if (!isPlainObject(msg) || typeof msg.type !== "string") return { status: 400, data: { error: "Bad request." } };
   switch (msg.type) {
     case "ping":
       return { ok: true, version: VERSION, engine: "extension" };
     case "api":
-      return apiRequest(msg);
+      if (web && isNotForWebPages(msg)) {
+        return { status: 403, data: { error: "Do this in the extension's own page." } };
+      }
+      return apiRequest(msg, { internal });
     case "icon":
       return iconMessage(msg);
     case "sniffed":

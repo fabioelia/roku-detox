@@ -241,7 +241,27 @@ function basename(path) {
  * Order: the page's own player address (sent by the page), media this browser played on
  * that page, a direct link, the page's HTML, one level of embedded frames.
  */
-export async function findVideo(pageUrl, direct = null, sniffed = []) {
+const LOCAL_LINK_ERROR = "Links to addresses on your home network can only be sent from this computer.";
+
+/**
+ * A name or address on this computer or the home network (localhost, *.local, 10.x, 192.168.x, ...).
+ * The browser can't look names up, so this checks what the link says; the program also checks where
+ * names point (is_public_host).
+ */
+export function isLocalHost(host) {
+  const h = String(host || "").toLowerCase().replace(/^\[|\]$/g, "").replace(/\.$/, "");
+  if (!h || h === "localhost" || /\.(localhost|local|lan|home|internal|arpa)$/.test(h) || !h.includes(".") && !h.includes(":")) return true;
+  const v4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(h);
+  if (v4) {
+    const [a, b] = [Number(v4[1]), Number(v4[2])];
+    return a === 0 || a === 10 || a === 127 || (a === 100 && b >= 64 && b <= 127) || (a === 169 && b === 254)
+      || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || a >= 224;
+  }
+  if (h.includes(":")) return h === "::1" || h === "::" || /^f[cd]/.test(h) || /^fe[89ab]/.test(h) || h.startsWith("::ffff:");
+  return false;
+}
+
+export async function findVideo(pageUrl, direct = null, sniffed = [], { publicOnly = false } = {}) {
   if (direct && /^https?:\/\//.test(direct) && direct.length < 4000 && !isAdUrl(direct)) {
     return { url: direct, title: "", format: streamFormat(direct), how: "the page's video player", referer: pageUrl };
   }
@@ -256,8 +276,10 @@ export async function findVideo(pageUrl, direct = null, sniffed = []) {
   if (PLAYABLE_RE.test(parsed.path)) {
     return { url: pageUrl, title: basename(parsed.path), format: streamFormat(pageUrl), how: "a direct video link", referer: "" };
   }
+  if (publicOnly && isLocalHost(parsed.host)) throw new ValueError(LOCAL_LINK_ERROR);
 
   const fetched = await fetchPage(pageUrl);
+  if (publicOnly && isLocalHost(urlParts(fetched.finalUrl).host)) throw new ValueError(LOCAL_LINK_ERROR);
   const { finalUrl, page } = fetched;
   if (page === null) {
     return { url: finalUrl, title: "", format: fetched.ctype.includes("mpegurl") ? "hls" : "mp4", how: "a direct video link", referer: "" };
@@ -273,6 +295,7 @@ export async function findVideo(pageUrl, direct = null, sniffed = []) {
     if (absolute && /^https?:\/\//.test(absolute) && !isAdUrl(absolute) && !frames.includes(absolute)) frames.push(absolute);
   }
   for (const frame of frames.slice(0, 3)) {
+    if (publicOnly && isLocalHost(urlParts(frame).host)) continue;
     let framed;
     try {
       framed = await fetchPage(frame, { referer: finalUrl });
@@ -295,14 +318,14 @@ export async function findVideo(pageUrl, direct = null, sniffed = []) {
 }
 
 /** Play a link on the TV: YouTube/Netflix in their apps, anything else in Detox Home. */
-export async function cast(target, pageUrl, direct = null, title = null) {
+export async function cast(target, pageUrl, direct = null, title = null, { publicOnly = false } = {}) {
   const link = parseLink(pageUrl); // YouTube and Netflix have their own apps
   if (link) {
     await launch(target, link.appId, link.params);
     return { app: link.app, title: title || "" };
   }
   await loadSniffed();
-  const found = await findVideo(pageUrl, direct, sniffedForUrl(pageUrl));
+  const found = await findVideo(pageUrl, direct, sniffedForUrl(pageUrl), { publicOnly });
   if (found.format === "app") {
     const embedded = parseLink(found.url);
     await launch(target, embedded.appId, embedded.params);

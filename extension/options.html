@@ -80,7 +80,9 @@
 
   <section class="card" aria-labelledby="id-heading">
     <h2 id="id-heading">Use the extension from a web page</h2>
-    <p>The Roku Detox page can also run from <code>http://localhost</code> or <code>http://127.0.0.1</code> and use this extension to reach the TV. The page needs this extension's id to find it:</p>
+    <p>The Roku Detox page can also run from <code>http://localhost</code> or <code>http://127.0.0.1</code> and use this extension to reach the TV. It's off unless you turn it on, because any web app running on this computer could then work your TV and change rules.</p>
+    <label class="row"><input type="checkbox" id="allow-local"> Let pages on this computer use it</label>
+    <p class="muted small">Even then, those pages can't add sites or use Look closer, which reads pages in a hidden tab with your sign-ins. The page needs this extension's id to find it:</p>
     <div class="row">
       <code class="id" id="ext-id"></code>
       <button class="btn" type="button" id="copy-id">Copy id</button>

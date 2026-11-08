@@ -219,7 +219,18 @@ test("rules helpers", () => {
     "2026-11-08 02:00", "2026-11-08 22:00", "2026-11-09 03:00", "2026-11-09 12:00", "2026-11-06 06:30"];
   const daytime = { start: "13:00", end: "15:00", days: ["sat"] };
   const cases = [...moments.map((m) => [school, m]), [daytime, "2026-11-07 14:00"], [daytime, "2026-11-08 14:00"], [{ start: "21:00", end: "06:30" }, "2026-11-06 23:00"]];
+  // A start after midnight (or a morning window) belongs to the night before: 00:30 on school nights runs
+  // early Monday to early Friday; a 07:00 "before school" window, Monday to Friday mornings.
+  const late = { start: "00:30", end: "06:00", days: school.days };
+  const morning = { start: "07:00", end: "08:00", days: school.days };
+  cases.push([late, "2026-11-06 01:00"], [late, "2026-11-07 01:00"], [late, "2026-11-08 01:00"], [late, "2026-11-09 01:00"],
+    [morning, "2026-11-09 07:30"], [morning, "2026-11-07 07:30"], [morning, "2026-11-06 07:30"]);
   same("bedtime_now", (rule, when) => rules.bedtimeNow(rule, new Date(when.replace(" ", "T") + ":00")), cases);
+  assert.deepEqual(cases.slice(-7).map(([rule, when]) => rules.bedtimeNow(rule, new Date(when.replace(" ", "T") + ":00"))),
+    [true, false, false, true, true, false, true]);
+  same("next_bedtime_on", (rule, when) => rules.nextBedtimeOn(rule, new Date(when.replace(" ", "T") + ":00")), [
+    [late, "2026-11-05 23:00"], [late, "2026-11-07 23:00"], [school, "2026-11-06 20:00"], [school, "2026-11-08 20:00"],
+    [daytime, "2026-11-07 16:00"], [daytime, "2026-11-07 12:00"]]);
   assert.deepEqual(moments.map((m) => rules.bedtimeNow(school, new Date(m.replace(" ", "T") + ":00"))),
     [true, true, false, false, false, false, true, true, false, false]);
   same("is_home", rules.isHome, [[{ id: "", name: "Roku" }], [{ id: "562859", name: "Roku Dynamic Menu" }], [{ id: "12", name: "Netflix" }], [{ id: "x", name: " HOME " }]]);
@@ -291,4 +302,18 @@ test("TV answers: device-info, apps, active-app, media-player, check", () => {
     same(fn, (answers) => tv(answers)[fn](), cases.map((c) => [c]));
   }
   same("check", ecp.check, [[200, ""], [403, "ECP command not allowed in Limited mode."], [200, "Not Allowed"], [404, ""], [500, "x"], [401, ""]]);
+});
+
+test("bedtime nights hold across a clock change (run in New York and Berlin time)", () => {
+  const script = `const r = await import(${JSON.stringify(new URL("../engine/rules.js", import.meta.url).href)});
+const school = { start: "21:00", end: "06:30", days: ["mon", "tue", "wed", "thu", "sun"] };
+const weekend = { start: "21:00", end: "06:30", days: ["fri", "sat"] };
+const at = (s) => new Date(s);
+console.log(JSON.stringify([r.bedtimeNow(school, at("2026-03-09T00:30:00")), r.bedtimeNow(weekend, at("2026-03-09T00:30:00")),
+  r.bedtimeNow(school, at("2026-03-30T00:30:00")), r.bedtimeNow(school, at("2026-11-02T00:30:00"))]));`;
+  for (const TZ of ["America/New_York", "Europe/Berlin"]) {
+    const out = execFileSync(process.execPath, ["--input-type=module", "-e", script], { encoding: "utf8", env: { ...process.env, TZ } });
+    // Sunday night into Monday morning is a school night; the weekend rule is off then.
+    assert.deepEqual(JSON.parse(out), [true, false, true, true], TZ);
+  }
 });

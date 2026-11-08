@@ -318,6 +318,12 @@ function setUpQuickRemote() {
     if (!tv || !text) return;
     input.disabled = true;
     try {
+      if (/^https?:\/\/\S+$/i.test(text)) {   // a pasted link plays, like the page's Send box
+        const result = await api("POST", "/api/link", { body: { tv, url: text, video: "", title: "" } });
+        setStatus(`Playing on the TV${result.app ? ` in ${result.app}` : ""}.`, "ok");
+        input.value = "";
+        return;
+      }
       const { done } = await api("POST", "/api/do", { body: { tv, do: text } });
       setStatus(done, "ok");
       input.value = "";

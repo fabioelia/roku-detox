@@ -33,7 +33,7 @@ import urllib.request
 import webbrowser
 import zipfile
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from xml.etree import ElementTree as ET
 
@@ -120,6 +120,8 @@ def parse_target(value):
     port = int(port) if port.isdigit() else ECP_PORT
     if not 0 < port < 65536:
         raise ValueError("That port number isn't valid.")
+    if port != ECP_PORT and not ip.is_loopback:  # other ports only for a pretend TV on this computer
+        raise ValueError("Roku TVs answer on port 8060. Leave the port off.")
     return str(ip), port
 
 
@@ -1377,13 +1379,26 @@ def clean_days(raw):
     return [day for day in BEDTIME_DAYS if day in raw] or list(BEDTIME_DAYS)
 
 
+def night_of(weekday, start):
+    """The night (day key) a bedtime starting on weekday (0 = Monday) belongs to: a start before noon
+    (00:30, or a morning window) counts as the night before."""
+    return BEDTIME_DAYS[(weekday - (1 if start < "12:00" else 0)) % 7]
+
+
 def bedtime_now(rule, moment):
-    """Inside the bedtime hours of a night it applies to. A night counts from its start time, so with
-    21:00-06:30 on school nights (Sun-Thu), Thursday night runs into Friday morning, but Friday night is free."""
+    """Inside the bedtime hours of a night it applies to. With 21:00-06:30 on school nights (Sun-Thu),
+    Thursday night runs into Friday morning, but Friday night is free; 00:30-06:00 on school nights covers
+    early Monday to early Friday."""
     if not in_window(rule["start"], rule["end"], moment):
         return False
-    started = moment if rule["start"] <= rule["end"] or moment.strftime("%H:%M") >= rule["start"] else moment - timedelta(days=1)
-    return BEDTIME_DAYS[started.weekday()] in rule.get("days", BEDTIME_DAYS)
+    started_yesterday = rule["start"] > rule["end"] and moment.strftime("%H:%M") < rule["start"]
+    return night_of(moment.weekday() - started_yesterday, rule["start"]) in rule.get("days", BEDTIME_DAYS)
+
+
+def next_bedtime_on(rule, moment):
+    """Whether the next bedtime (today's start if it's still ahead, else tomorrow's) is on one of its nights."""
+    ahead = moment.strftime("%H:%M") >= rule["start"]
+    return night_of(moment.weekday() + ahead, rule["start"]) in rule.get("days", BEDTIME_DAYS)
 
 
 def in_window(start, end, moment):
@@ -1993,11 +2008,11 @@ def say_time_left(target):
                              for app_id, minutes in rules["limits"].items()):
         parts.append(f"{name}: time's up for today." if left <= 0 else f"{name}: {say_duration(left)} left.")
     bedtime = rules["bedtime"]
-    if bedtime["enabled"]:
+    if bedtime["enabled"] and bedtime["start"] != bedtime["end"]:
         later = bedtime.get("extendUntil", 0) - time.time()
         if not status["bedtimeNow"]:
-            tonight = BEDTIME_DAYS[datetime.now().weekday()] in bedtime.get("days", BEDTIME_DAYS)
-            parts.append(f"Bedtime is at {say_clock(bedtime['start'])}." if tonight else "No bedtime tonight.")
+            parts.append(f"Bedtime is at {say_clock(bedtime['start'])}." if next_bedtime_on(bedtime, datetime.now())
+                         else "No bedtime tonight.")
         else:
             parts.append(f"Bedtime is put off for {say_duration(later)} more." if later > 0 else "It's bedtime.")
     return " ".join(parts) or "There's no daily limit or bedtime set."
@@ -2614,17 +2629,49 @@ def is_ad_url(url):
     return any(marker in host for marker in AD_HOSTS) or bool(AD_PATH_RE.search(parsed.path))
 
 
-def fetch_page(url, referer=None, limit=3_000_000):
+LOCAL_LINK_ERROR = "Links to addresses on your home network can only be sent from this computer."
+
+
+def is_public_host(host):
+    """Every address the name points to is on the internet (not this computer or the home network)."""
+    if not host:
+        return False
+    try:
+        infos = socket.getaddrinfo(host, None)
+    except (OSError, UnicodeError, ValueError):
+        return True  # it won't open anyway; let the fetch say so
+    try:
+        return all(ipaddress.ip_address(info[4][0].split("%")[0]).is_global for info in infos)
+    except ValueError:
+        return False
+
+
+class PublicRedirects(urllib.request.HTTPRedirectHandler):
+    """Follow redirects only to internet addresses (for links sent from other devices)."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        host = urllib.parse.urlparse(newurl).hostname
+        if not host or not is_public_host(host):
+            raise ValueError(LOCAL_LINK_ERROR)
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+def fetch_page(url, referer=None, limit=3_000_000, public_only=False):
     """Read a page's HTML only: no scripts, images or ads are loaded.
 
     Returns (final url, html), or (final url, None, content type) for a video file.
+    public_only: the link came from another device, so this computer won't open addresses on the home
+    network (or itself) for it, redirects included.
     """
     headers = {"User-Agent": BROWSER_UA, "Accept": "text/html,*/*"}
     if referer:
         headers["Referer"] = referer
+    if public_only and not is_public_host(urllib.parse.urlparse(url).hostname or ""):
+        raise ValueError(LOCAL_LINK_ERROR)
     req = urllib.request.Request(url, headers=headers)
+    opener = urllib.request.build_opener(PublicRedirects()) if public_only else urllib.request.build_opener()
     try:
-        with urllib.request.urlopen(req, timeout=12) as resp:
+        with opener.open(req, timeout=12) as resp:
             ctype = resp.headers.get("Content-Type", "")
             final_url = resp.geturl()
             if ctype.startswith("video/") or "mpegurl" in ctype:
@@ -2686,7 +2733,7 @@ def pick_video(candidates):
     return {"url": best, "format": stream_format(best), "how": "the page"}
 
 
-def find_video(page_url, direct=None):
+def find_video(page_url, direct=None, public_only=False):
     """Find a playable video file for a web page. Returns {url, title, format, how, referer}."""
     if direct and direct.startswith(("http://", "https://")) and len(direct) < 4000 and not is_ad_url(direct):
         return {"url": direct, "title": "", "format": stream_format(direct), "how": "the page's video player", "referer": page_url}
@@ -2696,7 +2743,7 @@ def find_video(page_url, direct=None):
     if PLAYABLE_RE.search(url.path):
         return {"url": page_url, "title": os.path.basename(url.path), "format": stream_format(page_url), "how": "a direct video link", "referer": ""}
 
-    fetched = fetch_page(page_url)
+    fetched = fetch_page(page_url, public_only=public_only)
     final_url, page = fetched[0], fetched[1]
     if page is None:
         ctype = fetched[2]
@@ -2715,8 +2762,8 @@ def find_video(page_url, direct=None):
             frames.append(absolute)
     for frame in frames[:3]:
         try:
-            frame_url, frame_page = fetch_page(frame, referer=final_url)[:2]
-        except TVError:
+            frame_url, frame_page = fetch_page(frame, referer=final_url, public_only=public_only)[:2]
+        except (TVError, ValueError):
             continue
         if frame_page is None:
             return {"url": frame_url, "title": title, "format": stream_format(frame_url), "how": "the page's video player", "referer": final_url}
@@ -3100,12 +3147,12 @@ def search_sites(query):
         return list(pool.map(one, sites))
 
 
-def cast(target, page_url, direct=None, title=None):
+def cast(target, page_url, direct=None, title=None, public_only=False):
     link = parse_link(page_url)
     if link:  # YouTube and Netflix have their own apps
         launch(target, link["appId"], link["params"])
         return {"app": link["app"], "title": title or ""}
-    found = find_video(page_url, direct)
+    found = find_video(page_url, direct, public_only=public_only)
     if found["format"] == "app":
         link = parse_link(found["url"])
         launch(target, link["appId"], link["params"])
@@ -3267,6 +3314,13 @@ class Handler(BaseHTTPRequestHandler):
             return self.run(lambda: self.from_tv_app(path, {}, body))
         if path in MAC_ONLY_PATHS and self.on_lan:  # say so first, instead of asking for a PIN that won't help
             return self.fail(403, "Do this on your Mac.")
+        if path == "/api/pair":
+            return self.run(lambda: self.pair(body))
+        # Pairing first, then the PIN: a device that isn't let in can't use the PIN check to guess it.
+        if not self.paired(allow_key=path == "/api/do"):
+            if shortcut:
+                return self.fail(401, "That Shortcuts key doesn't work anymore. Make a new one in Roku Detox on your Mac (Phone menu).")
+            return self.fail(401, "Enter the code from your Mac first.", pair=True)
         pausing = path == "/api/do" and fold_words(str(body.get("do", "")))[:120] in PAUSE_RULE_PHRASES
         if path.startswith(PIN_PATHS) or pausing:
             pin = self.pin_check()
@@ -3275,12 +3329,7 @@ class Handler(BaseHTTPRequestHandler):
             if pin != "ok":
                 return self.fail(403, "Enter the household PIN to pause the rules." if pausing
                                  else "Enter the household PIN to change this.", pin=True)
-        if path == "/api/pair":
-            return self.run(lambda: self.pair(body))
-        if not self.paired(allow_key=path == "/api/do"):
-            if shortcut:
-                return self.fail(401, "That Shortcuts key doesn't work anymore. Make a new one in Roku Detox on your Mac (Phone menu).")
-            return self.fail(401, "Enter the code from your Mac first.", pair=True)
+        key_ok = bool(shortcut) and self.server.phone.is_shortcut_key(shortcut)
 
         def target():
             return parse_target(body.get("tv"))
@@ -3308,7 +3357,7 @@ class Handler(BaseHTTPRequestHandler):
             "/api/wake": lambda: self.send(200, wake_tv(target())),
             "/api/do": lambda: self.send(200, {"done": do_phrase(
                 parse_target(body["tv"]) if body.get("tv") else default_tv(), str(body.get("do", "")),
-                strict=body.get("strict") is True, links=bool(shortcut))}),
+                strict=body.get("strict") is True, links=key_ok)}),
             "/api/phone/key": lambda: self.mac_only(lambda: self.send(200, {
                 "key": self.server.phone.new_key(), "url": f"{self.server.phone.url}/api/do"})),
             "/api/rules": lambda: self.save_rules(body),
@@ -3380,7 +3429,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def play_link(self, body):
         result = cast(parse_target(body.get("tv")), str(body.get("url", ""))[:4000],
-                      str(body.get("video") or "")[:4000] or None, str(body.get("title") or "")[:200] or None)
+                      str(body.get("video") or "")[:4000] or None, str(body.get("title") or "")[:200] or None,
+                      public_only=self.on_lan)  # a phone's link can't make this computer open home-network addresses
         self.send(200, result)
 
     def find(self, query):
@@ -3424,7 +3474,8 @@ class Handler(BaseHTTPRequestHandler):
     def pin_check(self):
         """"ok", "missing", "wrong" or "locked". The Mac itself never needs the PIN; others do when one is
         set. Five wrong tries from one device within 10 minutes lock it out for the rest of those minutes,
-        so the PIN can't simply be guessed (there are only 10,000 four-digit ones)."""
+        so the PIN can't simply be guessed (there are only 10,000 four-digit ones); 20 wrong tries from all
+        devices together lock out every other device too. The Mac itself is never locked out."""
         pin = household()["pin"]
         if not self.on_lan or not pin:
             return "ok"
@@ -3433,11 +3484,16 @@ class Handler(BaseHTTPRequestHandler):
             return "missing"
         device, now = self.client_address[0], time.time()
         with PIN_TRIES_LOCK:
-            tries = [t for t in PIN_TRIES.get(device, []) if now - t < 600]
-            PIN_TRIES[device] = tries
-            if len(tries) >= 5:
+            for key in list(PIN_TRIES):
+                PIN_TRIES[key] = [t for t in PIN_TRIES[key] if now - t < 600]
+                if not PIN_TRIES[key]:
+                    del PIN_TRIES[key]
+            # Five per device, and 20 for all of them together (a device can change its address).
+            if len(PIN_TRIES.get(device, [])) >= 5 or sum(map(len, PIN_TRIES.values())) >= 20:
                 return "locked"
         if hmac.compare_digest(token_hash(given), pin):
+            with PIN_TRIES_LOCK:
+                PIN_TRIES.pop(device, None)
             return "ok"
         with PIN_TRIES_LOCK:
             PIN_TRIES.setdefault(device, []).append(now)
@@ -3495,7 +3551,12 @@ class Handler(BaseHTTPRequestHandler):
 
     def save_rules(self, body):
         address = display_address(parse_target(body.get("tv")))
-        save_rules(address, keep_owned_fields(clean_rules(body.get("rules")), tv_rules(address)))
+        stored = tv_rules(address)
+        rules = keep_owned_fields(clean_rules(body.get("rules")), stored)
+        raw_bedtime = body["rules"].get("bedtime") if isinstance(body.get("rules"), dict) else None
+        if isinstance(raw_bedtime, dict) and "days" not in raw_bedtime:  # a page from before bedtime nights
+            rules["bedtime"]["days"] = stored["bedtime"].get("days", list(BEDTIME_DAYS))
+        save_rules(address, rules)
         self.send(200, WATCHER.status(address))
 
     def rules_pause(self, body):

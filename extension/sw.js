@@ -41,12 +41,20 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   return reply(handleMessage(msg, { internal: true }), sendResponse);
 });
 
+// Pages on this computer (http://localhost, any port) may use the extension only after it's turned on in
+// its settings: any local web app or dev server could otherwise work the TV and change rules.
 chrome.runtime.onMessageExternal.addListener((msg, sender, sendResponse) => {
   if (!fromAllowedSite(sender)) {
     sendResponse({ status: 403, data: { error: "Forbidden." } });
     return false;
   }
-  return reply(handleMessage(msg, { internal: false }), sendResponse);
+  return reply((async () => {
+    const { allowLocalPages } = await chrome.storage.local.get("allowLocalPages");
+    if (allowLocalPages !== true) {
+      return { status: 403, data: { error: "Turn on \"Let pages on this computer use it\" in the Roku Detox extension's settings first." } };
+    }
+    return handleMessage(msg, { internal: false, web: true });
+  })(), sendResponse);
 });
 
 chrome.alarms.onAlarm.addListener((alarm) => {
