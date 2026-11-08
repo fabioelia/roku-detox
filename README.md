@@ -171,6 +171,26 @@ The lite page's TV app menu walks through the same steps. With the program or th
 does it for you: type the developer password and press Install (or Update). Or build the file yourself:
 `python3 roku_detox.py --export-tv-app detox-home.zip`.
 
+### Home Assistant and other automations
+
+Anything that can send a web request can use the same phrases as Siri: turn on the phone remote, choose
+"Set up a shortcut" on the Phone menu for a key, then POST `{"do": "<phrase>"}` to `http://<this computer>:8642/api/do`
+with the header `X-Detox-Key: <key>` (and `X-Detox-Pin` too for rule phrases, if a household PIN is set). The answer
+is `{"done": "<a sentence>"}`. For example, in Home Assistant's `configuration.yaml`:
+
+```yaml
+rest_command:
+  roku_detox:
+    url: "http://192.168.1.10:8642/api/do"
+    method: post
+    headers:
+      X-Detox-Key: !secret roku_detox_key
+    content_type: "application/json"
+    payload: '{"do": "{{ phrase }}"}'
+```
+
+Then call it from an automation with `phrase: "sleep 30"`, `"pause rules"`, `"open Netflix"` or `"what's on"`.
+
 ## Let the page use your TV
 
 Roku TVs block other devices by default. On the TV:
