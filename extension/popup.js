@@ -168,6 +168,20 @@ async function loadLaunchers() {
       b.addEventListener("click", () => run(b, () => api("POST", "/api/launch", { body: { tv, id } }), `Opening ${names.get(id)}.`));
       buttons.push(b);
     }
+    // Sleep timer: one tap for 30 minutes, or off when one is set.
+    const sleep = document.createElement("button");
+    sleep.type = "button";
+    const showSleep = (until) => {
+      sleep.dataset.on = until ? "1" : "";
+      sleep.textContent = until
+        ? `Sleep: off at ${new Date(until * 1000).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })} (tap to cancel)`
+        : "Sleep in 30 min";
+    };
+    try { showSleep((await api("GET", "/api/sleep", { query: { tv } })).until); } catch { showSleep(null); }
+    sleep.addEventListener("click", () => run(sleep, async () => {
+      const { until } = await api("POST", "/api/sleep", { body: { tv, minutes: sleep.dataset.on ? 0 : 30 } });
+      showSleep(until);
+    }, sleep.dataset.on ? "Sleep timer off." : "The TV turns off in 30 minutes, even if you close this."));
     for (const scene of scenes.slice(0, 4)) {
       const b = document.createElement("button");
       b.type = "button";
@@ -177,6 +191,7 @@ async function loadLaunchers() {
       b.addEventListener("click", () => run(b, () => api("POST", "/api/scene", { body: { tv, id: scene.id } }), `Ran ${scene.name}.`));
       buttons.push(b);
     }
+    buttons.push(sleep);
     $("#launch").replaceChildren(...buttons);
   } catch { /* the quick remote still works */ }
 }
