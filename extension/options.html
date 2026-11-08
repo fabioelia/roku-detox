@@ -15,6 +15,10 @@
   .row input { flex: 1 1 200px; }
   ol { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
   .id { font-size: 14px; padding: 4px 8px; }
+  .ways { margin: 8px 0 0; padding-left: 18px; display: grid; gap: 6px; }
+  .sub { margin-top: 14px; font-size: 15px; }
+  .small { font-size: 12.5px; margin-top: 8px; }
+  kbd { padding: 0 5px; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 5px; font: inherit; }
 </style>
 </head>
 <body>
@@ -28,8 +32,8 @@
   </header>
 
   <section class="card" aria-labelledby="tv-heading">
-    <h2 id="tv-heading">TV for the toolbar button</h2>
-    <p>The toolbar button sends videos to the TV you used last in Roku Detox. To always use one TV, type its address here.</p>
+    <h2 id="tv-heading">Which TV</h2>
+    <p>The toolbar button, the right-click menu, <code>tv</code> in the address bar and the keyboard shortcuts all use the TV you used last in Roku Detox. To always use one TV, type its address here.</p>
     <form class="row" id="tv-form">
       <input type="text" id="tv-input" placeholder="192.168.1.20" autocomplete="off" spellcheck="false" aria-label="TV address">
       <button class="btn primary" type="submit">Save</button>
@@ -73,6 +77,19 @@
       <p class="muted small">A new link stops every old one from working.</p>
     </div>
     <p class="muted small">You set up the relay once with a free Cloudflare account; see relay/README.md in the Roku Detox folder.</p>
+  </section>
+
+  <section class="card" aria-labelledby="ways-heading">
+    <h2 id="ways-heading">Ways to use it</h2>
+    <ul class="ways">
+      <li><strong>Address bar:</strong> type <kbd>tv</kbd>, a space, then a show, an app, one of your scenes, a button (pause, home, louder, off) or a link.</li>
+      <li><strong>Right-click</strong> a video or a link: "Play this video on the TV". Select text: "Search the TV for …".</li>
+      <li><strong>Toolbar button:</strong> send this tab's video, a small remote, your favorites and scenes, and a sleep timer.</li>
+    </ul>
+    <h3 class="sub">Keyboard shortcuts</h3>
+    <ul class="ways" id="shortcut-list"><li class="muted">Loading…</li></ul>
+    <div class="row"><button class="btn" type="button" id="shortcuts-edit">Change shortcuts</button></div>
+    <p class="muted small">On that page you can also set a shortcut to work when Chrome isn't in front ("Global").</p>
   </section>
 
   <section class="card" aria-labelledby="open-heading">

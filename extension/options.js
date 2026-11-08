@@ -109,3 +109,25 @@ setInterval(loadRelay, 4000);
 
 loadTv();
 loadRelay();
+
+// --- Ways to use it: the keyboard shortcuts as they're set now ------------------------------
+
+async function loadShortcuts() {
+  const list = $("#shortcut-list");
+  try {
+    const commands = (await chrome.commands.getAll()).filter((c) => c.name !== "_execute_action" && c.description)
+      .sort((a, b) => (Number(!a.shortcut) - Number(!b.shortcut)) || a.description.localeCompare(b.description));
+    list.replaceChildren(...commands.map((c) => {
+      const li = document.createElement("li");
+      const key = document.createElement("kbd");
+      key.textContent = c.shortcut || "not set";
+      li.append(key, ` ${c.description}`);
+      if (!c.shortcut) li.classList.add("muted");
+      return li;
+    }));
+  } catch {
+    list.textContent = "";
+  }
+}
+$("#shortcuts-edit").addEventListener("click", () => chrome.tabs.create({ url: "chrome://extensions/shortcuts" }));
+loadShortcuts();
