@@ -10,6 +10,10 @@ Newest first. The extension's version is in `extension/manifest.json`; after pul
   developer installer, like the program does; the password goes only to the TV and isn't kept. No more
   downloading the file and using the TV's installer page (still there, under "Or install it by hand").
   Once updated, Detox Home runs on its own with no computer.
+- **Install Detox Home from a phone, no computer**: a GitHub Actions workflow builds `detox-home.zip` from
+  `roku-app/` on every change and publishes it on the
+  [detox-home release](https://github.com/fabioelia/roku-detox/releases/tag/detox-home). The lite page's TV
+  app menu (now shown) has the steps: download it, open the TV's installer page, sign in as rokudev, upload.
 
 ## Extension 1.2.0 (November 2026)
 

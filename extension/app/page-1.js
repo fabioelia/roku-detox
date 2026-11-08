@@ -3882,8 +3882,11 @@ document.addEventListener("error", (e) => {
 
 /* ---------- Detox Home (TV app) ---------- */
 
+// Detox Home's zip on GitHub (built by .github/workflows/detox-home.yml), for installing from a phone.
+const DETOX_HOME_DOWNLOAD = "https://github.com/fabioelia/roku-detox/releases/download/detox-home/detox-home.zip";
+
 async function loadTvApp() {
-  if (isLite()) return;
+  if (isLite()) { renderLiteTvApp(); return; }
   if (!state.tv || !state.reachable) { $("#app-status").textContent = "Connect to your TV first."; return; }
   try {
     state.tvApp = await api(`/api/tvapp?tv=${enc(state.tv)}`);
@@ -3899,6 +3902,21 @@ function bookmarkletHref() {
   const origin = `${location.protocol}//${location.host}`;
   const code = `(()=>{const v=[...document.querySelectorAll('video')].map(x=>x.currentSrc||x.src).find(s=>/^https?:/.test(s))||'';window.open('${origin}/?cast='+encodeURIComponent(location.href)+'&video='+encodeURIComponent(v)+'&title='+encodeURIComponent(document.title),'_blank')})()`;
   return `javascript:${code}`;
+}
+
+// The lite page (a phone, no program or extension): it can't see the TV's apps, so it gives the by-hand steps,
+// which work from the phone itself.
+function renderLiteTvApp() {
+  const tv = state.tv ? `http://${state.tv.split(":")[0]}` : "http://<your TV's address>";
+  $("#app-status").dataset.state = "off";
+  $("#app-status").textContent = "Install or update Detox Home from this phone, no computer needed.";
+  $("#app-body").innerHTML = `<ol class="app-steps">
+      <li>On the TV remote, press Home 3 times, Up 2 times, then Right, Left, Right, Left, Right. Choose "Enable installer and restart," accept the terms, and pick a password. (Skip this if developer mode is already on.)</li>
+      <li><a class="btn primary" href="${esc(DETOX_HOME_DOWNLOAD)}" target="_blank" rel="noopener">Download Detox Home</a> (from GitHub; it's the same app as on the computer).</li>
+      <li>Open <a href="${esc(tv)}" target="_blank" rel="noopener">${esc(tv)}</a> and sign in as <strong>rokudev</strong> with that password.</li>
+      <li>Choose the downloaded file (on an iPhone: Browse, then Downloads), press Install, and wait for the TV to open Detox Home.</li>
+    </ol>
+    <p class="note">Installing again updates it. Roku allows one custom app at a time; Detox Home goes in that slot and changes nothing else on the TV. Once it's on, it runs on its own.</p>`;
 }
 
 function renderTvApp() {
@@ -3932,7 +3950,7 @@ function renderTvApp() {
     const canInstall = app.canInstall !== false && state.engine?.kind === "extension";
     // By hand, from any browser on the Wi-Fi (a phone too): the file, then the TV's installer page.
     const byHand = `<details class="by-hand"><summary>Or install it by hand</summary><ol class="app-steps">
-        <li>${state.engine?.kind === "extension" ? `<a href="detox-home.zip" download="detox-home.zip">Download Detox Home</a>` : "Download Detox Home (detox-home.zip) on the computer that has the Roku Detox extension."}</li>
+        <li>${state.engine?.kind === "extension" ? `<a href="detox-home.zip" download="detox-home.zip">Download Detox Home</a>` : `<a href="${esc(DETOX_HOME_DOWNLOAD)}" target="_blank" rel="noopener">Download Detox Home</a>`} (on a phone: <a href="${esc(DETOX_HOME_DOWNLOAD)}" target="_blank" rel="noopener">from GitHub</a>).</li>
         <li>Open <a href="${esc(app.installPage)}" target="_blank" rel="noopener">the TV's installer page</a> and sign in as <strong>rokudev</strong> with the developer-mode password.</li>
         <li>Choose the file, press Install, and wait for the TV to open Detox Home.</li>
       </ol></details>`;
@@ -4210,7 +4228,7 @@ const isLocal = ["127.0.0.1", "localhost"].includes(location.hostname);
 
 function renderViews() {
   // Phone pairing and installing the TV app need the program; lite hides them.
-  const unavailable = isLite() ? ["phone", "tvapp"] : isLocal ? [] : ["phone"];
+  const unavailable = isLite() ? ["phone"] : isLocal ? [] : ["phone"];   // lite's TV app menu has the phone steps
   if (!["remote", "find", "rules", "cleanup", "tvapp", "phone"].includes(state.view) || unavailable.includes(state.view)) state.view = "remote";
   for (const btn of document.querySelectorAll("#views [data-view]")) {
     btn.setAttribute("aria-pressed", String(btn.dataset.view === state.view));

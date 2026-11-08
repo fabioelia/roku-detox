@@ -266,7 +266,7 @@ async function main() {
     out.winddown = Boolean(document.querySelector('[data-template="winddown"]'));
     return out; })()`);
   check("the lite page loads as lite", lite.engine === "lite", JSON.stringify(lite));
-  check("lite hides what it can't do", lite.sleepHidden && lite.tvAppHidden && !lite.winddown, JSON.stringify(lite));
+  check("lite hides what it can't do, and offers the phone install steps", lite.sleepHidden && !lite.tvAppHidden && !lite.winddown, JSON.stringify(lite));
 
   ws.close();
   let failed = 0;

@@ -154,8 +154,20 @@ The same page works three ways (see `ENGINE.md` for the details):
   once per tab; a shortcut sends it in an `X-Detox-Pin` header). Use `--data FOLDER`
   to keep settings and logs somewhere else.
 
-To install Detox Home from a browser without this program: `python3 roku_detox.py --export-tv-app detox-home.zip`,
-then open `http://<TV address>` (developer mode on) and upload the zip.
+### Install Detox Home with no computer
+
+From a phone (or any browser on the home Wi-Fi):
+
+1. On the TV, turn on developer mode: Home 3 times, Up 2 times, Right, Left, Right, Left, Right; choose
+   "Enable installer and restart" and pick a password.
+2. Download [detox-home.zip](https://github.com/fabioelia/roku-detox/releases/download/detox-home/detox-home.zip)
+   (built from `roku-app/` by `.github/workflows/detox-home.yml` on every change; it carries no settings).
+3. Open `http://<TV address>` (on the TV: Settings > Network > About), sign in as `rokudev` with that password,
+   choose the file and press Install. Installing again updates it.
+
+The lite page's TV app menu walks through the same steps. With the program or the extension, the TV app menu
+does it for you: type the developer password and press Install (or Update). Or build the file yourself:
+`python3 roku_detox.py --export-tv-app detox-home.zip`.
 
 ## Let the page use your TV
 

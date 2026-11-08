@@ -1,0 +1,60 @@
+# Builds Detox Home (the Roku app in roku-app/) and publishes detox-home.zip on the "detox-home" release, so it
+# can be installed from a phone with no computer: download it from
+# https://github.com/fabioelia/roku-detox/releases/download/detox-home/detox-home.zip, open http://<TV address>
+# (developer mode on), sign in as rokudev, and upload it.
+name: Detox Home
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "roku-app/**"
+      - "roku_detox.py"
+      - ".github/workflows/detox-home.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: detox-home
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build detox-home.zip
+        run: python3 roku_detox.py --export-tv-app detox-home.zip
+
+      - name: Check it carries no settings
+        run: |
+          python3 - <<'EOF'
+          import zipfile
+          names = zipfile.ZipFile("detox-home.zip").namelist()
+          assert "manifest" in names, names
+          assert "config.json" not in names, "a per-TV config.json must never be published"
+          print(f"{len(names)} files")
+          EOF
+
+      - name: Publish on the detox-home release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=$(python3 -c "import re; m = open('roku-app/manifest').read(); print('.'.join(re.search(k + r'=(\d+)', m).group(1) for k in ('major_version', 'minor_version', 'build_version')))")
+          notes="Detox Home ${version}, built from ${GITHUB_SHA::7}.
+
+          Install it from a phone or any browser on your home Wi-Fi, no computer needed:
+          1. On the TV, turn on developer mode (Home 3 times, Up 2 times, Right, Left, Right, Left, Right) and pick a password.
+          2. Download detox-home.zip below.
+          3. Open http://<your TV's address> (on the TV: Settings > Network > About), sign in as rokudev with that password.
+          4. Choose the file, press Install. Installing again updates it.
+
+          Or install it from the Roku Detox page (TV app menu), which does these steps for you."
+          if ! gh release view detox-home >/dev/null 2>&1; then
+            gh release create detox-home --title "Detox Home (Roku app)" --notes "$notes" --target "$GITHUB_SHA"
+          fi
+          gh release upload detox-home detox-home.zip --clobber
+          gh release edit detox-home --notes "$notes"
