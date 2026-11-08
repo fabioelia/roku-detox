@@ -1246,10 +1246,20 @@ function apiError(status, data) {
 }
 
 // The household PIN (roku_detox.py --household --pin): asked for the first time a change needs it, then
-// sent with each request until this tab closes.
+// sent with each change from this tab, until the tab closes or an hour goes by without one.
 const PIN_KEY = "detox.pin";
-const pinGet = () => { try { return sessionStorage.getItem(PIN_KEY) || ""; } catch { return ""; } };
-const pinSet = (pin) => { try { if (pin) sessionStorage.setItem(PIN_KEY, pin); else sessionStorage.removeItem(PIN_KEY); } catch { /* asked again next time */ } };
+const PIN_IDLE_MS = 60 * 60 * 1000;
+function pinGet() {
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(PIN_KEY) || "null");
+    if (!saved || typeof saved.pin !== "string" || !(Date.now() - saved.at < PIN_IDLE_MS)) return "";
+    sessionStorage.setItem(PIN_KEY, JSON.stringify({ pin: saved.pin, at: Date.now() }));   // in use: keep it
+    return saved.pin;
+  } catch { return ""; }
+}
+function pinSet(pin) {
+  try { if (pin) sessionStorage.setItem(PIN_KEY, JSON.stringify({ pin, at: Date.now() })); else sessionStorage.removeItem(PIN_KEY); } catch { /* asked again next time */ }
+}
 let pinAsking = null;
 function askPin(message) {
   if (pinAsking) return pinAsking;
