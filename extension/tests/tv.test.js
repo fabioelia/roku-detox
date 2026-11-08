@@ -186,6 +186,30 @@ test("Detox Home: refused until installed, then messages and videos travel inlin
   await ok("POST", "/api/key", { tv: TV, key: "Home" });
 });
 
+test("Detox Home: favorites and options go to the TV when it's open, and wait when it isn't", async () => {
+  await installDetoxHome();
+  await mock("/launch/dev");
+  await ok("POST", "/api/settings", { tv: TV, favorites: ["837", "12"] });
+  assert.deepEqual(await mock("/test/last-dev"), { contentId: "favorites", ids: "837,12" });
+  assert.deepEqual(await ok("POST", "/api/tvapp/options", { tv: TV, clock24: true, simpleMode: false }),
+    { options: { simpleMode: false, clock24: true }, delivered: true });
+  assert.deepEqual(await mock("/test/last-dev"), { contentId: "settings", clock24: "1", simpleMode: "0" });
+
+  await mock("/launch/12"); // watching Netflix: nothing interrupts it
+  assert.equal((await ok("POST", "/api/tvapp/options", { tv: TV, clock24: false, simpleMode: true })).delivered, false);
+  assert.deepEqual(await mock("/test/last-dev"), { contentId: "settings", clock24: "1", simpleMode: "0" });
+  await mock("/launch/dev"); // someone opens Detox Home; the next look at the TV hands it over
+  assert.equal((await ok("GET", "/api/active", { tv: TV })).app.id, "dev");
+  assert.deepEqual(await mock("/test/last-dev"), { contentId: "settings", clock24: "0", simpleMode: "1" });
+
+  const status = await ok("GET", "/api/tvapp", { tv: TV });
+  assert.deepEqual(status.options, { simpleMode: true, clock24: false });
+  assert.equal(status.linked, true);
+  assert.equal(status.outdated, true); // the test upload isn't a real 2.x package
+  await ok("POST", "/api/launch", { tv: TV, id: "837" });
+  await ok("POST", "/api/key", { tv: TV, key: "Home" });
+});
+
 test("settings, scenes, undo list, sites and watch history", async () => {
   const saved = await ok("POST", "/api/settings", {
     tv: TV, favorites: ["12", "837", "12"], services: { "12": true },

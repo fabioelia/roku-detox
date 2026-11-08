@@ -644,7 +644,7 @@
         <div id="sites-area" hidden>
           <details class="services" id="sites-box">
             <summary>Your sites <span id="sites-summary"></span></summary>
-            <p class="note">To add one, search the site in your browser, copy the address of its results page, and replace your search words with {q}. For example: https://example.com/search?q={q}</p>
+            <p class="note">To add one, search the site in your browser and paste the address of its results page here. Roku Detox finds your search words in it and swaps in {q} (or put {q} there yourself). For example: https://www.youtube.com/results?search_query={q}</p>
             <ul class="undo" id="sites-list"></ul>
             <form class="install-form" id="site-form" style="margin-top:10px">
               <input type="text" id="site-name" placeholder="Name" aria-label="Site name" maxlength="40" style="flex:0 1 160px;min-width:120px">
@@ -654,7 +654,7 @@
           </details>
           <div id="sites-status" class="note" role="status"></div>
           <div id="site-results"></div>
-          <p class="note" style="margin-top:18px">Roku Detox reads only the text of each page to find the video, so the site's ads, pop-ups and scripts never load, and videos from ad networks are skipped. Sites that build their pages with scripts, or lock their videos, may not work. Playing needs Detox Home on the TV.</p>
+          <p class="note" style="margin-top:18px">Roku Detox reads only the text of each page, including the data many sites tuck inside it, so the site's ads, pop-ups and scripts never load, and videos from ad networks are skipped. For sites that only show results after their scripts run, the extension offers "Look closer": it opens the page in a hidden, muted tab for a few seconds (the site's own scripts run there, with Roku Detox's ad blocking), reads the results and closes it. YouTube results open in the YouTube app on the TV. Other videos play in Detox Home; videos locked by DRM can't be sent.</p>
         </div>
       </section>
       <section class="section engine-note" hidden>
@@ -776,7 +776,7 @@
       <div class="view" data-view="tvapp" hidden>
       <section class="section">
         <h2>Detox Home on your TV</h2>
-        <p class="intro">A calm home screen for the TV: a big clock, your favorite apps and inputs, and no ads. It also shows rule notices like "Time's up," messages you send, videos from web links, and an ad-free clock screensaver.</p>
+        <p class="intro">A calm home screen for the TV: a big clock, your favorite apps and inputs, and no ads. It also shows rule notices like "Time's up," messages you send, videos from web links, and an ad-free clock screensaver. Once it's installed it runs on its own: it gets your apps from the TV itself, so it never needs this computer.</p>
         <p class="app-status" id="app-status" role="status">Checking the TV…</p>
         <div id="app-body"></div>
       </section>
@@ -2752,6 +2752,7 @@ async function runSiteSearch(query) {
   $("#find-go").disabled = true;
   $("#sites-status").textContent = `Searching ${state.sites.length === 1 ? state.sites[0].name : `${state.sites.length} sites`} for "${query}"…`;
   try {
+    state.siteQuery = query;
     state.siteGroups = (await api(`/api/sites/search?q=${enc(query)}`)).groups;
     const total = state.siteGroups.reduce((n, g) => n + g.results.length, 0);
     $("#sites-status").textContent = total ? "" : `Nothing found for "${query}".`;
@@ -2769,6 +2770,8 @@ function renderSiteResults() {
     <section class="site-group" aria-label="${esc(group.site)}">
       <h3 class="subhead">${esc(group.site)}</h3>
       ${group.error ? `<p class="note">${esc(group.error)}</p>` : ""}
+      ${group.canLookCloser && canLookCloser() ? `<p class="note"><button class="btn" type="button" data-site-closer="${gi}">Look closer</button> Opens the page in a hidden, muted tab for a few seconds so its scripts can show the results. If that works, Roku Detox does it for this site every time.</p>` : ""}
+      ${group.lookedCloser && group.results.length ? `<p class="meta">Read in a hidden tab.</p>` : ""}
       ${!group.error && !group.results.length ? `<p class="note">No matches here.</p>` : ""}
       <ul class="results">${group.results.map((r, ri) => `
         <li class="result site-result">
@@ -2808,6 +2811,7 @@ $("#site-form").addEventListener("submit", async (e) => {
   let search = $("#site-search").value.trim();
   if (search && !/^https?:\/\//i.test(search)) search = `https://${search}`;
   if (!name || !search) { toast("Give the site a name and its search address."); return; }
+  if (!search.includes("{q}")) search = withSearchSlot(search);
   if (!search.includes("{q}")) { toast("Put {q} in the address where your search words go."); return; }
   try {
     await saveSites([...state.sites, { name, search }]);
@@ -2818,7 +2822,48 @@ $("#site-form").addEventListener("submit", async (e) => {
     toast(err.message);
   }
 });
+// A results page address pasted as it is ("…/results?search_query=cats"): put {q} where the
+// search words are, so people don't have to.
+function withSearchSlot(address) {
+  try {
+    const url = new URL(address);
+    for (const key of ["q", "query", "search_query", "search", "s", "k", "keyword", "keywords", "term", "text", "searchTerm"]) {
+      if (url.searchParams.get(key)) {
+        url.searchParams.set(key, "QQQ");
+        return url.href.replace("QQQ", "{q}");
+      }
+    }
+    // Words in the path, like /search/cats/videos: the part after "search".
+    const parts = url.pathname.split("/");
+    const at = parts.findIndex((p) => /^search$/i.test(p));
+    if (at >= 0 && parts[at + 1]) {
+      parts[at + 1] = "QQQ";
+      url.pathname = parts.join("/");
+      return url.href.replace("QQQ", "{q}");
+    }
+  } catch { /* not an address */ }
+  return address;
+}
+
+// Looking closer opens a hidden tab, which only the browser extension can do.
+function canLookCloser() { return ["extension", "relay"].includes(state.engine?.kind); }
+
 $("#site-results").addEventListener("click", async (e) => {
+  const closer = e.target.closest("[data-site-closer]");
+  if (closer) {
+    const gi = Number(closer.dataset.siteCloser);
+    const group = state.siteGroups[gi];
+    closer.disabled = true;
+    closer.textContent = "Looking…";
+    try {
+      state.siteGroups[gi] = (await api("/api/sites/look", { siteId: group.siteId, q: state.siteQuery })).group;
+      if (state.siteGroups[gi].results.length) loadSites();
+    } catch (err) {
+      toast(err.message);
+    }
+    renderSiteResults();
+    return;
+  }
   const btn = e.target.closest("[data-site-play]");
   if (!btn) return;
   const [gi, ri] = btn.dataset.sitePlay.split(":").map(Number);
@@ -3673,6 +3718,13 @@ function renderTvApp() {
       <button class="btn ${id === "install-form" ? "primary" : ""}" type="submit">${label}</button>
     </form>
     <p class="note" style="margin-top:8px">The password you chose when you turned on developer mode. It goes only to your TV, for this one step, and isn't saved.</p>`;
+  const optionsHtml = `<h3 class="subhead">Options</h3>
+      <label class="option-row"><input type="checkbox" data-option="simpleMode" ${app.options?.simpleMode ? "checked" : ""}> Simple mode: only your favorites, extra large</label>
+      <label class="option-row"><input type="checkbox" data-option="clock24" ${app.options?.clock24 ? "checked" : ""}> 24-hour clock</label>
+      <p class="note">On the TV, press <strong>*</strong> on the remote while a tile is selected to add it to your favorites or take it off. Favorites you choose in the Remote menu are sent to it too. The screensaver is under Settings, Theme, Screensavers, called Detox Clock.</p>`;
+  const outdated = app.outdated
+    ? `<p class="note" style="margin-top:0" data-state="problem"><strong>This copy of Detox Home is an older version that needs this computer to work.</strong> Install it again (below) to get the version that runs on its own.</p>`
+    : "";
   const devSteps = `<ol class="app-steps">
       <li>On the TV remote, press Home 3 times, Up 2 times, then Right, Left, Right, Left, Right.</li>
       <li>Choose "Enable installer and restart," accept the terms, and pick a password.</li>
@@ -3684,13 +3736,15 @@ function renderTvApp() {
         <input type="text" id="message-input" maxlength="200" placeholder="Dinner's ready!" aria-label="Message">
         <button class="btn primary" type="submit">Show on TV</button>
       </form>`;
-    if (app.installed) {
-      status.dataset.state = "on";
-      status.textContent = "Detox Home is on the TV.";
-      body.innerHTML = `<div class="row-gap" style="margin-top:0">
+    if (app.installed && app.linked) {
+      status.dataset.state = app.outdated ? "off" : "on";
+      status.textContent = app.outdated ? "Detox Home is on the TV, but it's an older version." : "Detox Home is on the TV. It runs on its own.";
+      body.innerHTML = `${app.outdated ? `<p class="note" style="margin-top:0"><strong>This copy needs a computer to work.</strong> To update it: download Detox Home below, then install it from <a href="${esc(app.installPage)}" target="_blank" rel="noopener">the TV's installer page</a> (sign in as <strong>rokudev</strong>).</p>
+          ${state.engine?.kind === "extension" ? `<p style="margin-top:8px"><a class="btn" href="detox-home.zip" download="detox-home.zip">Download Detox Home</a></p>` : ""}` : ""}
+        <div class="row-gap" style="margin-top:0">
           <button class="btn primary" type="button" data-app="open">Open it on the TV</button>
           <button class="btn" type="button" data-app="autopilot">Open it when the TV turns on</button>
-        </div>${messageForm}
+        </div>${optionsHtml}${messageForm}
         <p class="note" style="margin-top:12px">Videos you send with "Send to TV" play here too. To update it, install it again the same way.</p>`;
       return;
     }
@@ -3701,7 +3755,9 @@ function renderTvApp() {
       return;
     }
     status.dataset.state = "off";
-    status.textContent = "Developer mode is on. Install Detox Home from the TV's own installer page.";
+    status.textContent = app.installed
+      ? "A different custom app is on the TV. Installing Detox Home from the TV's installer page replaces it."
+      : "Developer mode is on. Install Detox Home from the TV's own installer page.";
     const download = state.engine?.kind === "extension"
       ? `<a class="btn primary" href="detox-home.zip" download="detox-home.zip">Download Detox Home</a>`
       : `<span class="note">Download it on the computer that has the Roku Detox extension.</span>`;
@@ -3721,17 +3777,14 @@ function renderTvApp() {
     return;
   }
   if (app.installed && app.linked) {
-    status.dataset.state = "on";
-    status.textContent = "Detox Home is installed and linked to this Mac.";
-    body.innerHTML = `
+    status.dataset.state = app.outdated ? "off" : "on";
+    status.textContent = app.outdated ? "Detox Home is on the TV, but it's an older version." : "Detox Home is on the TV. It runs on its own, without this Mac.";
+    body.innerHTML = `${outdated}
       <div class="row-gap" style="margin-top:0">
         <button class="btn primary" type="button" data-app="open">Open it on the TV</button>
         <button class="btn" type="button" data-app="autopilot">Open it when the TV turns on</button>
       </div>
-      <h3 class="subhead">Options</h3>
-      <label class="option-row"><input type="checkbox" data-option="simpleMode" ${app.options.simpleMode ? "checked" : ""}> Simple mode: only your favorites, extra large</label>
-      <label class="option-row"><input type="checkbox" data-option="clock24" ${app.options.clock24 ? "checked" : ""}> 24-hour clock</label>
-      <p class="note">The tiles show your favorites from the Remote menu. The screensaver is under Settings, Theme, Screensavers, called Detox Clock.</p>
+      ${optionsHtml}
 
       <h3 class="subhead">Send a message to the TV</h3>
       <form class="install-form" id="message-form">
@@ -3762,7 +3815,7 @@ function renderTvApp() {
     return;
   }
   status.dataset.state = "off";
-  status.textContent = app.installed ? "A custom app is on the TV, but it isn't linked to this Mac. Install to replace it." : "Developer mode is on. Ready to install.";
+  status.textContent = app.installed ? "A different custom app is on the TV. Installing Detox Home replaces it." : "Developer mode is on. Ready to install.";
   body.innerHTML = `<p class="intro">Roku allows one custom app at a time. Installing puts Detox Home in that slot. It doesn't change anything else on the TV.</p>` + passwordForm("Install on TV", "install-form");
 }
 
@@ -3814,9 +3867,10 @@ $("#app-body").addEventListener("change", async (e) => {
   if (!option) return;
   const options = { ...state.tvApp.options, [option]: e.target.checked };
   try {
-    const { options: saved } = await api("/api/tvapp/options", { tv: state.tv, ...options });
+    const { options: saved, delivered } = await api("/api/tvapp/options", { tv: state.tv, ...options });
     state.tvApp.options = saved;
-    toast("Saved. Detox Home picks this up within 30 seconds.");
+    toast(delivered ? "Saved. Detox Home on the TV has it now."
+      : "Saved. Detox Home gets it the next time it's open on the TV while Roku Detox is running.");
   } catch (err) {
     toast(err.message);
   }

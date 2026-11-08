@@ -12,11 +12,13 @@ Restart shortcut (Home x5, Up, Rewind x2, Fast forward x2) takes it offline for 
 
 import argparse
 import hashlib
+import io
 import re
 import json
 import threading
 import time
 import urllib.parse
+import zipfile
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from xml.sax.saxutils import escape
 
@@ -55,6 +57,8 @@ class Fake:
         self.power = "PowerOn"
         self.dev_password = "testpass"   # pretend developer-mode password
         self.dev_app = None              # size of the installed Detox Home zip
+        self.dev_version = "1.0.1"       # from the installed zip's manifest
+        self.dev_config = None           # its config.json, if any
         self.last_dev_params = None
         self.lock = threading.Lock()
 
@@ -123,7 +127,8 @@ class Handler(BaseHTTPRequestHandler):
                 if b"manifest" not in data:
                     return self.reply(200, '<html>Install Failure: No manifest</html>', "text/html")
                 fake.dev_app = length
-                print(f"  Detox Home installed ({length} bytes)")
+                fake.dev_version, fake.dev_config = read_package(data)
+                print(f"  Detox Home {fake.dev_version} installed ({length} bytes)")
                 return self.reply(200, "<html>Install Success.</html>", "text/html")
         length = int(self.headers.get("Content-Length") or 0)
         self.rfile.read(length)
@@ -151,7 +156,7 @@ class Handler(BaseHTTPRequestHandler):
                 rows = "".join(
                     f'\t<app id="{i}" type="{t}" version="1.0.0">{escape(n)}</app>\n'
                     for i, t, n in ALL_APPS if i in fake.installed
-                ) + ('\t<app id="dev" type="appl" version="1.0.1">Detox Home</app>\n' if fake.dev_app else "")
+                ) + (f'\t<app id="dev" type="appl" version="{fake.dev_version}">Detox Home</app>\n' if fake.dev_app else "")
                 return self.reply(200, f'<?xml version="1.0" encoding="UTF-8" ?>\n<apps>\n{rows}</apps>\n')
             if path == "/query/active-app":
                 app_id, name = fake.active
@@ -208,6 +213,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.reply(200, "")
             if url.path == "/test/last-dev":
                 return self.reply(200, json.dumps(fake.last_dev_params or {}), "application/json")
+            if url.path == "/test/dev-config":  # the installed Detox Home's config.json
+                return self.reply(200, json.dumps(fake.dev_config), "application/json")
             if url.path == "/test/wake":  # pretend the TV turned itself on
                 to = urllib.parse.parse_qs(url.query).get("to", [""])[0]
                 name = next((n for i, _, n in ALL_APPS if i == to), None)
@@ -221,6 +228,20 @@ class Handler(BaseHTTPRequestHandler):
                 print(f"  search {url.query}")
                 return self.reply(200, "")
         self.reply(404, "")
+
+
+def read_package(form):
+    """(version, config.json) from the zip inside the installer's form upload."""
+    start = form.find(b"PK\x03\x04")
+    end = form.rfind(b"\r\n--")
+    try:
+        archive = zipfile.ZipFile(io.BytesIO(form[start:end]))
+        manifest = dict(line.split("=", 1) for line in archive.read("manifest").decode().splitlines() if "=" in line)
+        version = ".".join(manifest.get(k, "0") for k in ("major_version", "minor_version", "build_version"))
+        config = json.loads(archive.read("config.json")) if "config.json" in archive.namelist() else None
+        return version, config
+    except (zipfile.BadZipFile, KeyError, ValueError):
+        return "1.0.1", None
 
 
 def device_info():

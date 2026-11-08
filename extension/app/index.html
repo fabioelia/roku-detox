@@ -644,7 +644,7 @@
         <div id="sites-area" hidden>
           <details class="services" id="sites-box">
             <summary>Your sites <span id="sites-summary"></span></summary>
-            <p class="note">To add one, search the site in your browser, copy the address of its results page, and replace your search words with {q}. For example: https://example.com/search?q={q}</p>
+            <p class="note">To add one, search the site in your browser and paste the address of its results page here. Roku Detox finds your search words in it and swaps in {q} (or put {q} there yourself). For example: https://www.youtube.com/results?search_query={q}</p>
             <ul class="undo" id="sites-list"></ul>
             <form class="install-form" id="site-form" style="margin-top:10px">
               <input type="text" id="site-name" placeholder="Name" aria-label="Site name" maxlength="40" style="flex:0 1 160px;min-width:120px">
@@ -654,7 +654,7 @@
           </details>
           <div id="sites-status" class="note" role="status"></div>
           <div id="site-results"></div>
-          <p class="note" style="margin-top:18px">Roku Detox reads only the text of each page to find the video, so the site's ads, pop-ups and scripts never load, and videos from ad networks are skipped. Sites that build their pages with scripts, or lock their videos, may not work. Playing needs Detox Home on the TV.</p>
+          <p class="note" style="margin-top:18px">Roku Detox reads only the text of each page, including the data many sites tuck inside it, so the site's ads, pop-ups and scripts never load, and videos from ad networks are skipped. For sites that only show results after their scripts run, the extension offers "Look closer": it opens the page in a hidden, muted tab for a few seconds (the site's own scripts run there, with Roku Detox's ad blocking), reads the results and closes it. YouTube results open in the YouTube app on the TV. Other videos play in Detox Home; videos locked by DRM can't be sent.</p>
         </div>
       </section>
       <section class="section engine-note" hidden>
@@ -776,7 +776,7 @@
       <div class="view" data-view="tvapp" hidden>
       <section class="section">
         <h2>Detox Home on your TV</h2>
-        <p class="intro">A calm home screen for the TV: a big clock, your favorite apps and inputs, and no ads. It also shows rule notices like "Time's up," messages you send, videos from web links, and an ad-free clock screensaver.</p>
+        <p class="intro">A calm home screen for the TV: a big clock, your favorite apps and inputs, and no ads. It also shows rule notices like "Time's up," messages you send, videos from web links, and an ad-free clock screensaver. Once it's installed it runs on its own: it gets your apps from the TV itself, so it never needs this computer.</p>
         <p class="app-status" id="app-status" role="status">Checking the TV…</p>
         <div id="app-body"></div>
       </section>

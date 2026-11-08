@@ -47,7 +47,7 @@ sub onVideoState()
     end if
 end sub
 
-' Use the Mac's streamFormat if given; otherwise guess from the URL path.
+' Use the streamFormat Roku Detox sent if given; otherwise guess from the URL path.
 function guessStreamFormat(url as String, given as String) as String
     f = LCase(given.Trim())
     if f <> "" then return f

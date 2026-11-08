@@ -3,8 +3,9 @@
 ' Main(args)        normal app launch (and ECP deep links: launch/dev?contentId=..&mediaType=..)
 ' RunScreenSaver()  "Detox Clock" screensaver
 '
-' The Mac program injects pkg:/config.json into the zip:
-'   {"mac": "http://192.168.1.10:8642", "token": "...", "tv": "192.168.1.50"}
+' Detox Home needs no computer. When Roku Detox installs it from a computer it adds
+' pkg:/config.json with what to start with (used once per install):
+'   {"seed": "2026-11-08T10:00:00+00:00", "favorites": ["12", "837"], "clock24": false, "simpleMode": false, "tvName": "Living Room TV"}
 
 sub Main(args as Dynamic)
     screen = CreateObject("roSGScreen")
@@ -13,12 +14,7 @@ sub Main(args as Dynamic)
     scene = screen.CreateScene("HomeScene")
     screen.Show()
 
-    cfg = LoadDetoxConfig()
-    if cfg = invalid
-        scene.configMissing = true
-    else
-        scene.config = cfg
-    end if
+    scene.seed = LoadDetoxConfig()
 
     ' ECP "input?contentId=..&mediaType=.." while the app is already running.
     inputObj = CreateObject("roInput")
@@ -58,7 +54,7 @@ sub RunScreenSaver()
     scene = screen.CreateScene("ClockSaverScene")
     screen.Show()
 
-    ' HttpTask remembers the Mac's 12/24-hour setting here whenever the config loads.
+    ' HomeScene keeps the 12/24-hour choice here.
     sec = CreateObject("roRegistrySection", "DetoxHome")
     scene.clock24 = (sec.Read("clock24") = "1")
 
@@ -70,27 +66,15 @@ sub RunScreenSaver()
     end while
 end sub
 
-' Returns {mac, token, tv} or invalid when config.json is missing or unusable.
-function LoadDetoxConfig() as Dynamic
+' What Roku Detox put in pkg:/config.json, or {} when there's none (installed from a browser,
+' or a copy from an older Roku Detox, whose config.json only said how to reach the Mac).
+function LoadDetoxConfig() as Object
     text = ReadAsciiFile("pkg:/config.json")
-    if text = invalid or text = "" then return invalid
+    if not IsStringValue(text) then return {}
+    if text = "" then return {}
     cfg = ParseJson(text)
-    if type(cfg) <> "roAssociativeArray" then return invalid
-
-    mac = cfg.mac
-    if not IsStringValue(mac) then return invalid
-    mac = mac.Trim()
-    while Len(mac) > 0 and Right(mac, 1) = "/"
-        mac = Left(mac, Len(mac) - 1)
-    end while
-    if LCase(Left(mac, 7)) <> "http://" and LCase(Left(mac, 8)) <> "https://" then return invalid
-
-    token = ""
-    if IsStringValue(cfg.token) then token = cfg.token
-    tvIp = ""
-    if IsStringValue(cfg.tv) then tvIp = cfg.tv
-
-    return { mac: mac, token: token, tv: tvIp }
+    if type(cfg) <> "roAssociativeArray" then return {}
+    return cfg
 end function
 
 ' Pulls contentId / mediaType out of launch args or an roInputEvent's info.
@@ -103,8 +87,8 @@ function DeepLinkFrom(args as Dynamic) as Dynamic
     mediaType = ""
     if IsStringValue(args.mediaType) then mediaType = args.mediaType
     link = { contentId: cid, mediaType: mediaType }
-    ' Items sent straight from a browser (no Mac) travel inside the link itself.
-    for each field in ["url", "title", "text", "from", "streamFormat", "referer"]
+    ' Everything travels inside the link itself: items (contentId=inline), favorites, settings.
+    for each field in ["url", "title", "text", "from", "streamFormat", "referer", "ids", "clock24", "simpleMode"]
         if IsStringValue(args[field]) then link[field] = args[field]
     end for
     return link

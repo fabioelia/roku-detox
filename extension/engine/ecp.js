@@ -249,10 +249,16 @@ export function parseActiveApp(xml) {
   return { id: node.attrs.id || "", name: node.text.trim() };
 }
 
-export async function activeApp(target) {
+// Favorites or options changed while Detox Home wasn't open: "host:port" -> {kind: params}.
+// Handed over the next time it's seen in front (activeApp), so the TV never has to ask for them.
+const TV_APP_PENDING = new Map();
+
+export async function activeApp(target, { deliver = true } = {}) {
   const { status, text } = await ecp(target, "query/active-app");
   check(status, text);
-  return parseActiveApp(text);
+  const app = parseActiveApp(text);
+  if (deliver && app.id === "dev" && TV_APP_PENDING.has(targetKey(target))) await deliverPending(target, app);
+  return app;
 }
 
 export async function press(target, key) {
@@ -407,9 +413,33 @@ export async function tvAppPresent(target, maxAge = 60) {
   return present;
 }
 
+async function tvAppInFront(target) {
+  try {
+    return (await activeApp(target, { deliver: false })).id === "dev";
+  } catch (err) {
+    if (err instanceof TVError) return false;
+    throw err;
+  }
+}
+
 /**
- * Open Detox Home showing a video, message or notice. Without the Mac, the item travels
- * inside the deep link (ENGINE.md, "Detox Home (TV app) without the Mac").
+ * Hand Detox Home a deep link: an ECP input event when it's already open (nothing restarts),
+ * otherwise open it with the link, or (openIt false) send nothing. Returns true if it was sent.
+ */
+export async function sendToTvApp(target, params, openIt = true) {
+  if (await tvAppInFront(target)) {
+    const { status, text } = await ecp(target, "input?" + urlencode(params), "POST");
+    check(status, text);
+    return true;
+  }
+  if (!openIt) return false;
+  await launch(target, "dev", params);
+  return true;
+}
+
+/**
+ * Open Detox Home showing a video, message or notice. The item travels inside the deep link
+ * (contentId=inline, ENGINE.md), so the TV never has to reach a computer.
  */
 export async function showOnTv(target, kind, item) {
   // A "not installed" answer is checked again: it may have just been installed from the TV's installer page.
@@ -420,18 +450,52 @@ export async function showOnTv(target, kind, item) {
   for (const [key, value] of Object.entries(item)) {
     if (value !== undefined && value !== null && value !== "") params[key] = String(value);
   }
-  let inFront = false;
+  await sendToTvApp(target, params);
+}
+
+export function favoritesLink(favorites) {
+  return { contentId: "favorites", ids: (Array.isArray(favorites) ? favorites : []).filter((f) => f !== "dev").join(",") };
+}
+
+export function settingsLink(options) {
+  return { contentId: "settings", clock24: options.clock24 ? "1" : "0", simpleMode: options.simpleMode ? "1" : "0" };
+}
+
+/**
+ * Give Detox Home new favorites or options without interrupting the TV: now if it's open,
+ * otherwise the next time it's seen open. Returns true if it's on the TV now.
+ */
+export async function pushToTvApp(target, kind, params) {
+  const key = targetKey(target);
+  TV_APP_PENDING.set(key, { ...(TV_APP_PENDING.get(key) || {}), [kind]: params });
   try {
-    inFront = (await activeApp(target)).id === "dev";
+    return (await tvAppPresent(target, 300)) && (await deliverPending(target));
   } catch (err) {
-    if (!(err instanceof TVError)) throw err;
+    if (err instanceof TVError || err instanceof ParseError) return false; // still waiting
+    throw err;
   }
-  if (inFront) { // already open: hand it the new item instead of restarting it
-    const { status, text } = await ecp(target, "input?" + urlencode(params), "POST");
-    check(status, text);
-  } else {
-    await launch(target, "dev", params);
+}
+
+/** Send what's waiting for Detox Home, if it's in front. Returns true if everything went. */
+export async function deliverPending(target, app = null) {
+  const key = targetKey(target);
+  const waiting = TV_APP_PENDING.get(key);
+  if (!waiting || !Object.keys(waiting).length) return true;
+  const inFront = app ? app.id === "dev" : await tvAppInFront(target);
+  if (!inFront) return false;
+  for (const [kind, params] of Object.entries({ ...waiting })) {
+    try {
+      const { status, text } = await ecp(target, "input?" + urlencode(params), "POST");
+      check(status, text);
+    } catch (err) {
+      if (err instanceof TVError) return false;
+      throw err;
+    }
+    const now = TV_APP_PENDING.get(key);
+    if (now && now[kind] === params) delete now[kind];
+    if (now && !Object.keys(now).length) TV_APP_PENDING.delete(key);
   }
+  return true;
 }
 
 /** Show a rule's notice on the TV if Detox Home is installed. Returns true if shown. */

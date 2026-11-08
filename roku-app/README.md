@@ -1,67 +1,68 @@
 # Detox Home (Roku dev channel)
 
-A calm home screen for the TV. Roku apps can't open other apps, so Detox Home asks the
-Roku Detox program on the Mac to do it over the home network. BrightScript + SceneGraph, FHD.
+A calm home screen for the TV. BrightScript + SceneGraph, FHD. It needs no computer: it gets the
+TV's apps, their icons and opens them through the TV's own remote-control service (Roku's ECP on
+port 8060, the same one Roku Detox uses). Roku apps can't open other apps directly, but they can ask
+their own TV to. Favorites and options are kept on the TV.
 
-The Mac program zips this folder and adds `config.json` at the zip root (don't commit one here):
+Roku Detox only ever sends things in (deep links, below). Nothing on the TV connects out to a computer.
+
+When Roku Detox installs it from a computer it adds `config.json` at the zip root, used once per
+install (don't commit one here):
 
 ```json
-{"mac": "http://192.168.1.10:8642", "token": "<random string>", "tv": "192.168.1.50"}
+{"seed": "2026-11-08T10:00:00+00:00", "favorites": ["12", "837"], "clock24": false, "simpleMode": false, "tvName": "Living Room TV"}
 ```
 
-If it's missing or unreadable the TV shows "Open Roku Detox on your Mac and press Install on TV again."
+Without it (installed from a browser) the TV starts with no favorites, which can be added on the TV.
+`config.json` from Roku Detox before 2.0 (`{"mac", "token", "tv"}`) is ignored.
 
 ## Files
 
 | File | What it does |
 | --- | --- |
-| `manifest` | Title, version, icons, splash, `ui_resolutions=fhd`, `supports_input_launch=1`, `screensaver_title=Detox Clock`. |
+| `manifest` | Title, version (2.0.0: the first that runs on its own), icons, splash, `ui_resolutions=fhd`, `supports_input_launch=1`, `screensaver_title=Detox Clock`. |
 | `source/main.brs` | `Main(args)`: reads `pkg:/config.json`, shows `HomeScene`, forwards the launch deep link and `roInputEvent`s (ECP `input`) to the scene. `RunScreenSaver()`: shows `ClockSaverScene`. |
-| `components/HomeScene.xml/.brs` | Everything on screen: clock, favorites and inputs rows, focus and remote keys, "Opening…" overlay, "Can't reach" banner, the 30 s config refresh, message/notice/video switching. |
+| `components/HomeScene.xml/.brs` | Everything on screen: clock, the Favorites / All apps / Inputs rows, focus and remote keys, the * favorites button, "Opening…" overlay, message/notice/video switching. Keeps favorites and options in the registry. |
+| `components/EcpTask.xml/.brs` | Task node, one per request to the TV's own ECP (`query/apps`, `query/device-info`, `launch/<id>`). Tries the address that answered last, then each of `roDeviceInfo.GetIPAddrs()`, then 127.0.0.1. 4 s timeout per address. Parses the XML. |
 | `components/DetoxTile.xml/.brs` | One tile: app icon with name under it, or an input box with name and port. Draws the focus outline. |
-| `components/HttpTask.xml/.brs` | Task node, one per request: `roUrlTransfer` with the CA bundle, `X-Detox-Device` header, async GET/POST, 8 s timeout, JSON parsing. Also saves the 12/24-hour choice for the screensaver. |
 | `components/MessageView.xml/.brs` | Full-screen message (big text, "from", "Press OK to close"). With a title it's the notice screen. |
 | `components/VideoView.xml/.brs` | Full-screen `Video` node with the built-in trickplay UI; reports finished / error. |
-| `components/ClockSaverScene.xml/.brs` | "Detox Clock" screensaver: black, soft gray clock + date, moves every 60 s. No network. |
+| `components/ClockSaverScene.xml/.brs` | "Detox Clock" screensaver: black, soft gray clock + date, moves every 60 s. Reads the 12/24-hour choice from the registry. |
 | `components/DetoxUtils.brs` | Shared helpers (type-safe JSON reads, fonts, time/date formatting). |
 | `images/` | `icon_focus_hd.png` 336x210, `icon_focus_sd.png` 248x140, `splash_fhd.png` 1920x1080. |
 | `tools/make_images.py` | Redraws the images (stdlib only): `python3 tools/make_images.py`. Not needed on the TV. |
 
-## Deep links (Mac -> TV, over ECP)
+## Kept on the TV
 
-- App not running: `POST http://<tv>:8060/launch/dev?contentId=<item id>&mediaType=<kind>`
-- App already in front: `POST http://<tv>:8060/input?contentId=<item id>&mediaType=<kind>`
+Registry section `DetoxHome`: `favorites` (JSON list of app ids), `clock24` and `simpleMode` (`"1"`/`"0"`),
+`tvName`, and `seedId` (which `config.json` was already used).
 
-`kind` is `video`, `message` or `notice`. The app shows "Loading…", fetches
-`/api/tv/item?id=<item id>` and shows it. No `contentId` means the home screen.
-OK / Back on a message or notice, Back during a video, or the video ending all go back to Home.
-Back on Home exits the app.
+## Deep links (Roku Detox -> TV, over ECP)
 
-## HTTP (TV -> Mac)
+- App not running: `POST http://<tv>:8060/launch/dev?contentId=...`
+- App already in front: `POST http://<tv>:8060/input?contentId=...` (Roku Detox uses this for favorites and
+  options, so it never interrupts what's on the TV; if Detox Home isn't open, they wait until it is)
 
-Every request sends `X-Detox-Device: <token>` and expects JSON. Timeout 8 s.
+| `contentId` | Other fields | What happens |
+| --- | --- | --- |
+| `inline` | `mediaType=video`: `url`, `title`, `streamFormat` (`hls`/`mp4`/`dash`/empty), `referer` | Plays the video. Empty `streamFormat`: `.m3u8` -> hls, `.mpd` -> dash, else mp4. A `referer` is sent as a `Referer` header. |
+| `inline` | `mediaType=message`: `text`, `from` | Full-screen message. |
+| `inline` | `mediaType=notice`: `title`, `text` | Full-screen notice ("Time's up"). |
+| `favorites` | `ids=12,837,tvinput.hdmi1` (empty clears them) | Saves the favorites and redraws the home screen. |
+| `settings` | `clock24=0\|1`, `simpleMode=0\|1` (either) | Saves and redraws. |
 
-- `GET {mac}/api/tv/config` ->
-  `{"tvName": str, "simpleMode": bool, "clock24": bool,
-    "favorites": [{"id", "name", "icon"}], "inputs": [{"id", "name", "port"}]}`
-  `icon` URLs are loaded directly by `Poster` nodes (no headers), so they must carry the token (`?k=...`).
-  Fetched at start and every 30 s; the screen is only rebuilt when the answer changes.
-- `POST {mac}/api/tv/launch` body `{"id": "<app or input id>"}` -> `{"ok": true}` or `{"error": "..."}`.
-  Shows "Opening Netflix…"; Roku closes this app when the other app opens.
-- `GET {mac}/api/tv/item?id=<item id>` -> one of
-  - `{"kind": "video", "title", "url", "streamFormat": "hls"|"mp4"|"dash"|"", "referer"}`
-    (empty `streamFormat`: `.m3u8` -> hls, `.mpd` -> dash, else mp4; non-empty `referer` is sent as a `Referer` header)
-  - `{"kind": "message", "text", "from"}`
-  - `{"kind": "notice", "title", "text"}`
-
-When the Mac can't be reached (no answer, timeout) the home screen shows
-"Can't reach Roku Detox on your Mac" and keeps the clock running. HTTP 401/403 shows
-"Roku Detox on your Mac didn't accept this TV". An `{"error": "..."}` from `item` is shown as a notice.
+Anything else (or no `contentId`) shows the home screen. OK / Back on a message or notice, Back during a
+video, or the video ending all go back to Home. Back on Home exits the app.
 
 ## Screens
 
-- **Home**: clock (12-hour unless `clock24`) and date top-left, TV name top-right, "Your apps"
-  (290x218 icons) and "Inputs" rows. `simpleMode`: up to 6 favorites, big tiles in 2 rows of 3, no inputs.
+- **Home**: clock (12-hour unless `clock24`) and date top-left, TV name and a hint about * top-right,
+  then Favorites (if any), All apps (everything else, in the TV's order) and Inputs rows (290x218 icons,
+  140-high input boxes). Rows scroll up and down. OK opens the app or input; * adds it to favorites or takes it off.
+  `simpleMode`: up to 6 favorites, big tiles in 2 rows of 3 (shows the normal rows while there are no favorites).
+- If the TV refuses (HTTP 401/403, "Control by mobile apps" set to Limited) the screen says how to change it:
+  Settings > System > Advanced system settings > Control by mobile apps > Network access > Default.
 - **Message / Notice**: very large text; OK or Back closes.
 - **Video**: stock player UI; playback errors show "Couldn't play this video" with the error text.
 - **Screensaver**: pick "Detox Clock" in Settings > Theme > Screensaver.

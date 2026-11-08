@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  One request to this TV's own remote-control service (Roku ECP, port 8060). Create one per request:
+    request  = {tag, method: "GET"|"POST", path: "query/apps" | "query/device-info" | "launch/<id>", host: "" or the last host that answered}
+    response = {tag, ok: bool, code: int (0 = no answer), host: str, error: str,
+                apps: [{id, name, kind: "app"|"input", port}] (query/apps), name: str (query/device-info)}
+-->
+<component name="EcpTask" extends="Task">
+  <interface>
+    <field id="request" type="assocarray"/>
+    <field id="response" type="assocarray" alwaysNotify="true"/>
+  </interface>
+  <script type="text/brightscript" uri="pkg:/components/EcpTask.brs"/>
+  <script type="text/brightscript" uri="pkg:/components/DetoxUtils.brs"/>
+</component>

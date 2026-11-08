@@ -64,11 +64,24 @@ Pages never hard-code `/api/icon`. They call `engine.iconSrc(tv, appId)` which r
   for `:8060/query/device-info`), `rules.js` (chrome.alarms every 30 s; same rule shapes as roku_detox.py).
 - `sniffer`: `chrome.webRequest.onResponseStarted` notes media URLs (m3u8, mpd, mp4, mime `video/*`, `application/vnd.apple.mpegurl`)
   per tab, skipping ad hosts; the toolbar popup shows "Send to TV" for the current tab's best video.
+- `POST /api/sites/look` `{siteId, q}` → `{group}` (extension only): "Look closer". Opens the site's results page in a
+  hidden, muted tab (`chrome.tabs` + `chrome.scripting`), waits for its links to settle, reads the live page including
+  shadow DOM, closes the tab, and marks the site `deep: true` so later searches read it that way. Search groups carry
+  `canLookCloser` (plain read found nothing) and `lookedCloser`.
 - `rules/ads.json`: declarativeNetRequest static rules blocking the same ad hosts as `AD_HOSTS` in roku_detox.py.
 - `app/index.html`: a copy of `roku-detox/index.html`, made by `tools/build_extension.py` (never edited by hand).
 
-## Detox Home (TV app) without the Mac
+## Detox Home (TV app)
 
-When the engine is extension or lite, there's no Mac to fetch items from, so items travel inside the deep link:
-`launch/dev?contentId=inline&mediaType=video&url=<encoded>&title=<encoded>` (or `mediaType=message&text=..`,
-`mediaType=notice&title=..&text=..`). Detox Home must accept these inline items in addition to the Mac-hosted ones.
+Detox Home (2.0 and later) never connects to a computer, whichever engine installed it. It lists the TV's apps
+and opens them through the TV's own ECP, and keeps favorites and options on the TV. Every engine only sends
+things in, as deep links (`roku-app/README.md` has the full list):
+
+- Items travel inside the link: `launch/dev?contentId=inline&mediaType=video&url=<encoded>&title=<encoded>`
+  (or `mediaType=message&text=..`, `mediaType=notice&title=..&text=..`); `input?...` instead when Detox Home is in front.
+- Favorites: `contentId=favorites&ids=12,837`. Options: `contentId=settings&clock24=0|1&simpleMode=0|1`.
+  These go only as `input?...` while Detox Home is in front, so they never interrupt the TV. Otherwise they wait
+  and are handed over the next time the engine sees Detox Home in front (any active-app check).
+- `GET /api/tvapp` adds `detoxHome` (the dev app is Detox Home), `version`, and `outdated` (older than 2.0,
+  which still asked the Mac for everything); `linked` now just means `detoxHome`.
+- `POST /api/tvapp/options` answers `{options, delivered}` (delivered: on the TV now).

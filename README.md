@@ -8,6 +8,12 @@ The page has five menus:
 - **Find a show**: search any show or movie, see which of your apps has it, and start it on the TV.
   Listings come from JustWatch's public catalog (unofficial, so it may change). Roku can see which apps
   are installed but not which ones you pay for, so you can untick services under "My services".
+  **My sites** searches video sites you add (paste any results page address, like
+  `https://www.youtube.com/results?search_query=cats`). Results are read from the page's links and from
+  the data many sites tuck inside the page (YouTube, schema.org, Next.js), so no scripts or ads load.
+  For sites that only show results after their scripts run, the extension's **Look closer** opens the
+  page in a hidden, muted tab for a few seconds, reads it and closes it, and remembers to do that for the site.
+  YouTube results open in the YouTube app; other videos play in Detox Home.
 - **Rules**: things that run in the background while the program is open on your Mac:
   skip the home screen when the TV turns on, bedtime, daily time limits, blocked apps, swap apps,
   night guard (turns the TV back off when it wakes itself up at night), and a viewing log.
@@ -15,11 +21,13 @@ The page has five menus:
   Alerts show as macOS notifications. Includes a connection check with plain-language fixes.
 - **Clean up**: remove channels, finish-up checklist, undo list.
 - **TV app**: install **Detox Home**, a custom Roku app (in `roku-app/`): a calm home screen with a clock
-  and your favorites, rule notices ("Time's up"), messages you send from the Mac or phone, videos from
+  and your apps and favorites, rule notices ("Time's up"), messages you send from the Mac or phone, videos from
   web links, and an ad-free "Detox Clock" screensaver. Needs Roku developer mode (Home x3, Up x2,
   Right, Left, Right, Left, Right on the remote); you type the developer password on the page, and it's
-  sent only to the TV and never saved. The app reaches this Mac over home Wi-Fi with its own key, which
-  only works for the app's few requests.
+  sent only to the TV and never saved. Once installed it runs on its own: it reads the apps from the TV
+  itself and opens them through the TV's own remote-control service, so it never connects to the Mac.
+  Press * on the remote on a tile to add or remove a favorite; favorites and options chosen on the page
+  are sent to it while it's open.
 - **Phone**: use your phone as the remote.
 
 **Send a video link to the TV**: paste a link into the box under the remote, or use the "Send to TV"

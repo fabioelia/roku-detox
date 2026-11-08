@@ -1,112 +1,176 @@
-' HomeScene - home screen, message / notice / video screens, and all talk with the Mac.
+' HomeScene - Detox Home's screens: the home screen, and message / notice / video screens.
 '
-' Modes: "home" | "message" (also notices) | "video" | "loading" | "setup" (config.json missing)
+' Needs no computer. The apps, their icons and opening them all go through this TV's own
+' remote-control service (EcpTask). Favorites and options are kept on the TV (registry section
+' "DetoxHome"). Roku Detox on a computer or phone only ever sends things in: deep links and
+' ECP input events (see onDeepLink).
+'
+' Modes: "home" | "message" (also notices) | "video"
 
 sub init()
     ' Text sizes (see setFont in DetoxUtils.brs).
-    applyFonts([["clockLabel", 120, true], ["dateLabel", 40, false], ["tvNameLabel", 32, false], ["appsTitle", 36, true], ["statusLabel", 40, false], ["emptyLabel", 44, false], ["inputsTitle", 36, true], ["bannerLabel", 28, false], ["loadingLabel", 56, false], ["overlayTitle", 72, true], ["overlayText", 40, false], ["homeSceneText1", 72, true], ["homeSceneText2", 52, false]])
+    applyFonts([["clockLabel", 120, true], ["dateLabel", 40, false], ["tvNameLabel", 32, false], ["hintLabel", 26, false], ["statusLabel", 40, false], ["emptyLabel", 40, false], ["bannerLabel", 28, false], ["overlayTitle", 72, true], ["overlayText", 40, false]])
     m.top.backgroundURI = ""
     m.top.backgroundColor = "0x10161FFF"
 
     m.homeGroup = m.top.findNode("homeGroup")
+    m.rowsArea = m.top.findNode("rowsArea")
+    m.topCover = m.top.findNode("topCover")
     m.clockLabel = m.top.findNode("clockLabel")
     m.dateLabel = m.top.findNode("dateLabel")
     m.tvNameLabel = m.top.findNode("tvNameLabel")
-    m.appsTitle = m.top.findNode("appsTitle")
+    m.hintLabel = m.top.findNode("hintLabel")
     m.statusLabel = m.top.findNode("statusLabel")
     m.emptyLabel = m.top.findNode("emptyLabel")
-    m.appsArea = m.top.findNode("appsArea")
-    m.inputsTitle = m.top.findNode("inputsTitle")
-    m.inputsArea = m.top.findNode("inputsArea")
     m.banner = m.top.findNode("banner")
     m.bannerLabel = m.top.findNode("bannerLabel")
     m.messageView = m.top.findNode("messageView")
     m.videoView = m.top.findNode("videoView")
-    m.loadingGroup = m.top.findNode("loadingGroup")
     m.overlay = m.top.findNode("overlay")
     m.overlayTitle = m.top.findNode("overlayTitle")
     m.overlayText = m.top.findNode("overlayText")
-    m.setupGroup = m.top.findNode("setupGroup")
     m.clockTimer = m.top.findNode("clockTimer")
-    m.retryTimer = m.top.findNode("retryTimer")
+    m.refreshTimer = m.top.findNode("refreshTimer")
     m.overlayTimer = m.top.findNode("overlayTimer")
+    m.bannerTimer = m.top.findNode("bannerTimer")
 
-    m.cfg = invalid            ' {mac, token, tv} from config.json
-    m.tv = invalid             ' last good /api/tv/config response
-    m.tvSig = ""               ' FormatJson of it, to skip rebuilding when nothing changed
-    m.clock24 = false
-    m.simple = false
+    m.reg = CreateObject("roRegistrySection", "DetoxHome")
+    m.idPattern = CreateObject("roRegex", "^[A-Za-z0-9._-]{1,64}$", "")
+    m.favorites = loadFavorites()      ' [app id], in the order they were added
+    m.clock24 = (m.reg.Read("clock24") = "1")
+    m.simple = (m.reg.Read("simpleMode") = "1")
+    m.tvName = m.reg.Read("tvName")
+
+    m.ecpHost = ""             ' the TV's own address that answered last
+    m.apps = invalid           ' [{id, name, kind: "app"|"input", port}] from query/apps
+    m.appsSig = ""             ' FormatJson of it, to skip rebuilding when nothing changed
+    m.appsInFlight = false
+    m.appsProblem = ""
     m.mode = "home"
-    m.rows = []                ' [{group, items, tiles, x0, y, pitch, start, visibleCount, scroll}]
+    m.rows = []                ' [{kind, group, items, tiles, x0, y, top, height, pitch, start, visibleCount, scroll, vscroll, titleLabel}]
+    m.rowsBaseY = 330
+    m.scrollY = 0
     m.focusRow = 0
     m.focusCol = 0
-    m.tasks = {}               ' in-flight HttpTask nodes by id
+    m.tasks = {}               ' in-flight EcpTask nodes by id
     m.taskSeq = 0
-    m.itemSeq = 0
-    m.configInFlight = false
-    m.pendingLink = invalid
-    m.configMissing = false
-    m.bannerText = ""
 
     m.clockTimer.observeField("fire", "updateClock")
-    m.retryTimer.observeField("fire", "onRetryTimer")
+    m.refreshTimer.observeField("fire", "onRefreshTimer")
     m.overlayTimer.observeField("fire", "hideOverlay")
+    m.bannerTimer.observeField("fire", "hideBanner")
     m.videoView.observeField("finished", "onVideoFinished")
     m.videoView.observeField("playbackError", "onVideoError")
 
-    setClockLayout(false)
+    m.tvNameLabel.text = m.tvName
+    setClockLayout(m.simple)
     updateClock()
     m.clockTimer.control = "start"
+    m.refreshTimer.control = "start"
+    fetchApps()
+    startEcp("device", "GET", "query/device-info", {})
     m.top.setFocus(true)
 end sub
 
+' ---------------------------------------------------------------- what's kept on the TV
+
+function loadFavorites() as Object
+    return cleanIds(ParseJson(m.reg.Read("favorites")))
+end function
+
+sub saveFavorites(list as Object)
+    m.favorites = list
+    m.reg.Write("favorites", FormatJson(list))
+    m.reg.Flush()
+end sub
+
+sub saveFlag(key as String, isOn as Boolean)
+    value = "0"
+    if isOn then value = "1"
+    m.reg.Write(key, value)
+    m.reg.Flush()
+end sub
+
+' App ids from JSON or a deep link: strings like "12" or "tvinput.hdmi1", no repeats.
+function cleanIds(list as Dynamic) as Object
+    out = []
+    if type(list) <> "roArray" then return out
+    for each v in list
+        id = asStr(v)
+        id = id.Trim()
+        if id <> ""
+            if m.idPattern.IsMatch(id) and not hasValue(out, id) then out.Push(id)
+        end if
+    end for
+    return out
+end function
+
+' "1" / "0" (or true / false) from a deep link; invalid when it isn't there.
+function flagFrom(v as Dynamic) as Dynamic
+    t = type(v)
+    if t = "Boolean" or t = "roBoolean" then return v
+    s = LCase(asStr(v))
+    if s = "1" or s = "true" then return true
+    if s = "0" or s = "false" then return false
+    return invalid
+end function
+
 ' ---------------------------------------------------------------- fields from main.brs
 
-sub onConfigSet()
-    cfg = m.top.config
-    if type(cfg) <> "roAssociativeArray" then return
-    if asStr(cfg.mac) = "" then return
-    m.cfg = { mac: asStr(cfg.mac), token: asStr(cfg.token), tv: asStr(cfg.tv) }
-    m.configMissing = false
-    fetchConfig()
-    m.retryTimer.control = "start"
-    if m.pendingLink <> invalid
-        link = m.pendingLink
-        m.pendingLink = invalid
-        openItem(link.contentId)
+' A fresh install from Roku Detox on a computer brings its favorites and options. They're used
+' once per install (the "seed" id); after that the TV's own choices win.
+sub onSeed()
+    seed = m.top.seed
+    if type(seed) <> "roAssociativeArray" then return
+    seedId = asStr(seed.seed)
+    if seedId = "" or seedId = m.reg.Read("seedId") then return
+    if type(seed.favorites) = "roArray" then saveFavorites(cleanIds(seed.favorites))
+    saveFlag("clock24", asBool(seed.clock24))
+    saveFlag("simpleMode", asBool(seed.simpleMode))
+    if asStr(seed.tvName) <> "" and m.tvName = ""
+        m.tvName = asStr(seed.tvName)
+        m.tvNameLabel.text = m.tvName
     end if
+    m.reg.Write("seedId", seedId)
+    m.reg.Flush()
+    m.clock24 = asBool(seed.clock24)
+    m.simple = asBool(seed.simpleMode)
+    applyLook()
 end sub
 
-sub onConfigMissing()
-    if m.top.configMissing <> true then return
-    ' Installed without a Mac (from a browser): a clock home screen that still shows
-    ' videos, messages and notices sent straight to it.
-    m.configMissing = true
-    m.retryTimer.control = "stop"
-    m.appsTitle.visible = false
-    m.emptyLabel.visible = false
-    m.statusLabel.text = "Send videos and messages here from Roku Detox in your browser. Your favorite apps show up here when Roku Detox runs on a computer at home."
-    m.statusLabel.visible = true
-    setMode("home")
-end sub
-
+' Deep links (launch/dev?...) and ECP input events (input?...) from Roku Detox:
+'   contentId=inline     mediaType=video|message|notice, with url, title, text, from, streamFormat, referer
+'   contentId=favorites  ids=12,837,tvinput.hdmi1 (empty clears them)
+'   contentId=settings   clock24=0|1, simpleMode=0|1 (either one)
+' Anything else (like an item id from an older Roku Detox) just shows what's already on screen.
 sub onDeepLink()
     link = m.top.deepLink
     if type(link) <> "roAssociativeArray" then return
-    contentId = asStr(link.contentId)
-    if contentId = "" then return
+    contentId = LCase(asStr(link.contentId))
     if contentId = "inline"
         showInline(link)
-        return
+    else if contentId = "favorites"
+        ids = asStr(link.ids)
+        saveFavorites(cleanIds(ids.Split(",")))
+        buildHome()
+    else if contentId = "settings"
+        clock24 = flagFrom(link.clock24)
+        if clock24 <> invalid
+            m.clock24 = clock24
+            saveFlag("clock24", clock24)
+        end if
+        simple = flagFrom(link.simpleMode)
+        if simple <> invalid
+            m.simple = simple
+            saveFlag("simpleMode", simple)
+        end if
+        applyLook()
     end if
-    if m.configMissing then return
-    openItem(contentId)
 end sub
 
 ' An item carried in the deep link itself: {mediaType, url, title, text, from, ...}.
 sub showInline(link as Object)
     kind = LCase(asStr(link.mediaType))
-    m.itemSeq = m.itemSeq + 1   ' any item still loading from the Mac is now out of date
     if kind = "video"
         showVideo(link)
     else if kind = "message"
@@ -124,11 +188,13 @@ sub setClockLayout(simple as Boolean)
         m.clockLabel.translation = [120, 50]
         setFont(m.dateLabel, 36, false)
         m.dateLabel.translation = [124, 170]
+        m.topCover.height = 250
     else
         setFont(m.clockLabel, 120, true)
         m.clockLabel.translation = [120, 60]
         setFont(m.dateLabel, 40, false)
         m.dateLabel.translation = [124, 210]
+        m.topCover.height = 320
     end if
 end sub
 
@@ -138,6 +204,13 @@ sub updateClock()
     m.dateLabel.text = formatDate(dt)
 end sub
 
+' After the 12/24-hour clock or simple mode changed.
+sub applyLook()
+    setClockLayout(m.simple)
+    updateClock()
+    buildHome()
+end sub
+
 ' ---------------------------------------------------------------- modes
 
 sub setMode(mode as String)
@@ -145,10 +218,10 @@ sub setMode(mode as String)
     m.homeGroup.visible = (mode = "home")
     m.messageView.visible = (mode = "message")
     m.videoView.visible = (mode = "video")
-    m.loadingGroup.visible = (mode = "loading")
-    m.setupGroup.visible = (mode = "setup")
-    if mode <> "home" then hideOverlay()
-    updateBanner()
+    if mode <> "home"
+        hideOverlay()
+        hideBanner()
+    end if
     ' The Video node takes focus itself (for trickplay); everything else is handled here.
     if mode <> "video" then m.top.setFocus(true)
 end sub
@@ -201,21 +274,18 @@ end sub
 
 ' ---------------------------------------------------------------- banner + overlay
 
-sub setBanner(text as String)
-    m.bannerText = text
-    if text <> "" then m.bannerLabel.text = text
-    updateBanner()
+sub showBanner(text as String)
+    if m.mode <> "home" then return
+    m.bannerLabel.text = text
+    m.banner.visible = true
+    m.bannerTimer.control = "stop"
+    m.bannerTimer.control = "start"
 end sub
 
-sub updateBanner()
-    m.banner.visible = (m.bannerText <> "" and (m.mode = "home" or m.mode = "loading"))
+sub hideBanner()
+    m.banner.visible = false
+    m.bannerTimer.control = "stop"
 end sub
-
-function reachText(resp as Object) as String
-    code = asInt(resp.code, 0)
-    if code = 401 or code = 403 then return "Roku Detox on your Mac didn't accept this TV"
-    return "Can't reach Roku Detox on your Mac"
-end function
 
 sub showOverlay(title as String, text as String, seconds as Integer)
     m.overlayTitle.text = title
@@ -231,28 +301,27 @@ sub hideOverlay()
     m.overlayTimer.control = "stop"
 end sub
 
-' ---------------------------------------------------------------- HTTP
+function blockedText() as String
+    return "Roku is blocking requests from apps. On this TV, open Settings, System, Advanced system settings, Control by mobile apps, Network access, and choose Default."
+end function
 
-' Starts one HttpTask. extra is kept and handed back with the response.
-sub startRequest(tag as String, method as String, path as String, query as Dynamic, body as Dynamic, extra as Object)
-    if m.cfg = invalid then return
+' ---------------------------------------------------------------- talking to this TV
+
+' Starts one EcpTask. extra is kept and handed back with the response.
+sub startEcp(tag as String, method as String, path as String, extra as Object)
     m.taskSeq = m.taskSeq + 1
-    key = "req" + m.taskSeq.ToStr()
-    req = { tag: tag, method: method, url: m.cfg.mac + path, token: m.cfg.token }
-    if query <> invalid then req.query = query
-    if body <> invalid then req.body = FormatJson(body)
-
-    task = CreateObject("roSGNode", "HttpTask")
+    key = "ecp" + m.taskSeq.ToStr()
+    task = CreateObject("roSGNode", "EcpTask")
     task.id = key
-    task.request = req
-    task.observeField("response", "onHttpResponse")
+    task.request = { tag: tag, method: method, path: path, host: m.ecpHost }
+    task.observeField("response", "onEcpResponse")
     extra.tag = tag
     extra.node = task          ' keeps the task alive until it answers
     m.tasks[key] = extra
     task.control = "RUN"
 end sub
 
-sub onHttpResponse(event as Object)
+sub onEcpResponse(event as Object)
     task = event.getRoSGNode()
     if task = invalid then return
     key = task.id
@@ -263,121 +332,161 @@ sub onHttpResponse(event as Object)
 
     resp = event.getData()
     if type(resp) <> "roAssociativeArray" then resp = { ok: false, code: 0, error: "no response" }
+    if asInt(resp.code, 0) > 0
+        m.ecpHost = asStr(resp.host)
+    else
+        m.ecpHost = ""         ' look for the TV's address again next time
+    end if
 
-    if info.tag = "config"
-        onConfigResponse(resp)
+    if info.tag = "apps"
+        onAppsResponse(resp)
+    else if info.tag = "device"
+        onDeviceResponse(resp)
     else if info.tag = "launch"
         onLaunchResponse(resp, info)
-    else if info.tag = "item"
-        onItemResponse(resp, info)
     end if
 end sub
 
-sub fetchConfig()
-    if m.cfg = invalid or m.configInFlight then return
-    m.configInFlight = true
-    startRequest("config", "GET", "/api/tv/config", invalid, invalid, {})
+sub fetchApps()
+    if m.appsInFlight then return
+    m.appsInFlight = true
+    startEcp("apps", "GET", "query/apps", {})
 end sub
 
-sub onRetryTimer()
-    ' Every 30 s: retry after a failure, and pick up favorites changed on the Mac.
-    fetchConfig()
+sub onRefreshTimer()
+    ' Every 60 s: pick up apps added or removed on the TV, or try again after a problem.
+    fetchApps()
 end sub
 
-sub onConfigResponse(resp as Object)
-    m.configInFlight = false
-    data = resp.data
-    if asBool(resp.ok) and type(data) = "roAssociativeArray"
-        setBanner("")
-        sig = FormatJson(data)
-        if sig <> m.tvSig or m.tv = invalid
-            m.tvSig = sig
-            m.tv = data
-            applyTvConfig()
+sub onAppsResponse(resp as Object)
+    m.appsInFlight = false
+    code = asInt(resp.code, 0)
+    if asBool(resp.ok) and type(resp.apps) = "roArray"
+        m.appsProblem = ""
+        sig = FormatJson(resp.apps)
+        if sig <> m.appsSig or m.apps = invalid
+            m.appsSig = sig
+            m.apps = resp.apps
+            buildHome()
         end if
+        return
+    end if
+    if m.apps <> invalid then return   ' keep showing the apps from last time
+    if code = 401 or code = 403
+        m.appsProblem = blockedText()
+    else if code > 0
+        m.appsProblem = "The TV wouldn't list its apps (error " + code.ToStr() + "). Trying again in a minute."
     else
-        setBanner(reachText(resp))
-        if m.tv = invalid
-            m.statusLabel.text = "Your apps will show up here once Roku Detox on your Mac can be reached. Trying again every 30 seconds."
-            m.statusLabel.visible = true
-        end if
+        m.appsProblem = "Couldn't ask the TV for its apps. Trying again in a minute."
     end if
+    m.statusLabel.text = m.appsProblem
+    m.statusLabel.visible = true
 end sub
 
-sub applyTvConfig()
-    m.clock24 = asBool(m.tv.clock24)
-    m.simple = asBool(m.tv.simpleMode)
-    m.tvNameLabel.text = asStr(m.tv.tvName)
-    setClockLayout(m.simple)
-    updateClock()
-    buildHome()
+sub onDeviceResponse(resp as Object)
+    name = asStr(resp.name)
+    if not asBool(resp.ok) or name = "" then return
+    if name <> m.tvName
+        m.tvName = name
+        m.reg.Write("tvName", name)
+        m.reg.Flush()
+    end if
+    m.tvNameLabel.text = name
 end sub
 
 ' ---------------------------------------------------------------- home layout
 
 sub buildHome()
-    clearChildren(m.appsArea)
-    clearChildren(m.inputsArea)
+    ' Remember which row the focus was in, to land in the same one after rebuilding.
+    oldKind = ""
+    if m.rows.Count() > 0 and m.focusRow < m.rows.Count() then oldKind = m.rows[m.focusRow].kind
+    oldCol = m.focusCol
+
+    clearChildren(m.rowsArea)
     m.rows = []
+    m.scrollY = 0
+    if m.apps = invalid then return    ' still loading: the status line says so
     m.statusLabel.visible = false
 
-    favs = cleanItems(asArray(m.tv.favorites))
-    inputs = cleanItems(asArray(m.tv.inputs))
+    byId = {}
+    for each a in m.apps
+        byId[a.id] = a
+    end for
+    favs = []
+    for each id in m.favorites
+        if byId.DoesExist(id) then favs.Push(byId[id])
+    end for
+    others = []
+    inputs = []
+    for each a in m.apps
+        if not hasValue(m.favorites, a.id)
+            if a.kind = "input"
+                inputs.Push(a)
+            else
+                others.Push(a)
+            end if
+        end if
+    end for
 
-    if m.simple
+    if m.simple and favs.Count() > 0
         layoutSimple(favs)
+        m.hintLabel.text = "Press * on a tile to take it off your favorites"
     else
-        layoutNormal(favs, inputs)
+        m.rowsBaseY = 330
+        y = 0
+        if favs.Count() > 0 then y = addRow("favorites", "Favorites", favs, y)
+        if others.Count() > 0
+            title = "All apps"
+            if favs.Count() = 0 then title = "Your apps"
+            y = addRow("apps", title, others, y)
+        end if
+        if inputs.Count() > 0 then y = addRow("inputs", "Inputs", inputs, y)
+        m.hintLabel.text = "Press * on a tile to add or remove a favorite"
     end if
+    m.rowsArea.translation = [0, m.rowsBaseY]
+    m.emptyLabel.visible = (m.rows.Count() = 0)
+    m.hintLabel.visible = (m.rows.Count() > 0)
 
-    ' Keep focus where it was, as far as the new rows allow.
-    if m.rows.Count() = 0
-        m.focusRow = 0
-        m.focusCol = 0
-    else
-        if m.focusRow > m.rows.Count() - 1 then m.focusRow = m.rows.Count() - 1
+    ' Back to the same row (or the first one) and roughly the same spot in it.
+    m.focusRow = 0
+    for r = 0 to m.rows.Count() - 1
+        if m.rows[r].kind = oldKind then m.focusRow = r
+    end for
+    m.focusCol = oldCol
+    if m.rows.Count() > 0
         lastCol = m.rows[m.focusRow].tiles.Count() - 1
         if m.focusCol > lastCol then m.focusCol = lastCol
-        if m.focusCol < 0 then m.focusCol = 0
     end if
+    if m.focusCol < 0 then m.focusCol = 0
     applyHighlight()
 end sub
 
-sub layoutNormal(favs as Object, inputs as Object)
-    m.appsTitle.visible = true
-    m.appsTitle.translation = [120, 330]
-    m.appsArea.translation = [0, 395]
-    if favs.Count() = 0
-        m.emptyLabel.translation = [120, 410]
-        m.emptyLabel.visible = true
-    else
-        m.emptyLabel.visible = false
-        m.rows.Push(makeRow(m.appsArea, favs, "app", 120, 0, 290, 218, 36, 30, true))
+' A titled row of tiles at height y in rowsArea. Returns where the next row starts.
+function addRow(kind as String, title as String, items as Object, y as Integer) as Integer
+    label = m.rowsArea.createChild("Label")
+    label.translation = [120, y]
+    label.color = "0xC9D3DDFF"
+    setFont(label, 36, true)
+    label.text = title
+    h = 218
+    nameSize = 30
+    height = 65 + h + 60       ' title, tiles, names under them
+    if kind = "inputs"
+        h = 140
+        height = 65 + h + 30
     end if
-
-    if inputs.Count() > 0
-        m.inputsTitle.visible = true
-        m.inputsArea.visible = true
-        m.rows.Push(makeRow(m.inputsArea, inputs, "input", 120, 0, 290, 140, 36, 0, true))
-    else
-        m.inputsTitle.visible = false
-        m.inputsArea.visible = false
-    end if
-end sub
+    row = makeRow(m.rowsArea, items, kind, 120, y + 65, 290, h, 36, nameSize, true)
+    row.top = y
+    row.height = height
+    row.vscroll = true
+    row.titleLabel = label
+    m.rows.Push(row)
+    return y + height + 10
+end function
 
 ' simpleMode: favorites only, at most 6, big tiles in 2 rows of 3.
 sub layoutSimple(favs as Object)
-    m.appsTitle.visible = false
-    m.inputsTitle.visible = false
-    m.inputsArea.visible = false
-    m.appsArea.translation = [0, 260]
-    if favs.Count() = 0
-        m.emptyLabel.translation = [120, 330]
-        m.emptyLabel.visible = true
-        return
-    end if
-    m.emptyLabel.visible = false
-
+    m.rowsBaseY = 260
     firstRow = []
     secondRow = []
     for i = 0 to favs.Count() - 1
@@ -391,9 +500,9 @@ sub layoutSimple(favs as Object)
     w = 400
     h = 300
     gap = 90
-    m.rows.Push(makeRow(m.appsArea, firstRow, "app", centeredX(firstRow.Count(), w, gap), 0, w, h, gap, 48, false))
+    m.rows.Push(makeRow(m.rowsArea, firstRow, "simple1", centeredX(firstRow.Count(), w, gap), 0, w, h, gap, 48, false))
     if secondRow.Count() > 0
-        m.rows.Push(makeRow(m.appsArea, secondRow, "app", centeredX(secondRow.Count(), w, gap), h + 95, w, h, gap, 48, false))
+        m.rows.Push(makeRow(m.rowsArea, secondRow, "simple2", centeredX(secondRow.Count(), w, gap), h + 95, w, h, gap, 48, false))
     end if
 end sub
 
@@ -411,27 +520,18 @@ function makeRow(area as Object, items as Object, kind as String, x0 as Integer,
         it = items[i]
         tile = group.createChild("DetoxTile")
         tile.translation = [i * pitch, 0]
-        tile.tileData = { kind: kind, name: it.name, icon: it.icon, port: it.port, w: w, h: h, nameSize: nameSize }
+        tile.tileData = { kind: it.kind, name: it.name, icon: iconUrl(it), port: it.port, w: w, h: h, nameSize: nameSize }
         tiles.Push(tile)
     end for
     visibleCount = Int((1920 - x0 - 60) / pitch)
     if visibleCount < 1 then visibleCount = 1
-    return { group: group, items: items, tiles: tiles, x0: x0, y: y, pitch: pitch, start: 0, visibleCount: visibleCount, scroll: scroll }
+    return { kind: kind, group: group, items: items, tiles: tiles, x0: x0, y: y, top: 0, height: 0, pitch: pitch, start: 0, visibleCount: visibleCount, scroll: scroll, vscroll: false, titleLabel: invalid }
 end function
 
-function cleanItems(list as Object) as Object
-    out = []
-    for each it in list
-        if type(it) = "roAssociativeArray"
-            id = asStr(it.id)
-            if id <> ""
-                name = asStr(it.name)
-                if name = "" then name = id
-                out.Push({ id: id, name: name, icon: asStr(it.icon), port: asStr(it.port) })
-            end if
-        end if
-    end for
-    return out
+' The TV serves each app's icon itself.
+function iconUrl(item as Object) as String
+    if item.kind = "input" or m.ecpHost = "" then return ""
+    return "http://" + m.ecpHost + ":8060/query/icon/" + item.id
 end function
 
 sub clearChildren(node as Object)
@@ -449,83 +549,69 @@ sub applyHighlight()
     ensureVisible()
 end sub
 
-' Scrolls the focused row sideways so the focused tile is on screen.
+' Scrolls so the focused tile is on screen: its row sideways, and the rows up or down.
 sub ensureVisible()
     if m.rows.Count() = 0 then return
     row = m.rows[m.focusRow]
-    if not row.scroll then return
-    if m.focusCol < row.start then row.start = m.focusCol
-    if m.focusCol > row.start + row.visibleCount - 1 then row.start = m.focusCol - row.visibleCount + 1
-    row.group.translation = [row.x0 - row.start * row.pitch, row.y]
+    if row.scroll
+        if m.focusCol < row.start then row.start = m.focusCol
+        if m.focusCol > row.start + row.visibleCount - 1 then row.start = m.focusCol - row.visibleCount + 1
+        row.group.translation = [row.x0 - row.start * row.pitch, row.y]
+    end if
+    if row.vscroll
+        viewH = 1080 - m.rowsBaseY - 30
+        if row.top < m.scrollY then m.scrollY = row.top
+        if row.top + row.height > m.scrollY + viewH then m.scrollY = row.top + row.height - viewH
+        if m.scrollY < 0 then m.scrollY = 0
+        m.rowsArea.translation = [0, m.rowsBaseY - m.scrollY]
+        ' Rows scrolled up out of view are hidden whole, not left half under the clock.
+        for each r in m.rows
+            shown = (r.top >= m.scrollY)
+            r.group.visible = shown
+            if r.titleLabel <> invalid then r.titleLabel.visible = shown
+        end for
+    end if
 end sub
 
 ' ---------------------------------------------------------------- actions
 
 sub launchItem(item as Object)
-    if m.cfg = invalid then return
     showOverlay("Opening " + item.name + Chr(8230), "", 15)
-    startRequest("launch", "POST", "/api/tv/launch", invalid, { id: item.id }, { name: item.name })
+    startEcp("launch", "POST", "launch/" + item.id, { name: item.name })
 end sub
 
 sub onLaunchResponse(resp as Object, info as Object)
-    data = resp.data
-    errText = ""
-    if type(data) = "roAssociativeArray" then errText = asStr(data.error)
-    if asBool(resp.ok) and errText = ""
-        ' Roku closes this app when the other one opens; the overlay timer covers the gap.
-        setBanner("")
-        return
-    end if
-    if errText = "" and asInt(resp.code, 0) <= 0
-        errText = "Can't reach Roku Detox on your Mac."
-        setBanner(reachText(resp))
-    else if errText = "" and (asInt(resp.code, 0) = 401 or asInt(resp.code, 0) = 403)
-        errText = "Roku Detox on your Mac didn't accept this TV. Press Install on TV again."
-        setBanner(reachText(resp))
-    else if errText = ""
-        errText = "Something went wrong. Try again in a moment."
-    end if
-    showOverlay("Couldn't open " + asStr(info.name), errText, 5)
-end sub
-
-sub openItem(contentId as String)
-    if m.configMissing then return
-    if m.cfg = invalid
-        m.pendingLink = { contentId: contentId }
-        return
-    end if
-    stopVideo()
-    m.itemSeq = m.itemSeq + 1
-    setMode("loading")
-    startRequest("item", "GET", "/api/tv/item", { id: contentId }, invalid, { seq: m.itemSeq })
-end sub
-
-sub onItemResponse(resp as Object, info as Object)
-    if asInt(info.seq, -1) <> m.itemSeq or m.mode <> "loading" then return
-    data = resp.data
-    if not asBool(resp.ok) or type(data) <> "roAssociativeArray"
-        code = asInt(resp.code, 0)
-        errText = ""
-        if type(data) = "roAssociativeArray" then errText = asStr(data.error)
-        if code <= 0 or code = 401 or code = 403
-            setBanner(reachText(resp))
-            goHome()
-        else
-            if errText = "" then errText = "Roku Detox on your Mac couldn't find it."
-            showNotice("Couldn't open this", errText)
-        end if
-        return
-    end if
-
-    kind = LCase(asStr(data.kind))
-    if kind = "video"
-        showVideo(data)
-    else if kind = "message"
-        showMessage("", asStr(data.text), asStr(data.from))
-    else if kind = "notice"
-        showNotice(asStr(data.title), asStr(data.text))
+    ' On success Roku closes this app when the other one opens; the overlay covers the gap.
+    if asBool(resp.ok) then return
+    code = asInt(resp.code, 0)
+    if code = 401 or code = 403
+        errText = blockedText()
+    else if code > 0
+        errText = "The TV said no (error " + code.ToStr() + "). Try again, or open it from the Roku home screen."
     else
-        goHome()
+        errText = "Couldn't reach this TV's remote control service. Try again in a moment."
+    end if
+    showOverlay("Couldn't open " + asStr(info.name), errText, 10)
+end sub
+
+' The * button: add the tile to favorites, or take it off.
+sub toggleFavorite(item as Object)
+    list = []
+    wasFavorite = false
+    for each id in m.favorites
+        if id = item.id
+            wasFavorite = true
+        else
+            list.Push(id)
+        end if
+    end for
+    if not wasFavorite then list.Push(item.id)
+    saveFavorites(list)
+    buildHome()
+    if wasFavorite
+        showBanner("Took " + item.name + " off favorites")
+    else
+        showBanner("Added " + item.name + " to favorites")
     end if
 end sub
 
@@ -546,15 +632,7 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
             return true
         end if
         return false
-    else if m.mode = "loading"
-        if key = "back"
-            m.itemSeq = m.itemSeq + 1   ' ignore the answer when it arrives
-            goHome()
-        end if
-        return true
     end if
-
-    ' "setup": Back exits the app.
     return false
 end function
 
@@ -585,6 +663,8 @@ function handleHomeKey(key as String) as Boolean
         if m.focusRow < m.rows.Count() - 1 then moveToRow(m.focusRow + 1)
     else if key = "OK"
         if m.focusCol >= 0 and m.focusCol < row.items.Count() then launchItem(row.items[m.focusCol])
+    else if key = "options"
+        if m.focusCol >= 0 and m.focusCol < row.items.Count() then toggleFavorite(row.items[m.focusCol])
     end if
     return true
 end function

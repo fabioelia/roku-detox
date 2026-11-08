@@ -6,17 +6,17 @@ import {
   fetchWithTimeout, isPlainObject, keepAlive, parseTarget, pyLen, pyStr, truthy,
 } from "./util.js";
 import {
-  activeApp, canControl, deviceInfo, fetchIcon, launch, listApps, nowPlaying, openStorePage, press, restart,
-  runScene, search, summarize, tvAppPresent, typeText,
+  activeApp, canControl, deviceInfo, favoritesLink, fetchIcon, launch, listApps, nowPlaying, openStorePage, press,
+  pushToTvApp, restart, runScene, search, settingsLink, summarize, tvAppPresent, typeText,
 } from "./ecp.js";
 import {
-  appendLog, cleanFavorites, cleanScenes, cleanServices, preferredTv, readLog, rememberTv, saveSites,
-  saveTvSettings, siteList, tvSettings,
+  appendLog, cleanFavorites, cleanScenes, cleanServices, getLocal, preferredTv, readLog, rememberTv, saveSites,
+  saveTvSettings, setLocal, siteList, tvSettings,
 } from "./store.js";
 import {
   catalogId, findHistory, findNext, findSeason, findShow, findTitles, forgetHistory, pinHistory, recordHistory, watch,
 } from "./catalog.js";
-import { cast, searchSites, sniffedForTab, tvMessage } from "./video.js";
+import { cast, lookCloser, searchSites, sniffedForTab, tvMessage } from "./video.js";
 import { discoverReport } from "./discover.js";
 import { cleanRules, doctor, extendBedtime, rulesStatus, saveRules, skipAutopilot } from "./rules.js";
 
@@ -58,14 +58,35 @@ async function devModeOn(target) {
   }
 }
 
+// Detox Home before 2.0 asked the Mac for everything over Wi-Fi.
+const TV_APP_STANDALONE_VERSION = 2;
+
+async function tvAppOptions(address) {
+  const all = (await getLocal("tvAppOptions", {})) || {};
+  const options = isPlainObject(all[address]) ? all[address] : {};
+  return { simpleMode: Boolean(options.simpleMode), clock24: Boolean(options.clock24) };
+}
+
 async function tvAppStatus(target) {
-  const installed = await tvAppPresent(target, 5);
+  let dev = null;
+  let installed;
+  try {
+    dev = (await listApps(target)).find((a) => a.id === "dev") || null;
+    installed = Boolean(dev);
+  } catch {
+    installed = await tvAppPresent(target, 5);
+  }
+  const ours = Boolean(dev) && dev.name === "Detox Home";
+  const major = /^\d+/.exec(dev?.version || "");
   return {
     installed,
-    // Inline items (ENGINE.md) need no link to a home program, so an installed copy just works.
-    linked: installed,
+    // Detox Home works on its own (ENGINE.md), so any copy of it just works.
+    linked: ours,
+    detoxHome: ours,
+    version: dev?.version || "",
+    outdated: ours && (major ? parseInt(major[0], 10) : 0) < TV_APP_STANDALONE_VERSION,
     devMode: await devModeOn(target),
-    options: { simpleMode: false, clock24: false },
+    options: await tvAppOptions(displayAddress(target)),
     installedAt: null,
     ytdlp: false,
     appReady: true,
@@ -162,7 +183,10 @@ const POST_ROUTES = {
       scenes: "scenes" in b ? cleanScenes(b.scenes) : null,
       services: "services" in b ? cleanServices(b.services) : null,
     });
-    return tvSettings(address);
+    const saved = await tvSettings(address);
+    // Detox Home keeps its own copy: send it the new list.
+    if ("favorites" in b) await pushToTvApp(parseTarget(address), "favorites", favoritesLink(saved.favorites));
+    return saved;
   },
   "/api/scene": async (c) => {
     const target = c.target();
@@ -193,13 +217,21 @@ const POST_ROUTES = {
   "/api/tvapp/remove": async (c) => {
     throw new NotSupported(`Remove Detox Home from the TV's own installer page: open ${installerPage(c.body.tv)} in your browser.`);
   },
-  "/api/tvapp/options": async () => { throw new NotSupported("Detox Home's options need the Roku Detox program at home."); },
+  "/api/tvapp/options": async (c) => {
+    const target = c.target();
+    const address = displayAddress(target);
+    const options = { simpleMode: truthy(c.body.simpleMode), clock24: truthy(c.body.clock24) };
+    const all = (await getLocal("tvAppOptions", {})) || {};
+    await setLocal("tvAppOptions", { ...(isPlainObject(all) ? all : {}), [address]: options });
+    return { options, delivered: await pushToTvApp(target, "settings", settingsLink(options)) };
+  },
   "/api/tv-message": async (c) => {
     const text = words(c.body.text, "Type a message of up to 200 characters.", 200);
     await tvMessage(c.target(), text);
     return ok();
   },
   "/api/sites": async (c) => ({ sites: await saveSites(c.body.sites) }),
+  "/api/sites/look": async (c) => ({ group: await lookCloser(String(c.body.siteId ?? ""), words(c.body.q, "Type something to search for.")) }),
   "/api/phone": async () => { throw new NotSupported(PHONE); },
   "/api/pair": async () => { throw new NotSupported(PHONE); },
   "/api/household": async () => { throw new NotSupported(HOUSEHOLD); },

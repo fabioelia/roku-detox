@@ -37,11 +37,12 @@ address once, or press Find TVs.
 
 ### Detox Home (the TV app)
 
-Videos, messages and rule notices open in Detox Home. Without the Mac there's nothing for Detox
-Home to fetch items from, so each item travels inside the launch link
-(`launch/dev?contentId=inline&mediaType=video&url=…&title=…`). The extension can't install
-Detox Home itself: with developer mode on, open `http://<your TV's address>` in the browser and
-upload the Detox Home zip there.
+Videos, messages and rule notices open in Detox Home. It runs on its own on the TV (it reads the
+TV's apps itself), so each item travels inside the launch link
+(`launch/dev?contentId=inline&mediaType=video&url=…&title=…`). Favorites saved on the page and the
+TV app options go to it as `contentId=favorites` / `contentId=settings` input events while it's open,
+or wait until the extension next sees it open. The extension can't install Detox Home itself: with
+developer mode on, open `http://<your TV's address>` in the browser and upload the Detox Home zip there.
 
 ### Needs the program at home
 
@@ -49,8 +50,8 @@ These answer with a plain-English explanation (status 501, `needs: "home"`):
 
 - the phone remote and pairing (`/api/phone`, `/api/pair`), and sharing the page with the
   household (`/api/household`)
-- installing or removing Detox Home (`/api/tvapp/install`, `/api/tvapp/remove`), and its options
-  (`/api/tvapp/options`), which Detox Home reads from the Mac
+- installing or removing Detox Home (`/api/tvapp/install`, `/api/tvapp/remove`): use the TV's own
+  installer page instead
 
 Rules stop when Chrome is closed. The Mac program keeps them running all the time.
 

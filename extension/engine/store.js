@@ -148,7 +148,9 @@ export function cleanSites(raw) {
     if (!search.includes("{q}")) throw new ValueError(`Put {q} in the search address for "${name}" where your search words go.`);
     let siteId = truthy(item.id) ? pyStr(item.id) : "";
     if (!SITE_ID_RE.test(siteId)) siteId = randomHex(4);
-    sites.push({ id: siteId, name, search });
+    const site = { id: siteId, name, search };
+    if (item.deep === true) site.deep = true; // read in a hidden tab ("Look closer" worked for it)
+    sites.push(site);
   }
   return sites;
 }

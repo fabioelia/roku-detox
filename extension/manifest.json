@@ -33,6 +33,7 @@
     "webRequest",
     "declarativeNetRequest",
     "tabs",
+    "scripting",
     "sidePanel"
   ],
   "host_permissions": [

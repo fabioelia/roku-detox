@@ -67,6 +67,32 @@ test("search results are read like search_site", () => {
   });
 });
 
+test("results are read from page data and look-alike links like read_results", () => {
+  const data = `<html><head>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"ItemList","itemListElement":[{"@type":"ListItem","position":1,"url":"https://example.com/watch/ocean-life","name":"Ocean Life &amp; More","image":"https://img.example.com/ocean.jpg"},{"@type":"ListItem","position":2,"url":"https://example.com/watch/deep-sea","name":"Deep Sea"}]}</script>
+    <script id="__NEXT_DATA__" type="application/json">{"props":{"pageProps":{"results":[{"title":"Whales of the Ocean","href":"/video/whales?utm_source=x","duration":3600,"thumbnail":{"sources":[{"url":"//img.example.com/w-small.jpg"},{"url":"//img.example.com/w-big.jpg"}]}},{"title":"About us","url":"/about"},{"name":"Ocean menu link","url":"/menu/ocean"}]}}}</script>
+    <script>window.__INITIAL_STATE__ = {"feed":{"items":[{"headline":{"runs":[{"text":"Coral "},{"text":"Reefs"}]},"permalink":"https://example.com/watch/coral","viewCount":10}]}};</script>
+    <script>var junk = {a: 1}; self.cfg = JSON.parse("{\\"items\\":[{\\"title\\":\\"Ocean Storms\\",\\"url\\":\\"/watch/storms\\",\\"releaseDate\\":\\"2020\\",\\"pad\\":\\"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\\"}]}");</script>
+    <script>var ytInitialData = {"contents":[{"videoRenderer":{"videoId":"abcdefghijk","title":{"runs":[{"text":"Sea "},{"text":"Otters"}]},"thumbnail":{"thumbnails":[{"url":"https://i.ytimg.com/vi/abcdefghijk/1.jpg"},{"url":"https://i.ytimg.com/vi/abcdefghijk/2.jpg"}]}}}]};</script>
+    </head><body><nav><a href="/watch/nav-ocean">Ocean (nav)</a></nav>
+    <a href="/watch/ocean-life">Ocean Life</a><a href="/watch/forest">Forest</a><a href="/watch/ocean-sunset?ref=a">Ocean sunset</a></body></html>`;
+  const grid = `<div>${["Panda hunt", "Daddy, stop", "City lights", "Rain", "Ocean drive", "Night shift"].map((t, i) => `<a href="/video/x${i}z">${t}</a><a href="/video/x${i}z?pp=1">${i}:00</a>`).join("")}<a href="/about-us">About</a><a href="/channel/ocean-fans">Ocean fans</a></div>`;
+  const calls = [
+    ["https://example.com/search?q=ocean", data, "ocean"], ["https://www.youtube.com/results?search_query=otter", data, "otter"],
+    ["https://example.com/search?q=ocean", grid, "ocean"], ["https://example.com/s", grid, "zzz"], ["https://example.com/s", "<p>nothing</p>", "ocean"],
+  ];
+  const expected = oracle(calls.map((args) => ({ fn: "read_results", args })));
+  calls.forEach((args, i) => {
+    let got;
+    try { got = { value: video.readResults(...args) }; } catch (err) { got = { error: err.message }; }
+    assert.deepEqual(got.error ?? got.value, expected[i].error ?? expected[i].value, `${args[0]} ${args[2]}`);
+  });
+  const ocean = video.readResults(...calls[0]).map((r) => r.title);
+  assert.ok(ocean.includes("Whales of the Ocean") && ocean.includes("Coral Reefs") && ocean.includes("Ocean Storms") && !ocean.includes("Ocean (nav)"));
+  assert.ok(video.readResults(...calls[1]).some((r) => r.url === "https://www.youtube.com/watch?v=abcdefghijk" && r.title === "Sea Otters"));
+  assert.equal(video.readResults(...calls[2]).length, 7); // six look-alike results plus the one that names the words
+});
+
 test("sniffer: records playable media per tab, skips ads and segments, picks the best", async () => {
   chrome.tabs.list.set(7, { id: 7, url: "https://videos.example.com/watch/42", title: "Episode 42" });
   const note = (url, type, extra = {}) => video.noteMedia({

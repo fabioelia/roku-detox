@@ -28,6 +28,14 @@ function asArray(v as Dynamic) as Object
     return []
 end function
 
+' Is the string v in list?
+function hasValue(list as Object, v as String) as Boolean
+    for each item in list
+        if asStr(item) = v then return true
+    end for
+    return false
+end function
+
 ' Roku can't load its system font by file name, so a label starts from a built-in
 ' system font and is then resized (label.font becomes a Font node we can change).
 sub setFont(label as Object, size as Integer, bold as Boolean)

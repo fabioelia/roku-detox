@@ -212,13 +212,17 @@ def can_control(target):
     return status == 200 and not is_blocked(status, body)
 
 
-def active_app(target):
+def active_app(target, deliver=True):
     status, body, _ = ecp(target, "query/active-app")
     check(status, body)
     node = ET.fromstring(body).find("app")
     if node is None:
         return {"id": "", "name": ""}
-    return {"id": node.get("id", ""), "name": (node.text or "").strip()}
+    app = {"id": node.get("id", ""), "name": (node.text or "").strip()}
+    # Detox Home is open and favorites or options changed while it wasn't: hand them over now.
+    if deliver and app["id"] == "dev" and TV_APP_PENDING.get(target):
+        deliver_pending(target, app)
+    return app
 
 
 def press(target, key):
@@ -1759,9 +1763,9 @@ class PhoneAccess:
 
     def stop_listening_if_unused(self):
         with SETTINGS_LOCK:
-            tv_apps = read_settings().get("tvApps") or {}
+            legacy_tv_app = legacy_tv_apps(read_settings())
         with self.lock:
-            if self.server and not self.phone_on and not tv_apps and not household()["open"]:
+            if self.server and not self.phone_on and not legacy_tv_app and not household()["open"]:
                 self.server.shutdown()
                 self.server.server_close()
                 self.server = self.url = None
@@ -1830,12 +1834,20 @@ class PhoneAccess:
 # --- Detox Home (the custom Roku app) ----------------------------------------------
 
 APP_DIR = os.path.join(HERE, "roku-app")
-TV_ITEMS = {}          # item id -> what Detox Home should show (video, message, notice)
 TV_APP_SEEN = {}       # target -> (checked at, installed?)
+# Favorites / options changed on this page while Detox Home wasn't open: {target: {"favorites": params, ...}}.
+# Handed over the next time it's seen in front (active_app), so the TV never has to ask for them.
+TV_APP_PENDING = {}
+TV_APP_PENDING_LOCK = threading.Lock()
 TV_APP_REQUIRED = [
     "manifest", "source/main.brs", "components/HomeScene.xml",
     "images/icon_focus_hd.png", "images/icon_focus_sd.png", "images/splash_fhd.png",
 ]
+
+
+def legacy_tv_apps(settings):
+    """Copies of Detox Home from before 2.0, which reach this Mac over Wi-Fi with a device token."""
+    return [address for address, info in (settings.get("tvApps") or {}).items() if (info or {}).get("token")]
 
 
 def tv_app_present(target, max_age=60):
@@ -1851,29 +1863,77 @@ def tv_app_present(target, max_age=60):
     return present
 
 
-def put_item(item):
-    now = time.time()
-    for key in [k for k, v in TV_ITEMS.items() if now - v["created"] > 3600]:
-        TV_ITEMS.pop(key)
-    item_id = secrets.token_hex(6)
-    TV_ITEMS[item_id] = {**item, "created": now}
-    return item_id
+def tv_app_in_front(target):
+    try:
+        return active_app(target, deliver=False).get("id") == "dev"
+    except TVError:
+        return False
+
+
+def send_to_tv_app(target, params, open_it=True):
+    """Hand Detox Home a deep link. It's an ECP input event when the app is already open (nothing
+    restarts); otherwise the app is opened with it, or (open_it=False) nothing is sent.
+    Returns True if it was sent."""
+    if tv_app_in_front(target):
+        status, body, _ = ecp(target, "input?" + urllib.parse.urlencode(params), "POST")
+        check(status, body)
+        return True
+    if not open_it:
+        return False
+    launch(target, "dev", params)
+    return True
 
 
 def show_on_tv(target, kind, item):
-    """Open Detox Home on the TV showing a video, message or notice."""
+    """Open Detox Home on the TV showing a video, message or notice. The item travels inside the
+    link itself (contentId=inline), so the TV never has to reach this computer."""
     if not tv_app_present(target):
         raise ValueError("Detox Home isn't on this TV yet. Install it from the TV app menu first.")
-    params = {"contentId": put_item({"kind": kind, **item}), "mediaType": kind}
+    params = {"contentId": "inline", "mediaType": kind}
+    params.update({key: str(value) for key, value in item.items() if value not in (None, "")})
+    send_to_tv_app(target, params)
+
+
+def favorites_link(address):
+    favorites = [f for f in tv_settings(address)["favorites"] if f != "dev"]
+    return {"contentId": "favorites", "ids": ",".join(favorites)}
+
+
+def settings_link(options):
+    return {"contentId": "settings", "clock24": "1" if options.get("clock24") else "0",
+            "simpleMode": "1" if options.get("simpleMode") else "0"}
+
+
+def push_to_tv_app(target, kind, params):
+    """Give Detox Home new favorites or options without interrupting the TV: now if it's open,
+    otherwise the next time it's seen open. Returns True if it's on the TV now."""
+    with TV_APP_PENDING_LOCK:
+        TV_APP_PENDING.setdefault(target, {})[kind] = params
     try:
-        in_front = active_app(target).get("id") == "dev"
-    except TVError:
-        in_front = False
-    if in_front:  # already open: hand it the new item instead of restarting it
-        status, body, _ = ecp(target, "input?" + urllib.parse.urlencode(params), "POST")
-        check(status, body)
-    else:
-        launch(target, "dev", params)
+        return tv_app_present(target, max_age=300) and deliver_pending(target)
+    except (TVError, ET.ParseError):
+        return False   # it's still waiting; it goes the next time Detox Home is seen open
+
+
+def deliver_pending(target, app=None):
+    """Send what's waiting for Detox Home, if it's in front. Returns True if everything went."""
+    with TV_APP_PENDING_LOCK:
+        waiting = dict(TV_APP_PENDING.get(target) or {})
+    if not waiting:
+        return True
+    in_front = (app.get("id") == "dev") if app is not None else tv_app_in_front(target)
+    if not in_front:
+        return False
+    for kind, params in waiting.items():
+        try:
+            status, body, _ = ecp(target, "input?" + urllib.parse.urlencode(params), "POST")
+            check(status, body)
+        except TVError:
+            return False
+        with TV_APP_PENDING_LOCK:
+            if (TV_APP_PENDING.get(target) or {}).get(kind) == params:
+                TV_APP_PENDING[target].pop(kind)
+    return True
 
 
 def friendly_notice(target, title, text):
@@ -1888,10 +1948,10 @@ def friendly_notice(target, title, text):
 
 
 def build_package(config=None):
-    """Zip the roku-app folder, plus a config.json telling the app how to reach this Mac.
+    """Zip the roku-app folder. Detox Home needs nothing else: it reads its apps from the TV.
 
-    With no config, the app runs on its own: a clock home screen that shows videos and
-    messages sent straight from a browser (the extension or the phone link).
+    config (from tv_seed) becomes config.json, what a fresh install starts with: favorites,
+    clock24, simpleMode, tvName, and a seed id so the TV uses it once per install.
     """
     missing = [f for f in TV_APP_REQUIRED if not os.path.exists(os.path.join(APP_DIR, f))]
     if missing:
@@ -1947,25 +2007,40 @@ def send_to_installer(target, password, package=None):
         raise TVError("The TV's installer answered, but didn't say the install worked.")
 
 
+def tv_app_options(address):
+    with SETTINGS_LOCK:
+        info = (read_settings().get("tvApps") or {}).get(address) or {}
+    options = info.get("options") or {}
+    return {"simpleMode": bool(options.get("simpleMode")), "clock24": bool(options.get("clock24"))}
+
+
+def tv_seed(target):
+    """What a fresh Detox Home starts with (its config.json). After that the TV keeps its own copy."""
+    address = display_address(target)
+    try:
+        name = summarize(target, device_info(target))["name"]
+    except TVError:
+        name = ""
+    return {"seed": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "favorites": [f for f in tv_settings(address)["favorites"] if f != "dev"],
+            **tv_app_options(address), "tvName": name}
+
+
 def install_tv_app(phone, target, password):
     if not password or len(password) > 200:
         raise ValueError("Type the developer password you chose on the TV.")
     address = display_address(target)
-    lan = phone.listen()
-    token = secrets.token_urlsafe(24)
-    try:
-        send_to_installer(target, password, build_package({"mac": lan, "token": token, "tv": address}))
-    except (TVError, ValueError):
-        phone.stop_listening_if_unused()
-        raise
+    options = tv_app_options(address)
+    send_to_installer(target, password, build_package(tv_seed(target)))
 
     def change(data):
         apps = data.setdefault("tvApps", {})
-        options = apps.get(address, {}).get("options", {})
-        apps[address] = {"token": token_hash(token), "mac": lan, "options": options,
-                         "installedAt": datetime.now(timezone.utc).isoformat(timespec="seconds")}
+        apps[address] = {"options": options, "installedAt": datetime.now(timezone.utc).isoformat(timespec="seconds")}
     update_settings(change)
     TV_APP_SEEN.pop(target, None)
+    with TV_APP_PENDING_LOCK:
+        TV_APP_PENDING.pop(target, None)   # the new copy starts with them
+    phone.stop_listening_if_unused()       # older copies reached this Mac over Wi-Fi; this one doesn't
 
 
 def remove_tv_app(phone, target, password):
@@ -1978,6 +2053,10 @@ def remove_tv_app(phone, target, password):
     phone.stop_listening_if_unused()
 
 
+# Detox Home before 2.0 asked this Mac for everything over Wi-Fi.
+TV_APP_STANDALONE_VERSION = 2
+
+
 def tv_app_status(target):
     address = display_address(target)
     with SETTINGS_LOCK:
@@ -1988,11 +2067,23 @@ def tv_app_status(target):
             dev_mode = True
     except OSError:
         dev_mode = False
+    try:
+        dev = next((a for a in list_apps(target) if a["id"] == "dev"), None)
+        installed = dev is not None
+        TV_APP_SEEN[target] = (time.time(), installed)
+    except TVError:
+        dev, installed = None, tv_app_present(target)
+    ours = bool(dev) and dev["name"] == "Detox Home"
+    major = re.match(r"\d+", (dev or {}).get("version", ""))
     return {
-        "installed": tv_app_present(target, max_age=5),
-        "linked": bool(info),
+        "installed": installed,
+        # Any copy of Detox Home works on its own now; nothing links it to this Mac.
+        "linked": ours,
+        "detoxHome": ours,
+        "version": (dev or {}).get("version", ""),
+        "outdated": ours and (int(major.group()) if major else 0) < TV_APP_STANDALONE_VERSION,
         "devMode": dev_mode,
-        "options": (info or {}).get("options", {"simpleMode": False, "clock24": False}),
+        "options": tv_app_options(address),
         "installedAt": (info or {}).get("installedAt"),
         "ytdlp": bool(shutil.which("yt-dlp")),
         "appReady": all(os.path.exists(os.path.join(APP_DIR, f)) for f in TV_APP_REQUIRED),
@@ -2000,16 +2091,15 @@ def tv_app_status(target):
 
 
 def save_tv_app_options(target, raw):
+    """Save Detox Home's options and send them to the TV. Returns {options, delivered}."""
     address = display_address(target)
     options = {"simpleMode": bool(raw.get("simpleMode")), "clock24": bool(raw.get("clock24"))}
 
     def change(data):
-        info = (data.get("tvApps") or {}).get(address)
-        if not info:
-            raise ValueError("Install Detox Home first.")
+        info = data.setdefault("tvApps", {}).setdefault(address, {})
         info["options"] = options
     update_settings(change)
-    return options
+    return {"options": options, "delivered": push_to_tv_app(target, "settings", settings_link(options))}
 
 
 def tv_config(address, base, token):
@@ -2244,7 +2334,10 @@ def clean_sites(raw):
         site_id = str(item.get("id") or "")
         if not SITE_ID_RE.match(site_id):
             site_id = secrets.token_hex(4)
-        sites.append({"id": site_id, "name": name, "search": search})
+        site = {"id": site_id, "name": name, "search": search}
+        if item.get("deep") is True:  # the extension reads it in a hidden tab ("Look closer" worked)
+            site["deep"] = True
+        sites.append(site)
     return sites
 
 
@@ -2252,28 +2345,243 @@ def strip_tags(fragment):
     return re.sub(r"\s+", " ", html_module.unescape(re.sub(r"<[^>]+>", " ", fragment))).strip()
 
 
-def search_site(site, query):
-    """Read a site's search results page and pick out the links that look like results."""
-    url = site["search"].replace("{q}", urllib.parse.quote_plus(query))
-    final_url, page = fetch_page(url, limit=2_000_000)[:2]
-    if page is None:
-        return []
+# Many sites build their results with scripts, but still ship them inside the page as data
+# (YouTube's ytInitialData, Next.js __NEXT_DATA__, schema.org JSON-LD...). Reading that data finds
+# results with no scripts run, so ads and pop-ups still never load.
+JSON_SCRIPT_RE = re.compile(r'<script\b[^>]*\btype=["\']application/(?:ld\+json|json)["\'][^>]*>(.*?)</script>', re.S | re.I)
+SCRIPT_RE = re.compile(r'<script\b([^>]*)>(.*?)</script>', re.S | re.I)
+ASSIGN_RE = re.compile(r'[A-Za-z_$][\w$]*\s*=\s*(?=[\[{])')
+JSON_PARSE_RE = re.compile(r'JSON\.parse\(\s*"((?:\\.|[^"\\])*)"\s*\)', re.S)
+URL_KEYS = ("url", "href", "link", "permalink", "canonicalUrl", "canonical_url", "webpageUrl", "webpage_url",
+            "watchUrl", "watch_url", "shareUrl", "share_url", "pageUrl", "page_url", "path")
+TITLE_KEYS = ("title", "headline", "name")
+IMAGE_KEYS = ("thumbnail", "thumbnails", "thumbnailUrl", "thumbnail_url", "image", "images", "poster", "posterUrl",
+              "poster_url", "cover", "coverImage", "cover_image", "contentImage", "artwork", "picture", "img", "still")
+# Data that is clearly a video, show or movie, not a menu entry.
+MEDIA_TYPES = {"videoobject", "movie", "tvseries", "tvepisode", "episode", "tvseason", "clip", "musicvideoobject",
+               "creativework", "listitem"}
+MEDIA_KEYS = ("duration", "lengthSeconds", "length_seconds", "runtime", "uploadDate", "upload_date", "releaseDate",
+              "release_date", "episodeNumber", "seasonNumber", "viewCount", "view_count")
+DROP_PARAMS = {"ref", "ref_src", "fbclid", "gclid", "si", "pp", "feature", "source", "from"}
+MAX_DATA_BYTES = 6_000_000
+MAX_DATA_NODES = 300_000
+MAX_RESULTS = 20
+MIN_GRID = 5  # this many links of the same shape (like /video/<id>) are the page's list of results
+
+
+def scan_json(text, start):
+    """End of the JSON object or array starting at text[start] (balanced brackets, strings skipped), or -1."""
+    closers = {"{": "}", "[": "]"}
+    stack = []
+    i, n = start, min(len(text), start + MAX_DATA_BYTES)
+    while i < n:
+        ch = text[i]
+        if ch == '"':
+            i += 1
+            while i < n and text[i] != '"':
+                i += 2 if text[i] == "\\" else 1
+        elif ch in closers:
+            stack.append(closers[ch])
+        elif ch in "}]":
+            if not stack or stack.pop() != ch:
+                return -1
+            if not stack:
+                return i + 1
+        i += 1
+    return -1
+
+
+def page_data(page):
+    """JSON found in a page's scripts, in page order."""
+    blobs, used = [], 0
+
+    def add(text):
+        nonlocal used
+        text = text.strip()
+        if len(text) < 2 or used + len(text) > MAX_DATA_BYTES or len(blobs) >= 40:
+            return
+        try:
+            blobs.append(json.loads(text))
+            used += len(text)
+        except ValueError:
+            pass
+
+    for match in JSON_SCRIPT_RE.finditer(page):
+        add(re.sub(r"^\s*(?:<!--|<!\[CDATA\[)|(?:-->|\]\]>)\s*$", "", match.group(1)))
+    for script in SCRIPT_RE.finditer(page):
+        attrs, body = script.group(1), script.group(2)
+        if re.search(r"\bsrc=|application/(?:ld\+json|json)", attrs, re.I):
+            continue  # scripts loaded from elsewhere aren't read; data scripts were read above
+        for assign in ASSIGN_RE.finditer(body):
+            stop = scan_json(body, assign.end())
+            if stop - assign.end() >= 64:
+                add(body[assign.end():stop])
+        for parsed in JSON_PARSE_RE.finditer(body):
+            if len(parsed.group(1)) >= 64:
+                try:
+                    add(json.loads('"' + re.sub(r"\\x([0-9a-fA-F]{2})", r"\\u00\1", parsed.group(1)) + '"'))
+                except ValueError:
+                    pass
+    return blobs
+
+
+def data_text(value):
+    """Text from the shapes sites use for a title: "x", {"simpleText": "x"}, {"content": "x"}, {"runs": [{"text": "x"}]}."""
+    if isinstance(value, str):
+        return value
+    if isinstance(value, dict):
+        for key in ("simpleText", "content", "text"):
+            if isinstance(value.get(key), str):
+                return value[key]
+        runs = value.get("runs")
+        if isinstance(runs, list):
+            return "".join(run["text"] for run in runs if isinstance(run, dict) and isinstance(run.get("text"), str))
+    return ""
+
+
+def data_title(node, depth=0):
+    for key in TITLE_KEYS:
+        text = strip_tags(data_text(node.get(key)))
+        if text:
+            return text
+    metadata = node.get("metadata")
+    if depth < 3 and isinstance(metadata, dict):
+        title = data_title(metadata, depth + 1)
+        if title:
+            return title
+        for value in metadata.values():
+            if isinstance(value, dict):
+                title = data_title(value, depth + 1)
+                if title:
+                    return title
+    return ""
+
+
+def data_image(value, depth=0):
+    """The first picture address in a value: a string, {"url": ..}, or a list (the last, usually largest)."""
+    if depth > 5:
+        return None
+    if isinstance(value, str):
+        return value if value.startswith(("https://", "http://", "//", "/")) else None
+    if isinstance(value, list):
+        for item in reversed(value):
+            found = data_image(item, depth + 1)
+            if found:
+                return found
+        return None
+    if isinstance(value, dict):
+        for key in ("url", "src", "contentUrl"):
+            if isinstance(value.get(key), str):
+                found = data_image(value[key], depth + 1)
+                if found:
+                    return found
+        for item in value.values():
+            if isinstance(item, (dict, list)):
+                found = data_image(item, depth + 1)
+                if found:
+                    return found
+    return None
+
+
+def result_key(url):
+    """A result's address without tracking bits, so the same video found twice counts once."""
+    parsed = urllib.parse.urlparse(url)
+    query = [(k, v) for k, v in urllib.parse.parse_qsl(parsed.query, keep_blank_values=True)
+             if not k.lower().startswith("utm_") and k.lower() not in DROP_PARAMS]
+    return ((parsed.hostname or "").lower().removeprefix("www.") + parsed.path.rstrip("/")
+            + ("?" + urllib.parse.urlencode(query) if query else ""))
+
+
+def link_shape(url):
+    """Links in a results list look alike: same first folder, same depth, same query names."""
+    parsed = urllib.parse.urlparse(url)
+    parts = [part for part in parsed.path.split("/") if part]
+    names = sorted({k for k, _ in urllib.parse.parse_qsl(parsed.query, keep_blank_values=True)})
+    return "|".join([(parsed.hostname or "").lower(), parts[0].lower() if parts else "", str(len(parts)), ",".join(names)])
+
+
+def usable_link(absolute, final_url, base_root):
+    parsed = urllib.parse.urlparse(absolute)
+    host = (parsed.hostname or "").lower()
+    if parsed.scheme not in ("http", "https") or not host.endswith(base_root) or is_ad_url(absolute):
+        return False
+    if parsed.path.strip("/") == "" or NAV_PATH_RE.search(parsed.path) or NAV_QUERY_RE.search(parsed.query):
+        return False
+    return absolute.rstrip("/") != final_url.rstrip("/")
+
+
+def usable_image(url, final_url):
+    if not url:
+        return None
+    url = urllib.parse.urljoin(final_url, html_module.unescape(url))
+    return url if url.startswith("https://") and not is_ad_url(url) else None
+
+
+def data_results(page, final_url, base_root):
+    """[(result, sure)] from the page's data. sure: clearly a video or show, so it's kept even when its
+    title doesn't repeat the search words (a search engine's own ranking is better than ours)."""
+    youtube_page = base_root == "youtube.com"
+    out = []
+    budget = MAX_DATA_NODES
+    for blob in page_data(page):
+        stack = [blob]
+        while stack and budget > 0:
+            node = stack.pop()
+            budget -= 1
+            if isinstance(node, list):
+                stack.extend(reversed(node))
+                continue
+            if not isinstance(node, dict):
+                continue
+            stack.extend(reversed([v for v in node.values() if isinstance(v, (dict, list))]))
+            entry = None
+            video_id = node.get("videoId")
+            if not isinstance(video_id, str) and "VIDEO" in str(node.get("contentType", "")).upper():
+                video_id = node.get("contentId")
+            if isinstance(video_id, str) and YOUTUBE_ID_RE.match(video_id):
+                title = data_title(node)
+                if title:
+                    image = None
+                    for key in IMAGE_KEYS:
+                        if key in node:
+                            image = usable_image(data_image(node[key]), final_url)
+                            if image:
+                                break
+                    entry = ({"title": title, "url": f"https://www.youtube.com/watch?v={video_id}", "image": image}, youtube_page)
+            if entry is None:
+                link = next((node[k] for k in URL_KEYS if isinstance(node.get(k), str) and node[k]), None)
+                title = data_title(node) if link else ""
+                if link and title:
+                    absolute = urllib.parse.urljoin(final_url, html_module.unescape(link))
+                    if usable_link(absolute, final_url, base_root):
+                        kind = node.get("@type")
+                        kinds = [k.lower() for k in (kind if isinstance(kind, list) else [kind]) if isinstance(k, str)]
+                        sure = any(k in MEDIA_TYPES for k in kinds) or any(k in node for k in MEDIA_KEYS)
+                        image = None
+                        for key in IMAGE_KEYS:
+                            if key in node:
+                                image = usable_image(data_image(node[key]), final_url)
+                                if image:
+                                    break
+                        entry = ({"title": title, "url": absolute, "image": image}, sure)
+            if entry and 2 <= len(entry[0]["title"]) <= 140:
+                out.append(entry)
+    return out
+
+
+def read_results(final_url, page, query):
+    """Pick out the results on a search results page: from the page's data first, then from its links."""
     base_host = (urllib.parse.urlparse(final_url).hostname or "").lower()
     base_root = ".".join(base_host.split(".")[-2:])
+    from_data = data_results(page, final_url, base_root)
     # Menus, headers and footers are never results.
     page = re.sub(r"<(script|style|noscript|svg|header|nav|footer|aside)\b.*?</\1>", " ", page, flags=re.S | re.I)
     words = [w for w in re.findall(r"\w+", query.lower()) if len(w) >= 3] or re.findall(r"\w+", query.lower())
-    results, seen = [], {}
+    links, seen = [], {}
     for match in re.finditer(r'<a\b([^>]*?)href=["\']([^"\'#]+)["\']([^>]*)>(.*?)</a>', page, re.S | re.I):
-        attrs, href, more, inner = match.group(1) + match.group(3), match.group(2), match.group(3), match.group(4)
+        attrs, href, inner = match.group(1) + match.group(3), match.group(2), match.group(4)
         absolute = urllib.parse.urljoin(final_url, html_module.unescape(href))
-        parsed = urllib.parse.urlparse(absolute)
-        host = (parsed.hostname or "").lower()
-        if parsed.scheme not in ("http", "https") or not host.endswith(base_root) or is_ad_url(absolute):
-            continue
-        if parsed.path.strip("/") == "" or NAV_PATH_RE.search(parsed.path) or NAV_QUERY_RE.search(parsed.query):
-            continue
-        if absolute.rstrip("/") == final_url.rstrip("/"):
+        if not usable_link(absolute, final_url, base_root):
             continue
         image = re.search(r'<img[^>]+(?:data-src|data-original|data-lazy-src|src)=["\']([^"\']+)', inner, re.I)
         alt = re.search(r'<img[^>]+alt=["\']([^"\']+)', inner, re.I)
@@ -2281,29 +2589,56 @@ def search_site(site, query):
         title = strip_tags((title_attr.group(1) if title_attr else "") or strip_tags(inner) or (alt.group(1) if alt else ""))
         if not 2 <= len(title) <= 140:
             continue
-        image_url = urllib.parse.urljoin(final_url, html_module.unescape(image.group(1))) if image else None
-        if image_url and (not image_url.startswith("https://") or is_ad_url(image_url)):
-            image_url = None
-        key = absolute.split("?")[0].rstrip("/")
+        image_url = usable_image(image.group(1), final_url) if image else None
+        key = result_key(absolute)
         if key in seen:
             entry = seen[key]
             entry["image"] = entry["image"] or image_url
-            if len(title) > len(entry["title"]) and len(title) <= 140:
+            if len(title) > len(entry["title"]):
                 entry["title"] = title
             continue
         entry = {"title": title, "url": absolute, "image": image_url}
         seen[key] = entry
-        results.append(entry)
+        links.append(entry)
 
-    # Keep links that mention the search words; rank by how many, then by having a picture.
+    # Links (and data that may be a menu) must mention the search words; rank by how many, then by having a picture.
     def score(entry):
         haystack = (entry["title"] + " " + urllib.parse.unquote(urllib.parse.urlparse(entry["url"]).path)).lower()
         return sum(1 for w in words if w in haystack)
-    matched = [r for r in results if score(r) > 0]
-    if not matched:
-        raise ValueError("No results could be read. This site may build its results with scripts, which this can't see.")
-    matched.sort(key=lambda r: (-score(r), r["image"] is None))
-    return matched[:12]
+    # The biggest set of look-alike links that mentions the search words at least once is the
+    # results list: kept whole, in the site's order (a menu of look-alike links never mentions them).
+    shapes = {}
+    for entry in links:
+        shapes.setdefault(link_shape(entry["url"]), []).append(entry)
+    grid = []
+    for group in shapes.values():
+        if len(group) >= MIN_GRID and len(group) > len(grid) and any(score(entry) > 0 for entry in group):
+            grid = group
+    in_grid = {id(entry) for entry in grid}
+    sure = [entry for entry, certain in from_data if certain] + grid
+    maybe = [entry for entry in [e for e, certain in from_data if not certain] + links
+             if id(entry) not in in_grid and score(entry) > 0]
+    maybe.sort(key=lambda r: (-score(r), r["image"] is None))
+    results, keys = [], {}
+    for entry in sure + maybe:
+        key = result_key(entry["url"])
+        if key in keys:
+            keys[key]["image"] = keys[key]["image"] or entry["image"]
+            continue
+        keys[key] = entry
+        results.append(entry)
+    if not results:
+        raise ValueError("No results could be read from this page. The site may build its results with scripts.")
+    return results[:MAX_RESULTS]
+
+
+def search_site(site, query):
+    """Read a site's search results page and pick out the results."""
+    url = site["search"].replace("{q}", urllib.parse.quote_plus(query))
+    final_url, page = fetch_page(url, limit=3_000_000)[:2]
+    if page is None:
+        return []
+    return read_results(final_url, page, query)
 
 
 def search_sites(query):
@@ -2501,7 +2836,7 @@ class Handler(BaseHTTPRequestHandler):
             "/api/rules/skip": lambda: self.rules_skip(body),
             "/api/tvapp/install": lambda: self.mac_only(lambda: (install_tv_app(self.server.phone, target(), str(body.get("password", ""))), self.send(200, tv_app_status(target())))),
             "/api/tvapp/remove": lambda: self.mac_only(lambda: (remove_tv_app(self.server.phone, target(), str(body.get("password", ""))), self.send(200, tv_app_status(target())))),
-            "/api/tvapp/options": lambda: self.send(200, {"options": save_tv_app_options(target(), body)}),
+            "/api/tvapp/options": lambda: self.send(200, save_tv_app_options(target(), body)),
             "/api/tv-message": lambda: self.tv_message(body),
             "/api/sites": lambda: self.save_sites(body),
             "/api/phone": lambda: self.phone_switch(body),
@@ -2583,6 +2918,8 @@ class Handler(BaseHTTPRequestHandler):
             scenes=clean_scenes(body["scenes"]) if "scenes" in body else None,
             services=clean_services(body["services"]) if "services" in body else None,
         )
+        if "favorites" in body:  # Detox Home keeps its own copy: send it the new list
+            push_to_tv_app(parse_target(address), "favorites", favorites_link(address))
         self.send(200, tv_settings(address))
 
     def sites_search(self, query):
@@ -2645,11 +2982,8 @@ class Handler(BaseHTTPRequestHandler):
         target = parse_target(address)
         if body is None and path == "/api/tv/config":
             return self.send(200, tv_config(address, f"http://{self.headers.get('Host')}", token))
-        if body is None and path == "/api/tv/item":
-            item = TV_ITEMS.get(str(query.get("id", "")))
-            if not item:
-                return self.fail(404, "That's no longer available.")
-            return self.send(200, {k: v for k, v in item.items() if k != "created"})
+        if body is None and path == "/api/tv/item":  # items now travel inside the link itself
+            return self.fail(404, "Install Detox Home again from the Mac to see this.")
         if body is None and path == "/api/tv/icon":
             return self.icon({"tv": address, "id": query.get("id", "")})
         if body is not None and path == "/api/tv/launch":
@@ -2753,15 +3087,15 @@ def main():
             print(f"Anyone on your Wi-Fi can open {f'http://{name}:{args.port}' if name else lan} (or {lan})")
         except ValueError as err:
             print(f"Household mode couldn't start: {err}")
-    if startup.get("phone") or startup.get("tvApps"):
+    if startup.get("phone") or legacy_tv_apps(startup):
         try:
             if startup.get("phone"):
                 server.phone.start()
                 print(f"Phone remote is on at {server.phone.url}/ (code is shown on the Mac page)")
             else:
                 server.phone.listen()
-            if startup.get("tvApps"):
-                print(f"Detox Home on the TV can reach this Mac at {server.phone.url}")
+            if legacy_tv_apps(startup):
+                print(f"An older Detox Home on the TV reaches this Mac at {server.phone.url}. Install it again to drop that.")
         except ValueError as err:
             print(f"The home-network connection couldn't start: {err}")
     print("Keep this window open while you use it. Press Ctrl+C to stop.")
