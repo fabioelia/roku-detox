@@ -3514,7 +3514,8 @@ function nightsHTML(days, start = "21:00") {
       ${NIGHT_NAMES.map(([key, short, long]) => `<button type="button" class="night-chip" data-night="${key}" aria-pressed="${days.includes(key)}" aria-label="${long}">${short}</button>`).join("")}
     </div>
     <div class="line nights-presets">
-      <span class="note" id="nights-note">${esc(nightsText(days))}</span>${start < "12:00" ? `<span class="note">It starts after midnight or in the morning, so each counts as the night before: Sunday night is early Monday.</span>` : ""}
+      <span class="note" id="nights-note">${esc(nightsText(days))}</span>
+      <span class="note" id="nights-early" ${start < "12:00" ? "" : "hidden"}>It starts after midnight or in the morning, so each counts as the night before: Sunday night is early Monday.</span>
       <button class="btn quiet" type="button" data-nights="school">School nights</button>
       <button class="btn quiet" type="button" data-nights="all">Every night</button>
     </div>`;
@@ -3658,6 +3659,7 @@ $("#rule-list").addEventListener("change", (e) => {
     const [rule, field] = t.dataset.field.split(".");
     r[rule][field] = t.type === "number" ? Number(t.value) || 1 : t.value;
     if (rule === "autopilot") { state.rulesVersion += 1; renderRuleList(); }
+    if (rule === "bedtime" && field === "start" && $("#nights-early")) $("#nights-early").hidden = !(t.value < "12:00");
     return saveRulesSoon();
   }
   const limitRow = t.closest("[data-limit]");
