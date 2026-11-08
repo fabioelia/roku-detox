@@ -17,6 +17,7 @@ import {
   catalogId, findHistory, findNext, findSeason, findShow, findTitles, forgetHistory, pinHistory, recordHistory, watch,
 } from "./catalog.js";
 import { cast, lookCloser, searchSites, sniffedForTab, tvMessage } from "./video.js";
+import { setSleep, sleepStatus } from "./sleep.js";
 import { discoverReport } from "./discover.js";
 import { cleanRules, doctor, extendBedtime, rulesStatus, saveRules, skipAutopilot } from "./rules.js";
 
@@ -129,6 +130,7 @@ const GET_ROUTES = {
   "/api/doctor": async (c) => doctor(c.target()),
   "/api/tvapp": async (c) => tvAppStatus(c.target()),
   "/api/sites": async () => ({ sites: await siteList() }),
+  "/api/sleep": async (c) => sleepStatus(c.address()),
   "/api/sites/search": async (c) => ({ groups: await searchSites(words(c.query.q, "Type something to search for.")) }),
   "/api/log": async () => ({ entries: await readLog() }),
   "/api/settings": async (c) => tvSettings(c.address()),
@@ -231,6 +233,7 @@ const POST_ROUTES = {
     return ok();
   },
   "/api/sites": async (c) => ({ sites: await saveSites(c.body.sites) }),
+  "/api/sleep": async (c) => setSleep(c.target(), c.body.minutes),
   "/api/sites/look": async (c) => ({ group: await lookCloser(String(c.body.siteId ?? ""), words(c.body.q, "Type something to search for.")) }),
   "/api/phone": async () => { throw new NotSupported(PHONE); },
   "/api/pair": async () => { throw new NotSupported(PHONE); },

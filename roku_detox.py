@@ -1170,6 +1170,46 @@ def scheduler():
         time.sleep(15)
 
 
+# --- Sleep timer: turn the TV off in a few minutes (kept while this program runs) ---------
+
+SLEEP_LOCK = threading.Lock()
+SLEEP_TIMERS = {}  # "host:port" -> {"until": epoch seconds, "timer": threading.Timer}
+MAX_SLEEP_MINUTES = 240
+
+
+def sleep_status(target):
+    with SLEEP_LOCK:
+        entry = SLEEP_TIMERS.get(display_address(target))
+        return {"until": int(entry["until"]) if entry else None}
+
+
+def set_sleep(target, minutes):
+    """Turn the TV off in `minutes` (0 cancels). Returns {"until": epoch seconds or None}."""
+    if isinstance(minutes, bool) or not isinstance(minutes, (int, float)) or not 0 <= minutes <= MAX_SLEEP_MINUTES:
+        raise ValueError(f"Pick between 1 and {MAX_SLEEP_MINUTES} minutes.")
+    address = display_address(target)
+    with SLEEP_LOCK:
+        old = SLEEP_TIMERS.pop(address, None)
+        if old:
+            old["timer"].cancel()
+        if minutes:
+            timer = threading.Timer(minutes * 60, sleep_fire, (address,))
+            timer.daemon = True
+            SLEEP_TIMERS[address] = {"until": time.time() + minutes * 60, "timer": timer}
+            timer.start()
+    return sleep_status(target)
+
+
+def sleep_fire(address):
+    with SLEEP_LOCK:
+        SLEEP_TIMERS.pop(address, None)
+    try:
+        press(parse_target(address), "PowerOff")
+        WATCHER.event(address, "Sleep timer: turned the TV off.")
+    except (TVError, ValueError) as err:
+        print(f"Sleep timer couldn't turn off {address}: {err}")
+
+
 def run_scheduled(address, scene):
     try:
         run_scene(parse_target(address), scene)
@@ -2789,6 +2829,7 @@ class Handler(BaseHTTPRequestHandler):
             "/api/find/next": lambda: self.next_episode(query),
             "/api/find/history": lambda: self.send(200, find_history(display_address(target()))),
             "/api/rules": lambda: self.send(200, WATCHER.status(display_address(target()))),
+            "/api/sleep": lambda: self.send(200, sleep_status(target())),
             "/api/doctor": lambda: self.send(200, doctor(target())),
             "/api/tvapp": lambda: self.send(200, tv_app_status(target())),
             "/api/sites": lambda: self.send(200, {"sites": site_list()}),
@@ -2849,6 +2890,7 @@ class Handler(BaseHTTPRequestHandler):
             "/api/log": lambda: self.send(200, {"entry": append_log(body)}),
             "/api/settings": lambda: self.save_settings(body),
             "/api/scene": lambda: self.scene(body),
+            "/api/sleep": lambda: self.send(200, set_sleep(target(), body.get("minutes"))),
             "/api/rules": lambda: self.save_rules(body),
             "/api/rules/extend": lambda: self.rules_extend(body),
             "/api/rules/skip": lambda: self.rules_skip(body),

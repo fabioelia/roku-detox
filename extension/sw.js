@@ -7,6 +7,7 @@ import { initSniffer } from "./engine/video.js";
 import { ALARM, ensureAlarm, runBurst } from "./engine/rules.js";
 import { newRelayKey, relayInfo, startRelay } from "./engine/relay-host.js";
 import { watchNetErrors } from "./engine/neterrors.js";
+import { onSleepAlarm } from "./engine/sleep.js";
 import { onCommand, onMenuClick, setUpMenus, setUpOmnibox } from "./engine/shortcuts.js";
 
 const EXTERNAL_HOSTS = new Set(["localhost", "127.0.0.1"]);
@@ -49,6 +50,10 @@ chrome.runtime.onMessageExternal.addListener((msg, sender, sendResponse) => {
 });
 
 chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name.startsWith("detox-sleep:")) {
+    onSleepAlarm(alarm);
+    return;
+  }
   if (alarm.name === ALARM) {
     runBurst();
     startRelay(); // reconnect the phone relay if the worker was asleep

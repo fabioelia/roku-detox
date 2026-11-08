@@ -762,6 +762,7 @@ async function connect(address) {
   renderContinue();
   await refreshDevice();
   await loadSettings();
+  loadSleep();
   loadHistory();
   pollNow();
   if (state.view === "rules") loadRules();
@@ -833,6 +834,7 @@ async function loadLiteApps(refresh = false) {
 /* ---------- Rendering ---------- */
 
 function renderAll() {
+  renderSleep();
   renderTV();
   renderServices();
   renderShortcuts();
@@ -1794,6 +1796,47 @@ function clock(ms) {
   const sec = String(total % 60).padStart(2, "0");
   return h ? `${h}:${String(m).padStart(2, "0")}:${sec}` : `${m}:${sec}`;
 }
+
+/* ---------- Sleep timer (kept by the program at home or the extension, so the page can close) ---------- */
+
+state.sleep = null;   // {until: epoch seconds, minutes: what was picked} or null
+async function loadSleep() {
+  if (!state.tv || !state.control || isLite()) { state.sleep = null; renderSleep(); return; }
+  try {
+    const { until } = await api(`/api/sleep?tv=${enc(state.tv)}`);
+    state.sleep = until ? { until, minutes: state.sleep?.minutes } : null;
+  } catch {
+    state.sleep = null;
+  }
+  renderSleep();
+}
+function renderSleep() {
+  const box = $("#sleep");
+  box.hidden = !state.control;
+  const left = state.sleep ? Math.max(0, Math.round((state.sleep.until * 1000 - Date.now()) / 60000)) : 0;
+  $("#sleep-status").textContent = state.sleep
+    ? `· off at ${new Date(state.sleep.until * 1000).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })} (${left < 1 ? "under a minute" : `${left} min`})`
+    : "";
+  $("#sleep-cancel").hidden = !state.sleep;
+  for (const chip of document.querySelectorAll("#sleep-chips [data-sleep]")) {
+    if (chip.dataset.sleep !== "0") chip.setAttribute("aria-pressed", String(Boolean(state.sleep && Number(chip.dataset.sleep) === state.sleep.minutes)));
+    chip.disabled = !state.control;
+  }
+}
+$("#sleep-chips").addEventListener("click", async (e) => {
+  const chip = e.target.closest("[data-sleep]");
+  if (!chip || !state.tv) return;
+  const minutes = Number(chip.dataset.sleep);
+  try {
+    const { until } = await api("/api/sleep", { tv: state.tv, minutes });
+    state.sleep = until ? { until, minutes } : null;
+    renderSleep();
+    toast(until ? `The TV turns off in ${chip.textContent.trim()}. You can close this page.` : "Sleep timer off.");
+  } catch (err) {
+    toast(err.message);
+  }
+});
+setInterval(() => { if (state.sleep) { if (state.sleep.until * 1000 <= Date.now()) loadSleep(); else renderSleep(); } }, 20000);
 
 async function pollNow() {
   if (!state.tv || !state.control || document.hidden || isLite()) return;

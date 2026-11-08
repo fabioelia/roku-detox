@@ -461,6 +461,17 @@
   .touchpad:focus-visible { outline: 3px solid var(--remote-glow); outline-offset: 2px; }
   .touchpad.sent { box-shadow: 0 0 0 3px var(--remote-glow); }
   .pad-toggle { margin-top: -6px; font-size: 14px; color: var(--muted); }
+  .sleep { width: 100%; max-width: 300px; display: grid; gap: 8px; }
+  .sleep-title { font-size: 14px; color: var(--muted); }
+  .sleep-status { color: var(--ink); font-weight: 600; }
+  .sleep-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .sleep-chip {
+    min-height: 34px; padding: 4px 9px; border: 1px solid var(--line); border-radius: 999px;
+    background: var(--raised); cursor: pointer; font-size: 13px; font-weight: 600;
+  }
+  .sleep-chip:hover:not(:disabled) { border-color: var(--muted); }
+  .sleep-chip[aria-pressed="true"] { border-color: var(--keep); background: var(--keep-soft); }
+  .sleep-chip:disabled { opacity: .55; cursor: not-allowed; }
   .remote-note { max-width: 280px; text-align: center; font-size: 14px; color: var(--muted); }
   .remote-error { max-width: 280px; text-align: center; font-size: 15px; font-weight: 600; color: var(--remove); }
   .smart { width: 100%; max-width: 300px; display: grid; gap: 8px; }
@@ -869,6 +880,16 @@
       </div>
 
       <button class="btn quiet pad-toggle" id="pad-toggle" type="button">Use the swipe pad</button>
+      <section class="sleep needs-engine" id="sleep" aria-label="Sleep timer">
+        <p class="sleep-title">Sleep timer <span class="sleep-status" id="sleep-status" aria-live="polite"></span></p>
+        <div class="sleep-chips" id="sleep-chips">
+          <button class="sleep-chip" type="button" data-sleep="15">15 min</button>
+          <button class="sleep-chip" type="button" data-sleep="30">30 min</button>
+          <button class="sleep-chip" type="button" data-sleep="60">1 hr</button>
+          <button class="sleep-chip" type="button" data-sleep="90">1½ hr</button>
+          <button class="sleep-chip" type="button" data-sleep="0" id="sleep-cancel" hidden>Off</button>
+        </div>
+      </section>
       <p class="remote-error" id="remote-error" aria-live="assertive" hidden></p>
       <p class="remote-note">Your keyboard works too: arrow keys to move, Enter for OK, Backspace for Back, H for Home.</p>
       <form class="smart" id="smart-form">
@@ -1674,6 +1695,7 @@ async function connect(address) {
   renderContinue();
   await refreshDevice();
   await loadSettings();
+  loadSleep();
   loadHistory();
   pollNow();
   if (state.view === "rules") loadRules();
@@ -1745,6 +1767,7 @@ async function loadLiteApps(refresh = false) {
 /* ---------- Rendering ---------- */
 
 function renderAll() {
+  renderSleep();
   renderTV();
   renderServices();
   renderShortcuts();
@@ -2706,6 +2729,47 @@ function clock(ms) {
   const sec = String(total % 60).padStart(2, "0");
   return h ? `${h}:${String(m).padStart(2, "0")}:${sec}` : `${m}:${sec}`;
 }
+
+/* ---------- Sleep timer (kept by the program at home or the extension, so the page can close) ---------- */
+
+state.sleep = null;   // {until: epoch seconds, minutes: what was picked} or null
+async function loadSleep() {
+  if (!state.tv || !state.control || isLite()) { state.sleep = null; renderSleep(); return; }
+  try {
+    const { until } = await api(`/api/sleep?tv=${enc(state.tv)}`);
+    state.sleep = until ? { until, minutes: state.sleep?.minutes } : null;
+  } catch {
+    state.sleep = null;
+  }
+  renderSleep();
+}
+function renderSleep() {
+  const box = $("#sleep");
+  box.hidden = !state.control;
+  const left = state.sleep ? Math.max(0, Math.round((state.sleep.until * 1000 - Date.now()) / 60000)) : 0;
+  $("#sleep-status").textContent = state.sleep
+    ? `· off at ${new Date(state.sleep.until * 1000).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })} (${left < 1 ? "under a minute" : `${left} min`})`
+    : "";
+  $("#sleep-cancel").hidden = !state.sleep;
+  for (const chip of document.querySelectorAll("#sleep-chips [data-sleep]")) {
+    if (chip.dataset.sleep !== "0") chip.setAttribute("aria-pressed", String(Boolean(state.sleep && Number(chip.dataset.sleep) === state.sleep.minutes)));
+    chip.disabled = !state.control;
+  }
+}
+$("#sleep-chips").addEventListener("click", async (e) => {
+  const chip = e.target.closest("[data-sleep]");
+  if (!chip || !state.tv) return;
+  const minutes = Number(chip.dataset.sleep);
+  try {
+    const { until } = await api("/api/sleep", { tv: state.tv, minutes });
+    state.sleep = until ? { until, minutes } : null;
+    renderSleep();
+    toast(until ? `The TV turns off in ${chip.textContent.trim()}. You can close this page.` : "Sleep timer off.");
+  } catch (err) {
+    toast(err.message);
+  }
+});
+setInterval(() => { if (state.sleep) { if (state.sleep.until * 1000 <= Date.now()) loadSleep(); else renderSleep(); } }, 20000);
 
 async function pollNow() {
   if (!state.tv || !state.control || document.hidden || isLite()) return;

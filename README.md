@@ -4,7 +4,9 @@ Find a Roku TV on your Wi-Fi and clean it up from a web page on your computer.
 
 The page has five menus:
 
-- **Remote**: open any app or input, favorites, scenes, the on-screen remote.
+- **Remote**: open any app or input, favorites, scenes, the on-screen remote (arrow buttons or a
+  swipe pad), voice search on secure pages, and a sleep timer (15 minutes to 1½ hours) that turns the
+  TV off even after you close the page, while this program or the extension is running.
 - **Find a show**: search any show or movie, see which of your apps has it, and start it on the TV.
   Listings come from JustWatch's public catalog (unofficial, so it may change). Roku can see which apps
   are installed but not which ones you pay for, so you can untick services under "My services".

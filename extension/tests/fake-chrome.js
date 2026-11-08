@@ -39,7 +39,16 @@ export function installFakeChrome() {
       onStartup: event(),
     },
     notifications: { create(id, options, cb) { notifications.push(options); if (cb) cb(id); }, list: notifications },
-    alarms: { created: [], async get() { return undefined; }, async create(name, info) { this.created.push([name, info]); }, onAlarm: event() },
+    alarms: {
+      created: [], pending: new Map(),
+      async get(name) { return this.pending.get(name); },
+      async create(name, info) {
+        this.created.push([name, info]);
+        this.pending.set(name, { name, scheduledTime: info.when ?? Date.now() + (info.delayInMinutes ?? info.periodInMinutes ?? 0) * 60000, periodInMinutes: info.periodInMinutes });
+      },
+      async clear(name) { return this.pending.delete(name); },
+      onAlarm: event(),
+    },
     declarativeNetRequest: {
       async updateSessionRules({ removeRuleIds = [], addRules = [] }) {
         for (const id of removeRuleIds) sessionRules.delete(id);
