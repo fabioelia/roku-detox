@@ -251,6 +251,14 @@
   }
   .chip img { width: 36px; height: 27px; border-radius: 5px; object-fit: cover; }
   .fav-suggest { display: grid; gap: 10px; align-content: center; }
+  .tips {
+    display: flex; gap: 12px; align-items: flex-start; justify-content: space-between; margin: 0 0 22px;
+    padding: 14px 16px; border: 1px solid var(--line); border-radius: var(--radius-s); background: var(--raised);
+  }
+  .tips[hidden] { display: none; }
+  .tips-title { font-size: 16px; margin-bottom: 6px; }
+  .tips ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: 15px; }
+  .tips kbd { padding: 0 5px; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 5px; font: inherit; font-size: 14px; }
   .shortcuts-box { margin-top: 28px; padding-top: 22px; border-top: 1px solid var(--line); max-width: 74ch; }
   .shortcuts-box .note { margin-top: 8px; }
   .recipe { margin: 12px 0 0; padding-left: 22px; display: grid; gap: 8px; }
@@ -640,6 +648,17 @@
   <div class="layout">
     <main>
       <div class="view" data-view="remote">
+      <aside class="tips" id="tips" hidden aria-label="Tips">
+        <div>
+          <h2 class="tips-title">More ways to use Roku Detox</h2>
+          <ul>
+            <li>Type <kbd>tv</kbd>, a space, then a show, an app or a button in Chrome's address bar: <em>tv netflix</em>, <em>tv pause</em>, <em>tv the bear</em>.</li>
+            <li>Right-click a video or a link: <em>Play this video on the TV</em>.</li>
+            <li>Keyboard shortcuts from any tab: <span id="tips-keys">Control+Shift+P to play or pause, +S to send this tab's video</span>. <a href="#" id="tips-shortcuts">Change them</a>.</li>
+          </ul>
+        </div>
+        <button class="btn quiet" type="button" id="tips-close">Got it</button>
+      </aside>
       <section class="section" id="shortcuts" hidden>
         <h2>Open on the TV</h2>
         <p class="intro">Tap an app or input to open it. Scenes run a few steps at once.</p>

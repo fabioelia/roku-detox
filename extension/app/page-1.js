@@ -3328,6 +3328,18 @@ $("#views").addEventListener("click", (e) => {
 
 /* ---------- Engine badge, and what this engine can't do ---------- */
 
+// Extension only, once: the address bar, right-click and keyboard ways in.
+function renderTips() {
+  const show = state.engine?.kind === "extension" && location.protocol === "chrome-extension:" && !store.get("detox.tipsSeen", false);
+  $("#tips").hidden = !show;
+  if (show && !/Mac/i.test(navigator.platform || navigator.userAgent)) $("#tips-keys").textContent = "Alt+Shift+P to play or pause, Alt+Shift+S to send this tab's video";
+}
+$("#tips-close").addEventListener("click", () => { store.set("detox.tipsSeen", true); renderTips(); });
+$("#tips-shortcuts").addEventListener("click", (e) => {
+  e.preventDefault();
+  try { chrome.tabs.create({ url: "chrome://extensions/shortcuts" }); } catch { /* only in the extension */ }
+});
+
 function applyEngine() {
   const kind = state.engine.kind;
   document.documentElement.dataset.engine = kind;   // [data-engine="lite"] .needs-engine is hidden
@@ -3503,6 +3515,7 @@ function takeFindLink() {
 (async function start() {
   await engineReady;
   applyEngine();
+  renderTips();
   const findLink = takeFindLink();
   if (usesIconLoader()) watchIcons();
   loadSites().then(renderFindSource);
