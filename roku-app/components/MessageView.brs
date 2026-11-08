@@ -3,7 +3,7 @@
 
 sub init()
     ' Text sizes (see setFont in DetoxUtils.brs).
-    applyFonts([["titleLabel", 64, true], ["bodyLabel", 80, true], ["fromLabel", 40, false], ["hintLabel", 32, false]])
+    applyFonts([["titleLabel", 64, true], ["bodyLabel", 80, true], ["fromLabel", 40, false], ["msgHint", 32, false]])
     m.titleLabel = m.top.findNode("titleLabel")
     m.bodyLabel = m.top.findNode("bodyLabel")
     m.fromLabel = m.top.findNode("fromLabel")

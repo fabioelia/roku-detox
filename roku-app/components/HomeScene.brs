@@ -130,6 +130,7 @@ sub onSeed()
     if asStr(seed.tvName) <> "" and m.tvName = ""
         m.tvName = asStr(seed.tvName)
         m.tvNameLabel.text = m.tvName
+        m.reg.Write("tvName", m.tvName)
     end if
     m.reg.Write("seedId", seedId)
     m.reg.Flush()
@@ -142,7 +143,7 @@ end sub
 '   contentId=inline     mediaType=video|message|notice, with url, title, text, from, streamFormat, referer
 '   contentId=favorites  ids=12,837,tvinput.hdmi1 (empty clears them)
 '   contentId=settings   clock24=0|1, simpleMode=0|1 (either one)
-' Anything else (like an item id from an older Roku Detox) just shows what's already on screen.
+' Anything else (like an item id from an older Roku Detox) shows the home screen.
 sub onDeepLink()
     link = m.top.deepLink
     if type(link) <> "roAssociativeArray" then return
@@ -165,6 +166,8 @@ sub onDeepLink()
             saveFlag("simpleMode", simple)
         end if
         applyLook()
+    else
+        if m.mode <> "home" then goHome()   ' anything else (like an older Roku Detox's item id): the home screen
     end if
 end sub
 
@@ -332,11 +335,9 @@ sub onEcpResponse(event as Object)
 
     resp = event.getData()
     if type(resp) <> "roAssociativeArray" then resp = { ok: false, code: 0, error: "no response" }
-    if asInt(resp.code, 0) > 0
-        m.ecpHost = asStr(resp.host)
-    else
-        m.ecpHost = ""         ' look for the TV's address again next time
-    end if
+    ' Keep the last address that answered (the task tries it first, then looks again), so one
+    ' failed request doesn't blank every icon.
+    if asInt(resp.code, 0) > 0 and asStr(resp.host) <> "" then m.ecpHost = asStr(resp.host)
 
     if info.tag = "apps"
         onAppsResponse(resp)
@@ -363,7 +364,7 @@ sub onAppsResponse(resp as Object)
     code = asInt(resp.code, 0)
     if asBool(resp.ok) and type(resp.apps) = "roArray"
         m.appsProblem = ""
-        sig = FormatJson(resp.apps)
+        sig = m.ecpHost + FormatJson(resp.apps)   ' a new address rebuilds too (icons use it)
         if sig <> m.appsSig or m.apps = invalid
             m.appsSig = sig
             m.apps = resp.apps
@@ -377,7 +378,7 @@ sub onAppsResponse(resp as Object)
     else if code > 0
         m.appsProblem = "The TV wouldn't list its apps (error " + code.ToStr() + "). Trying again in a minute."
     else
-        m.appsProblem = "Couldn't ask the TV for its apps. Trying again in a minute."
+        m.appsProblem = "Couldn't ask the TV for its apps. Trying again in a minute. If this keeps happening, check Settings, System, Advanced system settings, Control by mobile apps."
     end if
     m.statusLabel.text = m.appsProblem
     m.statusLabel.visible = true
@@ -583,13 +584,14 @@ end sub
 sub onLaunchResponse(resp as Object, info as Object)
     ' On success Roku closes this app when the other one opens; the overlay covers the gap.
     if asBool(resp.ok) then return
+    if m.mode <> "home" then return   ' a message or video came in meanwhile: don't cover it
     code = asInt(resp.code, 0)
     if code = 401 or code = 403
         errText = blockedText()
     else if code > 0
         errText = "The TV said no (error " + code.ToStr() + "). Try again, or open it from the Roku home screen."
     else
-        errText = "Couldn't reach this TV's remote control service. Try again in a moment."
+        errText = "Couldn't reach this TV's remote control service. Try again in a moment. If this keeps happening, check Settings, System, Advanced system settings, Control by mobile apps."
     end if
     showOverlay("Couldn't open " + asStr(info.name), errText, 10)
 end sub
@@ -608,6 +610,16 @@ sub toggleFavorite(item as Object)
     if not wasFavorite then list.Push(item.id)
     saveFavorites(list)
     buildHome()
+    ' Keep the highlight on the app just toggled (it may have moved rows), so * again undoes it.
+    for r = 0 to m.rows.Count() - 1
+        for c = 0 to m.rows[r].items.Count() - 1
+            if m.rows[r].items[c].id = item.id
+                m.focusRow = r
+                m.focusCol = c
+            end if
+        end for
+    end for
+    applyHighlight()
     if wasFavorite
         showBanner("Took " + item.name + " off favorites")
     else
