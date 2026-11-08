@@ -41,3 +41,14 @@ test("a timer that fires long after it was due (the computer slept) is skipped",
   assert.equal(await power(), "DisplayOff", "a little late is fine");
   await fetch(`http://${TV}/keypress/PowerOn`, { method: "POST" });
 });
+
+test("a scene can start the sleep timer", async () => {
+  const saved = await call("POST", "/api/settings", { scenes: [{ name: "Wind down", steps: [{ do: "volume_down", n: 2 }, { do: "sleep_timer", n: 45 }] }] });
+  assert.equal(saved.status, 200, JSON.stringify(saved.data));
+  assert.deepEqual(saved.data.scenes[0].steps[1], { do: "sleep_timer", n: 45 });
+  assert.equal((await call("POST", "/api/scene", { id: saved.data.scenes[0].id })).status, 200);
+  const { until } = (await call("GET", "/api/sleep")).data;
+  assert.ok(Math.abs(until - (Date.now() / 1000 + 45 * 60)) < 10);
+  await call("POST", "/api/sleep", { minutes: 0 });
+  await call("POST", "/api/settings", { scenes: [] });
+});

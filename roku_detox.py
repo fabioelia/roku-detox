@@ -1018,7 +1018,7 @@ def append_log(raw):
 # --- Shortcuts, scenes and phone pairing (remote-settings.json) ------------------
 
 SETTINGS_LOCK = threading.Lock()
-SCENE_STEPS = {"power_on", "power_off", "open", "volume_up", "volume_down", "mute", "wait"}
+SCENE_STEPS = {"power_on", "power_off", "open", "volume_up", "volume_down", "mute", "wait", "sleep_timer"}
 SCENE_ID_RE = re.compile(r"^[a-z0-9]{1,16}$")
 TIME_RE = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
 
@@ -1120,6 +1120,8 @@ def clean_scenes(raw):
                 clean["n"] = bounded_int(step.get("n"), 1, 50)
             elif action == "wait":
                 clean["n"] = bounded_int(step.get("n"), 1, 30)
+            elif action == "sleep_timer":
+                clean["n"] = bounded_int(step.get("n"), 1, MAX_SLEEP_MINUTES)
             steps.append(clean)
         if not steps:
             raise ValueError(f'"{name}" needs at least one step.')
@@ -1152,6 +1154,8 @@ def run_scene(target, scene):
             press(target, "VolumeMute")
         elif action == "wait":
             time.sleep(step["n"])
+        elif action == "sleep_timer":
+            set_sleep(target, step["n"])
 
 
 def scheduler():

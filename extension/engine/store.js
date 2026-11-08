@@ -70,7 +70,7 @@ export function saveTvSettings(address, changes) {
 
 // --- Cleaning what the page sends (same rules and messages as roku_detox.py) -------------
 
-export const SCENE_STEPS = new Set(["power_on", "power_off", "open", "volume_up", "volume_down", "mute", "wait"]);
+export const SCENE_STEPS = new Set(["power_on", "power_off", "open", "volume_up", "volume_down", "mute", "wait", "sleep_timer"]);
 export const SCENE_ID_RE = /^[a-z0-9]{1,16}$/;
 export const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 export const SITE_ID_RE = /^[a-z0-9]{1,16}$/;
@@ -119,6 +119,8 @@ export function cleanScenes(raw) {
         clean.n = boundedInt(step.n, 1, 50);
       } else if (action === "wait") {
         clean.n = boundedInt(step.n, 1, 30);
+      } else if (action === "sleep_timer") {
+        clean.n = boundedInt(step.n, 1, 240);
       }
       steps.push(clean);
     }

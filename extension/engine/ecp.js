@@ -6,6 +6,7 @@ import {
   APP_ID_RE, Blocked, ParseError, TVError, ValueError, displayAddress, fetchWithTimeout,
   keepAlive, quote, sleep, targetKey, unescapeHtml, urlencode,
 } from "./util.js";
+import { setSleep } from "./sleep.js";   // (sleep.js imports press from here: fine, both are only used later)
 import { explainFailure, lastNetError } from "./neterrors.js";
 
 export const STORE_APP_ID = "11"; // Roku's Streaming Store; launch/11?contentID=<id>
@@ -388,6 +389,8 @@ export async function runScene(target, scene) {
         await press(target, "VolumeMute");
       } else if (action === "wait") {
         await sleep(step.n * 1000);
+      } else if (action === "sleep_timer") {
+        await setSleep(target, step.n);
       }
     }
   })());
