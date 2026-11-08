@@ -2,11 +2,13 @@
 
 Find a Roku TV on your Wi-Fi and clean it up from a web page on your computer.
 
-The page has five menus:
+The page has six menus:
 
 - **Remote**: open any app or input, favorites, scenes, the on-screen remote (arrow buttons or a
   swipe pad), voice search on secure pages, and a sleep timer (15 minutes to 1½ hours) that turns the
-  TV off even after you close the page, while this program or the extension is running.
+  TV off even after you close the page, while this program or the extension is running. Hold an arrow
+  or volume button to repeat it. If the TV is off and not answering, the page explains Fast TV start, and
+  the program can try to wake it (Wake-on-LAN, using the network address it saw while the TV was on).
 - **Find a show**: search any show or movie, see which of your apps has it, and start it on the TV.
   Listings come from JustWatch's public catalog (unofficial, so it may change). Roku can see which apps
   are installed but not which ones you pay for, so you can untick services under "My services".
@@ -20,8 +22,10 @@ The page has five menus:
   skip the home screen when the TV turns on, bedtime, daily time limits, blocked apps, swap apps,
   night guard (turns the TV back off when it wakes itself up at night), and a viewing log.
   It checks the TV every 4 seconds and keeps the Mac from sleeping (`caffeinate`) while any rule is on.
-  Alerts show as macOS notifications. Includes a connection check with plain-language fixes.
-- **Clean up**: remove channels, finish-up checklist, undo list.
+  Alerts show as macOS notifications. Includes a connection check with plain-language fixes, and
+  screen time for the past days (total, daily average, top apps).
+- **Clean up**: remove channels, finish-up checklist, undo list. With the viewing log on, each channel
+  shows how long it was watched, and after a week "Select the ones not opened lately" picks the unused ones.
 - **TV app**: install **Detox Home**, a custom Roku app (in `roku-app/`): a calm home screen with a clock
   and your apps and favorites, rule notices ("Time's up"), messages you send from the Mac or phone, videos from
   web links, and an ad-free "Detox Clock" screensaver. Needs Roku developer mode (Home x3, Up x2,
