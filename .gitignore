@@ -14,3 +14,6 @@ __pycache__/
 node_modules/
 .wrangler/
 deploy/data/
+
+# Chrome writes this into an unpacked extension when it loads it
+extension/_metadata/
