@@ -151,6 +151,24 @@ async function main() {
     return on && getComputedStyle(document.querySelector("main")).display !== "none"; })()`);
   check("Just the remote hides the rest and comes back", remoteOnly);
 
+  // The send-only page (phones without the program): every menu opens without errors, and the
+  // things it can't do stay out of the way.
+  await send("Emulation.clearDeviceMetricsOverride");
+  await send("Page.navigate", { url: `${url}?engine=lite` });
+  await wait(2500);
+  const lite = await page(`(async () => {
+    const out = { engine: state.engine?.kind, menus: [] };
+    for (const view of ["find", "rules", "cleanup", "remote"]) {
+      const btn = document.querySelector('#views [data-view="' + view + '"]');
+      if (btn && !btn.hidden) { btn.click(); await new Promise((r) => setTimeout(r, 300)); out.menus.push(view); }
+    }
+    out.sleepHidden = getComputedStyle(document.querySelector("#sleep")).display === "none";
+    out.tvAppHidden = document.querySelector('#views [data-view="tvapp"]').hidden;
+    out.winddown = Boolean(document.querySelector('[data-template="winddown"]'));
+    return out; })()`);
+  check("the lite page loads as lite", lite.engine === "lite", JSON.stringify(lite));
+  check("lite hides what it can't do", lite.sleepHidden && lite.tvAppHidden && !lite.winddown, JSON.stringify(lite));
+
   ws.close();
   let failed = 0;
   for (const c of checks) {
