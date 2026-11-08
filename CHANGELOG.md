@@ -12,6 +12,11 @@ Newest first. The extension's version is in `extension/manifest.json`; after pul
 - **Bedtime on the nights you pick**: Sun to Sat buttons, "School nights" (Sunday to Thursday) and
   "Every night". A night counts from its start time; a start after midnight or in the morning belongs to
   the night before (so "school nights" with 00:30 means early Monday to early Friday).
+- **All TV together**: a daily total for every app and input combined ("150 minutes a day, 180 on
+  weekends"); once it's used, whatever is opened goes back to the home screen. Detox Home's own screens
+  (launcher, clock, notices) don't count; its videos do, and are stopped too. The Remote menu, the popup
+  and "time left" show whichever runs out first, and "skip the home screen" stays home when the app has
+  no time left.
 - **Weekend limits**: a daily time limit can have a different amount on Saturdays and Sundays
   ("60 minutes a day, 120 on weekends"); leave it empty for the same every day.
 - **Ask the TV** (Siri, the popup, `tv …` in Chrome's address bar): "what's on", "screen time",
