@@ -118,11 +118,11 @@ test("launch, deep links, keys and now playing", async () => {
 });
 
 test("icons come back as data URLs", async () => {
-  const reply = await handleMessage({ type: "icon", tv: TV, id: "12" });
+  const reply = await handleMessage({ type: "icon", tv: TV, id: "12" }, { internal: true });
   assert.match(reply.dataUrl, /^data:image\/svg\+xml;base64,/);
   assert.match(Buffer.from(reply.dataUrl.split(",")[1], "base64").toString(), /<svg/);
   assert.deepEqual(await handleMessage({ type: "icon", tv: "8.8.8.8", id: "12" }), { dataUrl: null, error: "That address isn't on your home network." });
-  assert.deepEqual(await handleMessage({ type: "icon", tv: TV, id: "../x" }), { dataUrl: null, error: "Bad channel id." });
+  assert.deepEqual(await handleMessage({ type: "icon", tv: TV, id: "../x" }, { internal: true }), { dataUrl: null, error: "Bad channel id." });
 });
 
 test("input checks and unsupported routes", async () => {

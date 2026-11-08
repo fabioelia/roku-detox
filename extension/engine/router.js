@@ -325,9 +325,10 @@ export async function apiRequest({ method = "GET", path, query, body } = {}, { i
 }
 
 /** An icon for <img data-icon-tv data-icon-id>: {dataUrl} (null when the TV has none). */
-async function iconMessage(msg) {
+async function iconMessage(msg, internal) {
   try {
     const target = parseTarget(msg.tv);
+    if (!internal && target.port !== 8060) throw new ValueError("Roku TVs answer on port 8060. Leave the port off.");
     const appId = typeof msg.id === "string" ? msg.id : "";
     if (!APP_ID_RE.test(appId)) throw new ValueError("Bad channel id.");
     return { dataUrl: await fetchIcon(target, appId) };
@@ -358,7 +359,7 @@ export async function handleMessage(msg, { internal = false, web = false } = {})
       }
       return apiRequest(msg, { internal });
     case "icon":
-      return iconMessage(msg);
+      return iconMessage(msg, internal);
     case "sniffed":
       if (!internal || !Number.isInteger(msg.tabId)) break;
       return sniffedForTab(msg.tabId);

@@ -34,6 +34,10 @@ test("links from a phone or a web page can't reach this computer or the home net
   await assert.rejects(findVideo("https://example.com/v.mp4", "http://10.0.0.2/v.mp4", [], { publicOnly: true }), /home network/);
   const direct = await findVideo("https://cdn.example.com/v.mp4", null, [], { publicOnly: true });
   assert.equal(direct.how, "a direct video link", "a video file on the internet is handed to the TV, not opened here");
+  // Icons too: the pretend TV's port is for this computer's own pages only.
+  const icon = await handleMessage({ type: "icon", tv: "127.0.0.1:9072", id: "12" }, { internal: false });
+  assert.equal(icon.dataUrl, null);
+  assert.match(icon.error || "", /8060/);
   // And the pretend TV's port is for this computer's own pages only.
   const relay = await handleMessage({ type: "api", method: "POST", path: "/api/key", query: {}, body: { tv: TV, key: "Home" } }, { internal: false });
   assert.equal(relay.status, 400);
@@ -70,9 +74,17 @@ print("opened" if rd.fetch_page("http://127.0.0.1:9072/query/device-info")[1] el
 # A name that looked public but connects to a local address (DNS tricks, redirects): stopped at the connection.
 rd.is_public_host = lambda host: True
 try: rd.fetch_page("http://127.0.0.1:9072/query/device-info", public_only=True); print("opened")
-except rd.TVError: print("stopped")`;
+except rd.TVError: print("stopped")
+try: rd.fetch_page("http://localhost:9072/query/device-info", public_only=True); print("opened")
+except rd.TVError: print("stopped")
+# Redirects only to http and https.
+import urllib.request
+try: rd.PublicRedirects().redirect_request(urllib.request.Request("https://example.com/"), None, 302, "Found", {}, "ftp://example.com/"); print("followed")
+except ValueError: print("refused")`;
   const lines = execFileSync("python3", ["-c", code], { encoding: "utf8" }).trim().split("\n");
   assert.deepEqual(lines.slice(0, 3), Array(3).fill("Links to addresses on your home network can only be sent from this computer."));
   assert.equal(lines[3], "opened", "from the Mac itself, local addresses still work");
   assert.equal(lines[4], "stopped");
+  assert.equal(lines[5], "stopped");
+  assert.equal(lines[6], "refused");
 });

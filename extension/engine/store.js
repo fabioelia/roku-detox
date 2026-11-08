@@ -144,6 +144,8 @@ export function cleanSites(raw) {
     let parsed = null;
     try { parsed = new URL(search.replaceAll("{q}", "x")); } catch { parsed = null; }
     if (!name) throw new ValueError("Give each site a name.");
+    // The words never pick the site's address.
+    if (/^[a-z]+:\/\/[^/?#]*\{q\}/i.test(search)) throw new ValueError(`The {q} for "${name}" goes after the site's name, in the search part of the address.`);
     if (!parsed || !["http:", "https:"].includes(parsed.protocol) || !parsed.hostname) {
       throw new ValueError(`The search address for "${name}" needs to start with https://`);
     }

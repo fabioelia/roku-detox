@@ -2195,7 +2195,8 @@ class PhoneAccess:
                 server = ThreadingHTTPServer((ip, self.port), Handler)
             except OSError as err:
                 raise ValueError(f"Couldn't open port {self.port} on your home network ({err.strerror}).") from None
-            server.allowed_hosts = {f"{ip}:{self.port}"}
+            name = local_name()
+            server.allowed_hosts = {f"{ip}:{self.port}"} | ({f"{name}:{self.port}"} if name else set())
             server.icon_cache = self.icon_cache
             server.phone = self
             server.lan = True
@@ -2648,25 +2649,34 @@ def is_public_host(host):
         return False
 
 
-def check_peer(sock):
-    """The connection really went to an internet address (whatever the name looked up to, and after any
-    redirect): checked after connecting, before anything is sent."""
-    peer = sock.getpeername()[0]
-    if not ipaddress.ip_address(peer.split("%")[0]).is_global:
-        sock.close()
-        raise OSError("not an internet address")
+def public_socket(host, port, timeout):
+    """Connect to host:port over IPv4, only to an internet address: each address the name looks up to is
+    checked before connecting (so DNS tricks and redirects can't lead to the home network). IPv4 only,
+    because on a home network with IPv6 the other devices have internet-wide ("global") addresses too."""
+    problem = OSError("not an internet address")
+    for family, socktype, proto, _, addr in socket.getaddrinfo(host, port, socket.AF_INET, socket.SOCK_STREAM):
+        if not ipaddress.ip_address(addr[0]).is_global:
+            continue
+        sock = socket.socket(family, socktype, proto)
+        if timeout is not socket._GLOBAL_DEFAULT_TIMEOUT:
+            sock.settimeout(timeout)
+        try:
+            sock.connect(addr)
+            return sock
+        except OSError as err:
+            sock.close()
+            problem = err
+    raise problem
 
 
 class PublicHTTPConnection(http.client.HTTPConnection):
     def connect(self):
-        super().connect()
-        check_peer(self.sock)
+        self.sock = public_socket(self.host, self.port, self.timeout)
 
 
 class PublicHTTPSConnection(http.client.HTTPSConnection):
-    def connect(self):
-        super().connect()
-        check_peer(self.sock)
+    def connect(self):  # the address is checked before the TLS hello goes out
+        self.sock = self._context.wrap_socket(public_socket(self.host, self.port, self.timeout), server_hostname=self.host)
 
 
 class PublicHTTPHandler(urllib.request.HTTPHandler):
@@ -2683,10 +2693,19 @@ class PublicRedirects(urllib.request.HTTPRedirectHandler):
     """Follow redirects only to internet addresses (for links sent from other devices)."""
 
     def redirect_request(self, req, fp, code, msg, headers, newurl):
-        host = urllib.parse.urlparse(newurl).hostname
-        if not host or not is_public_host(host):
+        parts = urllib.parse.urlparse(newurl)
+        if parts.scheme not in ("http", "https") or not parts.hostname or not is_public_host(parts.hostname):
             raise ValueError(LOCAL_LINK_ERROR)
         return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+def public_opener():
+    """http and https only (no ftp, file or data), no proxies, every connection checked (public_socket)."""
+    opener = urllib.request.OpenerDirector()
+    for handler in (PublicHTTPHandler(), PublicHTTPSHandler(), PublicRedirects(),
+                    urllib.request.HTTPDefaultErrorHandler(), urllib.request.HTTPErrorProcessor()):
+        opener.add_handler(handler)
+    return opener
 
 
 def fetch_page(url, referer=None, limit=3_000_000, public_only=False):
@@ -2702,8 +2721,7 @@ def fetch_page(url, referer=None, limit=3_000_000, public_only=False):
     if public_only and not is_public_host(urllib.parse.urlparse(url).hostname or ""):
         raise ValueError(LOCAL_LINK_ERROR)
     req = urllib.request.Request(url, headers=headers)
-    opener = (urllib.request.build_opener(PublicHTTPHandler(), PublicHTTPSHandler(), PublicRedirects()) if public_only
-              else urllib.request.build_opener())
+    opener = public_opener() if public_only else urllib.request.build_opener()
     try:
         with opener.open(req, timeout=12) as resp:
             ctype = resp.headers.get("Content-Type", "")
@@ -2857,6 +2875,8 @@ def clean_sites(raw):
         parsed = urllib.parse.urlparse(search.replace("{q}", "x"))
         if not name:
             raise ValueError("Give each site a name.")
+        if re.match(r"^[a-z]+://[^/?#]*\{q\}", search, re.I):  # the words never pick the site's address
+            raise ValueError(f'The {{q}} for "{name}" goes after the site\'s name, in the search part of the address.')
         if parsed.scheme not in ("http", "https") or not parsed.hostname:
             raise ValueError(f'The search address for "{name}" needs to start with https://')
         if "{q}" not in search:
@@ -3178,7 +3198,8 @@ def search_sites(query, public_only=False):
 
     def one(site):
         try:
-            return {"site": site["name"], "siteId": site["id"], "results": search_site(site, query, public_only)}
+            return {"site": site["name"], "siteId": site["id"],
+                    "results": search_site(site, query, public_only or site.get("fromPhone") is True)}
         except (TVError, ValueError) as err:
             return {"site": site["name"], "siteId": site["id"], "results": [], "error": str(err)}
 
@@ -3237,7 +3258,7 @@ class Handler(BaseHTTPRequestHandler):
     # Guards against other websites, DNS rebinding, and unpaired phones.
 
     def host_ok(self):
-        return self.headers.get("Host", "") in self.server.allowed_hosts
+        return self.headers.get("Host", "").lower() in self.server.allowed_hosts
 
     def from_our_page(self):
         return self.headers.get("X-Detox") == "1"
@@ -3511,11 +3532,18 @@ class Handler(BaseHTTPRequestHandler):
 
     def save_sites(self, body):
         sites = clean_sites(body.get("sites"))
-        if self.on_lan:  # from a phone: only sites on the internet (the computer searches them)
-            known = {s["search"] for s in site_list()}
-            for site in sites:
-                if site["search"] not in known and not is_public_host(urllib.parse.urlparse(site["search"]).hostname or ""):
+        stored = site_list()
+        known = {s["search"] for s in stored}
+        from_phone = {s["search"] for s in stored if s.get("fromPhone")}
+        for site in sites:
+            if self.on_lan and site["search"] not in known:
+                # From a phone: only sites on the internet, and searched with the same checks from now on,
+                # even from this computer (a name can be pointed somewhere else later).
+                if not is_public_host(urllib.parse.urlparse(site["search"].replace("{q}", "x")).hostname or ""):
                     raise ValueError(LOCAL_LINK_ERROR)
+                from_phone.add(site["search"])
+            if site["search"] in from_phone:
+                site["fromPhone"] = True
         update_settings(lambda data: data.update(sites=sites))
         self.send(200, {"sites": sites})
 

@@ -126,7 +126,8 @@ const ServerEngine = {
   async request(path, body) {
     const options = { headers: { "X-Detox": "1" } };
     // Only the changes that need it carry it (and renew its hour): rules, the TV app, sites, phone settings.
-    const pin = body !== undefined && /^\/api\/(rules|tvapp|sites|phone|household|do)\b/.test(path) ? pinGet() : "";
+    const needsPin = /^\/api\/(rules|tvapp|sites|phone|household)\b/.test(path) || (path === "/api/do" && /rules/i.test(String(body?.do ?? "")));
+    const pin = body !== undefined && needsPin ? pinGet() : "";
     if (pin) options.headers["X-Detox-Pin"] = pin;
     if (body !== undefined) {
       options.method = "POST";

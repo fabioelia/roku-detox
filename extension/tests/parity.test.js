@@ -173,6 +173,7 @@ test("clean_scenes, clean_sites, clean_favorites, clean_services", () => {
   same("clean_sites", store.cleanSites, [
     [[{ id: "s1", name: "Archive", search: "https://archive.org/search?query={q}" }]],
     [[{ id: "s1", name: "No q", search: "https://example.com/search" }]], [[{ id: "s1", name: "Bad", search: "ftp://x/{q}" }]],
+    [[{ id: "s1", name: "Host", search: "https://{q}.example.com/" }]], [[{ id: "s1", name: "Port", search: "https://example.com:{q}/" }]],
     [[{ id: "s1", name: "", search: "https://x.com/{q}" }]], [Array(21).fill({ id: "s", name: "x", search: "https://x.com/{q}" })],
   ]);
   same("clean_favorites", store.cleanFavorites, [[["12", 837, "12", "tvinput.hdmi1"]], [["bad id!"]], ["x"]]);
