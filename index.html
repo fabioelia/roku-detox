@@ -5228,7 +5228,7 @@ function shortcutsHTML() {
       <li>In the Shortcuts app on your iPhone, make a new shortcut and add <strong>Get Contents of URL</strong>.</li>
       <li>URL: <code>${esc(k.url)}</code> <button class="btn quiet" type="button" data-copy="${esc(k.url)}">Copy</button></li>
       <li>Method <strong>POST</strong>. Add a header <code>X-Detox-Key</code> with this key: <code>${esc(k.key)}</code> <button class="btn quiet" type="button" data-copy="${esc(k.key)}">Copy</button></li>
-      <li>Request Body <strong>JSON</strong>, with a text field <code>do</code>: what to do, like <em>pause</em>, <em>open Netflix</em>, <em>HDMI 2</em>, <em>game time</em> (one of your scenes), <em>sleep 30</em> or <em>search The Bear</em>.</li>
+      <li>Request Body <strong>JSON</strong>, with a text field <code>do</code>: what to do, like <em>pause</em>, <em>open Netflix</em>, <em>HDMI 2</em>, <em>game time</em> (one of your scenes), <em>sleep 30</em> or <em>search The Bear</em>. It answers questions too: <em>what's on</em>, <em>screen time</em>, <em>time left</em>.</li>
       <li>Add <strong>Speak Text</strong> after it to hear what happened. Name the shortcut, and "Hey Siri, <em>name</em>" runs it.</li>
     </ol>
     <p class="note">Tip: put <strong>Dictate Text</strong> first and use its text as <code>do</code>, and one shortcut does whatever you say. From a computer: <code>curl -X POST -H "X-Detox-Key: ${esc(k.key)}" -d '{"do":"pause"}' ${esc(k.url)}</code></p>
@@ -5236,7 +5236,7 @@ function shortcutsHTML() {
   return `
     <div class="shortcuts-box">
       <h3 class="subhead">Siri and Shortcuts</h3>
-      <p class="note">Say "pause the TV" or "open Netflix" to Siri, or make Home Screen buttons, with Apple's Shortcuts app. Works while the phone remote is on.</p>
+      <p class="note">Say "pause the TV" or "open Netflix" to Siri, ask "what's on the TV?", or make Home Screen buttons, with Apple's Shortcuts app. Works while the phone remote is on.</p>
       ${k ? recipe : `<button class="btn" type="button" id="phone-key">Set up a shortcut</button>`}
     </div>`;
 }
