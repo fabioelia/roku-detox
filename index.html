@@ -1581,13 +1581,13 @@ async function findTVs({ autoConnect = true } = {}) {
     ? "Looking for your TV. The first search can take up to 30 seconds. Faster: type the TV's address (on the TV: Settings, Network, About)."
     : "Looking for Roku TVs on your Wi-Fi. This takes a few seconds.");
   try {
-    const { tvs } = await api("/api/discover");
+    const { tvs, hint } = await api("/api/discover");
     state.tvs = tvs;
     renderPicker();
     if (!tvs.length) {
-      setPickerNote(sweeping
+      setPickerNote(hint || (sweeping
         ? "No Roku found. Type the TV's address above. It's on the TV under Settings, Network, About, and it's remembered after that."
-        : "No Roku found. Check the TV is on and on the same Wi-Fi as this computer, or type its IP address.");
+        : "No Roku found. Check the TV is on and on the same Wi-Fi as this computer, or type its IP address."));
       if (!state.tv) renderTV();
       return;
     }

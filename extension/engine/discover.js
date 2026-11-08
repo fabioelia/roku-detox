@@ -4,6 +4,7 @@
 import { ECP_PORT, fetchWithTimeout, isPlainObject, parseTarget } from "./util.js";
 import { parseDeviceInfo, summarize } from "./ecp.js";
 import { getLocal, readSettings, setLocal } from "./store.js";
+import { STOPPED_HERE, lastNetError, stoppedHereAdvice, stoppedSince } from "./neterrors.js";
 
 // Ranges scanned when none of the common ones looks like this computer's own network.
 export const HOME_RANGES = ["192.168.0", "192.168.1", "10.0.0", "10.0.1"];
@@ -97,7 +98,24 @@ function targetsFor(addresses, port) {
  * Options (mostly for tests): ranges (like "192.168.1"), hosts (exact addresses to try instead of
  * ranges), port, timeout, includeKnown, remember (save what's found).
  */
-export async function discover({ ranges = null, hosts = null, port = ECP_PORT, timeout = PROBE_TIMEOUT, includeKnown = true, remember = true } = {}) {
+export async function discover(options = {}) {
+  return (await discoverReport(options)).tvs;
+}
+
+/**
+ * discover(), plus a hint when nothing was found for a reason the user can fix: {tvs, hint}.
+ * When this computer is stopping Chrome from reaching the home network, searching is pointless
+ * (and hundreds of blocked requests look like an attack to security software), so it stops early.
+ */
+export async function discoverReport({ ranges = null, hosts = null, port = ECP_PORT, timeout = PROBE_TIMEOUT, includeKnown = true, remember = true } = {}) {
+  let hint = null;
+  const stoppedBy = async (targets, since) => {
+    for (const t of targets) {
+      const error = await lastNetError(t.host, String(t.port), since);
+      if (error && STOPPED_HERE.has(error)) return error;
+    }
+    return null;
+  };
   const found = new Map();
   const seen = new Set();
   const run = async (targets, limit = CONCURRENCY) => {
@@ -113,29 +131,55 @@ export async function discover({ ranges = null, hosts = null, port = ECP_PORT, t
   if (includeKnown) {
     const known = targetsFor(await knownAddresses(), port);
     if (known.length) {
+      const since = Date.now();
       await run(known);
       note(`tried ${known.length} TV address(es) seen before: ${found.size ? "found" : "no answer"}.`);
+      const error = found.size ? null : await stoppedBy(known, since);
+      if (error) {
+        hint = stoppedHereAdvice(error);
+        note(`Chrome said ${error}: this computer is blocking Chrome from the home network, so there's no point searching.`);
+      }
     }
   }
   if (hosts) {
-    await run(targetsFor(hosts, port));
-  } else if (!found.size) {
+    const since = Date.now();
+    const targets = targetsFor(hosts, port);
+    await run(targets);
+    const error = found.size ? null : await stoppedBy(targets, since);
+    if (error) hint = stoppedHereAdvice(error);
+  } else if (!found.size && !hint) {
     // Ranges passed in come from a TV we knew (rules re-finding a TV that moved), so they're swept
     // as given. Otherwise only ranges that look like this computer's own network are swept:
     // sweeping a range that isn't (its addresses just hang) uses up Chrome's connection limit.
     let sweep = ranges;
     if (!sweep) {
+      const since = Date.now();
       const flags = await Promise.all(COMMON_RANGES.map((range) => looksLocal(range)));
       sweep = COMMON_RANGES.filter((range, i) => flags[i]);
-      note(sweep.length ? `this computer looks to be on ${sweep.map((r) => `${r}.x`).join(", ")}.`
-        : "couldn't tell which network this computer is on, so nothing was swept. Type the TV's address instead.");
+      const routers = targetsFor(sweep.flatMap((range) => ROUTER_HOSTS.map((n) => `${range}.${n}`)), 80);
+      const error = await stoppedBy(routers, since);
+      if (error) {
+        hint = stoppedHereAdvice(error);
+        note(`Chrome said ${error} for the router: this computer is blocking Chrome from the home network, so there's no point searching.`);
+        sweep = [];
+      } else {
+        note(sweep.length ? `this computer looks to be on ${sweep.map((r) => `${r}.x`).join(", ")}.`
+          : "couldn't tell which network this computer is on, so nothing was swept. Type the TV's address instead.");
+      }
     }
     for (const range of sweep) {
+      const sweepStarted = Date.now();
       const addresses = [];
       for (let i = 1; i < 255; i++) addresses.push(`${range}.${i}`);
       const targets = targetsFor(addresses, port);
       await run(targets, ranges ? CONCURRENCY : LOCAL_CONCURRENCY);
       note(`swept ${range}.1 to ${range}.254: ${found.size ? [...found.keys()].join(", ") : "no TV"}.`);
+      const { stopped, failed, error } = stoppedSince(sweepStarted);
+      if (!found.size && stopped && stopped >= failed / 2) {
+        hint = stoppedHereAdvice(error);
+        note(`${stopped} of ${failed} failed requests were stopped on this computer, not by the network.`);
+        break;
+      }
       if (!found.size) {
         // One more pass: the computer now remembers which addresses are empty, so they fail at
         // once and the TV's answer isn't crowded out.
@@ -154,7 +198,7 @@ export async function discover({ ranges = null, hosts = null, port = ECP_PORT, t
     return x < y ? -1 : x > y ? 1 : 0;
   });
   if (remember && tvs.length) await setLocal("discovered", tvs.slice(0, 20));
-  return tvs;
+  return { tvs, hint: tvs.length ? null : hint };
 }
 
 /** The /24 range a TV's address is in, like "192.168.1". */

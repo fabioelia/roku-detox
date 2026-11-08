@@ -17,7 +17,7 @@ import {
   catalogId, findHistory, findNext, findSeason, findShow, findTitles, forgetHistory, pinHistory, recordHistory, watch,
 } from "./catalog.js";
 import { cast, searchSites, sniffedForTab, tvMessage } from "./video.js";
-import { discover } from "./discover.js";
+import { discoverReport } from "./discover.js";
 import { cleanRules, doctor, extendBedtime, rulesStatus, saveRules, skipAutopilot } from "./rules.js";
 
 export const VERSION = (() => {
@@ -80,7 +80,7 @@ const HOUSEHOLD = "Sharing the page with everyone on your Wi-Fi needs the Roku D
 
 // Each route gets a context: {query, body, target(), address()}.
 const GET_ROUTES = {
-  "/api/discover": async () => ({ tvs: await discover() }),
+  "/api/discover": async () => discoverReport(),
   "/api/device": async (c) => {
     const target = c.target();
     const info = summarize(target, await deviceInfo(target));

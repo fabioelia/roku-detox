@@ -6,6 +6,7 @@ import {
   APP_ID_RE, Blocked, ParseError, TVError, ValueError, displayAddress, fetchWithTimeout,
   keepAlive, quote, sleep, targetKey, unescapeHtml, urlencode,
 } from "./util.js";
+import { explainFailure, lastNetError } from "./neterrors.js";
 
 export const STORE_APP_ID = "11"; // Roku's Streaming Store; launch/11?contentID=<id>
 export const KEYS = new Set([
@@ -133,6 +134,7 @@ export function xmlFindAll(xml, tag) {
 export async function ecp(target, path, method = "GET", { timeout = 4000, binary = false } = {}) {
   const url = `http://${target.host}:${target.port}/${path}`;
   let resp;
+  const started = Date.now();
   try {
     resp = await fetchWithTimeout(url, {
       method,
@@ -143,7 +145,9 @@ export async function ecp(target, path, method = "GET", { timeout = 4000, binary
       referrerPolicy: "no-referrer",
     }, timeout);
   } catch {
-    throw new TVError("The TV didn't answer. Check it's turned on and on the same Wi-Fi.");
+    const why = await lastNetError(target.host, String(target.port), started);
+    throw new TVError(explainFailure(why, displayAddress(target))
+      || "The TV didn't answer. Check it's turned on and on the same Wi-Fi.");
   }
   const ctype = resp.headers.get("Content-Type") || "";
   let bytes = null;
