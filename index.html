@@ -3416,6 +3416,7 @@ function exportableRules(rules) {
   if (copy.autopilot) delete copy.autopilot.skipNext;
   if (copy.bedtime) delete copy.bedtime.extendUntil;
   delete copy.pausedUntil;
+  delete copy.bonus;   // extra time is for one day
   return copy;
 }
 
@@ -4737,6 +4738,13 @@ function ruleHTML(key, title, description, enabled, body) {
 }
 
 function anyOptions(selected) { return targetOptions(selected); }
+// "(+15 given)" when extra time was given today for the app, or "*" for all TV together.
+function extraToday(key) {
+  const b = state.rulesStatus?.rules?.bonus;
+  const given = b && b.day === localDayText() && b.minutes ? b.minutes[key] : 0;
+  return given ? ` (+${given} min given)` : "";
+}
+const localDayText = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 const watchedSeconds = (usage) => Object.entries(usage || {}).reduce((n, [k, v]) => n + (k === "home" ? 0 : v), 0);
 
 function renderRuleList() {
@@ -4745,10 +4753,10 @@ function renderRuleList() {
     // Only refresh the small live bits.
     for (const el of box.querySelectorAll("[data-used]")) {
       const seconds = state.rulesStatus.usage[el.dataset.used] || 0;
-      el.textContent = `used ${minutesText(seconds)} today`;
+      el.textContent = `used ${minutesText(seconds)} today${extraToday(el.dataset.used)}`;
     }
     const totalUsed = box.querySelector("[data-used-total]");
-    if (totalUsed) totalUsed.textContent = `used ${minutesText(watchedSeconds(state.rulesStatus.usage))} today`;
+    if (totalUsed) totalUsed.textContent = `used ${minutesText(watchedSeconds(state.rulesStatus.usage))} today${extraToday("*")}`;
     const extend = $("#bedtime-extend");
     if (extend) extend.hidden = !state.rulesStatus.bedtimeNow || (state.rulesStatus.rules?.pausedUntil || 0) * 1000 > Date.now();
     return;
@@ -4772,11 +4780,13 @@ function renderRuleList() {
      <div class="line"><button class="btn" type="button" id="bedtime-extend" data-action="extend" ${state.rulesStatus.bedtimeNow && !((state.rulesStatus.rules?.pausedUntil || 0) * 1000 > Date.now()) ? "" : "hidden"}>Give 15 more minutes</button></div>`);
 
   r.weekendLimits = r.weekendLimits || {};   // an older program sends none
+  const canGiveMore = "bonus" in (state.rulesStatus?.rules || {});
   const limitRows = Object.entries(r.limits).map(([id, minutes]) => `<div class="line" data-limit="${esc(id)}">
       <select data-limit-app aria-label="App">${anyOptions(id)}</select>
       <input type="number" min="1" max="720" value="${minutes}" data-limit-minutes aria-label="Minutes per day"><span>minutes a day,</span>
       <span class="weekend-limit" ${"weekendLimits" in (state.rulesStatus?.rules || {}) ? "" : "hidden"}><input type="number" min="1" max="720" value="${r.weekendLimits[id] ?? ""}" placeholder="same" data-limit-weekend aria-label="Minutes a day on Saturdays and Sundays (empty: the same)"> on weekends</span>
       <span class="used" data-used="${esc(id)}"></span>
+      ${canGiveMore ? `<button class="btn quiet" type="button" data-action="more" data-more-app="${esc(id)}" title="Just for today">+15 min today</button>` : ""}
       <button class="btn quiet" type="button" data-action="limit-remove">Remove</button></div>`).join("");
   const pendingLimit = state.pendingLimit ? `<div class="line" data-limit="">
       <select data-limit-app aria-label="App">${anyOptions("")}</select>
@@ -4786,7 +4796,8 @@ function renderRuleList() {
   const totalLine = hasTotal ? `<div class="line total-limit"><span>All apps together:</span>
       <input type="number" min="0" max="1440" value="${r.totalLimit || ""}" placeholder="none" data-total="totalLimit" aria-label="Minutes of TV a day, all apps and inputs together (empty: no total)"><span>minutes a day,</span>
       <span class="weekend-limit"><input type="number" min="0" max="1440" value="${r.totalWeekendLimit || ""}" placeholder="same" data-total="totalWeekendLimit" ${r.totalLimit ? "" : "disabled"} aria-label="Minutes of TV a day on Saturdays and Sundays (empty: the same)"> on weekends</span>
-      <span class="used" data-used-total></span></div>` : "";
+      <span class="used" data-used-total></span>
+      ${canGiveMore && r.totalLimit ? `<button class="btn quiet" type="button" data-action="more" data-more-app="" title="Just for today">+15 min today</button>` : ""}</div>` : "";
   const limits = ruleHTML("limits", "Daily time limits",
     "When an app or input reaches its time for the day, the TV is sent to the home screen each time it's opened again. \"All apps together\" counts everything but the home screen (and Detox Home's own screens; its videos count). Counts reset at midnight. Leave \"on weekends\" empty for the same time on Saturdays and Sundays.",
     Object.keys(r.limits).length > 0 || r.totalLimit > 0 || state.limitsOpen,
@@ -4964,6 +4975,23 @@ $("#rule-list").addEventListener("click", async (e) => {
   }
   const action = e.target.closest("[data-action]")?.dataset.action;
   if (!action) return;
+  if (action === "more") {
+    const btn = e.target.closest("[data-action]");
+    btn.disabled = true;
+    try {
+      const status = await api("/api/rules/more", { tv: state.tv, app: btn.dataset.moreApp, minutes: 15 });
+      state.rulesStatus = status;
+      if (state.rules) state.rules.bonus = status.rules.bonus;
+      noteLimits(status, state.tv);
+      renderRules();
+      renderNow();
+      toast(btn.dataset.moreApp ? `15 more minutes of ${appLabel(btn.dataset.moreApp) || "it"} today.` : "15 more minutes of TV today.");
+    } catch (err) {
+      toast(err.message);
+    }
+    btn.disabled = false;
+    return;
+  }
   if (action === "skip" || action === "extend") {
     try {
       state.rulesStatus = await api(action === "skip" ? "/api/rules/skip" : "/api/rules/extend", { tv: state.tv, minutes: 15 });

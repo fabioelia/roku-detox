@@ -22,6 +22,7 @@ export const RULES_DEFAULT = {
   pausedUntil: 0, // epoch seconds: every rule rests until then (guests over, movie night)
   totalLimit: 0, // minutes of TV a day, all apps and inputs together (0: none)
   totalWeekendLimit: 0, // ... on Saturdays and Sundays instead (0: the same)
+  bonus: { day: "", minutes: {} }, // extra minutes given for one day: app id (or "*" for all TV) -> minutes
   limits: {},    // app id -> minutes per day
   weekendLimits: {}, // app id -> minutes on Saturdays and Sundays instead (only apps with a daily limit)
   blocked: [],   // app ids sent back to the home screen
@@ -95,6 +96,7 @@ export function cleanRules(raw) {
     pausedUntil: boundedInt(raw.pausedUntil, 0, 4_102_444_800),
     totalLimit: boundedInt(raw.totalLimit, 0, 1440),
     totalWeekendLimit: boundedInt(raw.totalLimit, 0, 1440) ? boundedInt(raw.totalWeekendLimit, 0, 1440) : 0,
+    bonus: cleanBonus(raw.bonus),
   };
   for (const [k, v] of Object.entries(limits)) rules.limits[appId(k)] = boundedInt(v, 1, 720);
   for (const [k, v] of Object.entries(weekend)) { // a weekend amount only for an app with a daily limit
@@ -127,7 +129,29 @@ export async function tvRules(address) {
 /** Minutes of TV allowed on moment's day for all apps and inputs together, or null (total_limit_today). */
 export function totalLimitToday(rules, moment) {
   const weekend = (moment.getDay() === 0 || moment.getDay() === 6) && rules.totalWeekendLimit;
-  return (weekend ? rules.totalWeekendLimit : rules.totalLimit) || null;
+  const base = (weekend ? rules.totalWeekendLimit : rules.totalLimit) || null;
+  return base === null ? null : base + bonusMinutes(rules, "*", moment);
+}
+
+/** {day: "YYYY-MM-DD", minutes: {app id or "*": minutes}}: extra time given for one day (clean_bonus). */
+export function cleanBonus(raw) {
+  if (!isPlainObject(raw)) return { day: "", minutes: {} };
+  const day = typeof raw.day === "string" && /^\d{4}-\d\d-\d\d$/.test(raw.day) ? raw.day : "";
+  const given = isPlainObject(raw.minutes) ? raw.minutes : {};
+  const minutes = {};
+  for (const [key, value] of Object.entries(given).slice(0, 51)) {
+    if (key === "*" || APP_ID_RE.test(key)) {
+      const amount = boundedInt(value, 0, 720);
+      if (amount) minutes[key] = amount;
+    }
+  }
+  return { day: Object.keys(minutes).length ? day : "", minutes };
+}
+
+/** Extra minutes given today for the app (or "*" for all TV together): bonus_minutes. */
+export function bonusMinutes(rules, key, moment) {
+  const bonus = rules.bonus || {};
+  return bonus.day === localDay(moment) && bonus.minutes && Object.hasOwn(bonus.minutes, key) ? bonus.minutes[key] : 0;
 }
 
 /** Detox Home is playing a video (not showing its launcher, clock or a notice): detox_home_playing. */
@@ -154,8 +178,10 @@ export function watchedToday(usage) {
 /** Minutes allowed on the app on moment's day: its weekend amount on Saturday and Sunday, if any (limit_today). */
 export function limitToday(rules, appId, moment) {
   const weekendDay = moment.getDay() === 0 || moment.getDay() === 6;
-  if (weekendDay && rules.weekendLimits && Object.hasOwn(rules.weekendLimits, appId)) return rules.weekendLimits[appId];
-  return Object.hasOwn(rules.limits, appId) ? rules.limits[appId] : undefined;
+  let base;
+  if (weekendDay && rules.weekendLimits && Object.hasOwn(rules.weekendLimits, appId)) base = rules.weekendLimits[appId];
+  else base = Object.hasOwn(rules.limits, appId) ? rules.limits[appId] : undefined;
+  return base === undefined ? undefined : base + bonusMinutes(rules, appId, moment);
 }
 
 /** Any rule that acts on the TV (the viewing log alone only watches). */
@@ -173,6 +199,7 @@ export function keepOwnedFields(rules, stored) {
   rules.pausedUntil = stored.pausedUntil || 0;
   rules.bedtime.extendUntil = stored.bedtime.extendUntil || 0;
   rules.autopilot.skipNext = Boolean(stored.autopilot.skipNext);
+  rules.bonus = stored.bonus || { day: "", minutes: {} };
   return rules;
 }
 
@@ -714,6 +741,17 @@ export async function extendBedtime(address, minutes) {
 }
 
 /** Rest every rule for `minutes` (0 picks them back up). The viewing log keeps counting. */
+/** Add minutes for today to an app's limit, or to all TV together ("*"): give_more_time. */
+export async function giveMoreTime(address, key, minutes) {
+  const rules = await tvRules(address);
+  const today = localDay(new Date());
+  const given = rules.bonus && rules.bonus.day === today ? { ...rules.bonus.minutes } : {};
+  given[key] = Math.min(720, (given[key] || 0) + minutes);
+  rules.bonus = { day: today, minutes: given };
+  await saveRules(address, rules);
+  return rules;
+}
+
 export async function pauseRules(address, minutes) {
   const rules = await tvRules(address);
   rules.pausedUntil = minutes ? Math.trunc(now() + minutes * 60) : 0;

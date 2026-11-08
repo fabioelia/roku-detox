@@ -12,6 +12,8 @@ Newest first. The extension's version is in `extension/manifest.json`; after pul
 - **Bedtime on the nights you pick**: Sun to Sat buttons, "School nights" (Sunday to Thursday) and
   "Every night". A night counts from its start time; a start after midnight or in the morning belongs to
   the night before (so "school nights" with 00:30 means early Monday to early Friday).
+- **15 more minutes**: "+15 min today" on each limit (and on all TV together) in the Rules menu, or say
+  "15 more minutes" / "more time" to Siri (it needs the household PIN, like pausing). Just for that day.
 - **All TV together**: a daily total for every app and input combined ("150 minutes a day, 180 on
   weekends"); once it's used, whatever is opened goes back to the home screen. Detox Home's own screens
   (launcher, clock, notices) don't count; its videos do, and are stopped too. The Remote menu, the popup

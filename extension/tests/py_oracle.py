@@ -71,6 +71,8 @@ CALLS = {
     "in_window": lambda start, end, clock: rd.in_window(start, end, datetime.strptime("2026-11-07 " + clock, "%Y-%m-%d %H:%M")),
     "bedtime_now": lambda rule, when: rd.bedtime_now(rule, datetime.strptime(when, "%Y-%m-%d %H:%M")),
     "limit_today": lambda rules, when: rd.limit_today(rules, "12", datetime.strptime(when, "%Y-%m-%d %H:%M")),
+    "clean_bonus": rd.clean_bonus,
+    "bonus_minutes": lambda rules, key, when: rd.bonus_minutes(rules, key, datetime.strptime(when, "%Y-%m-%d %H:%M")),
     "total_limit_today": lambda rules, when: rd.total_limit_today(rules, datetime.strptime(when, "%Y-%m-%d %H:%M")),
     "next_bedtime_on": lambda rule, when: rd.next_bedtime_on(rule, datetime.strptime(when, "%Y-%m-%d %H:%M")),
     "is_home": rd.is_home,

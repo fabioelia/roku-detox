@@ -1,12 +1,12 @@
 // Plain phrases ("pause", "open Netflix", "HDMI 2", "game time", "sleep 30"): the same rules as
 // do_phrase() in roku_detox.py, for the page's search box (typed or spoken).
 
-import { deviceInfo, launch, listApps, nowPlaying, press, pressSequence, runScene, search } from "./ecp.js";
+import { activeApp, deviceInfo, launch, listApps, nowPlaying, press, pressSequence, runScene, search } from "./ecp.js";
 import { setSleep } from "./sleep.js";
 import { parseLink } from "./video.js";
-import { appLabel, isHome, limitToday, nextBedtimeOn, pauseRules, plainName, rulesEnforcing, rulesStatus, totalLimitToday, tvRules, watchedToday } from "./rules.js";
+import { appLabel, giveMoreTime, isHome, limitToday, nextBedtimeOn, pauseRules, plainName, rulesEnforcing, rulesStatus, totalLimitToday, tvRules, watchedToday } from "./rules.js";
 import { tvSettings } from "./store.js";
-import { ValueError, cut, displayAddress, pyLen } from "./util.js";
+import { ValueError, boundedInt, cut, displayAddress, pyLen } from "./util.js";
 
 const PHRASE_KEYS = [
   [["pause", "play", "resume", "play pause", "playpause"], "Play", "Play or pause sent."],
@@ -71,6 +71,23 @@ async function sayScreenTime(target) {
   const name = await appLabel(target, top);
   if (usage.length === 1) return `${sayDuration(total)} of TV today, all on ${name}.`;
   return `${sayDuration(total)} of TV today. The most: ${name}, ${sayDuration(topSeconds)}.`;
+}
+
+/** "15 more minutes": for all TV together if there's a total today, else for the app that's on (say_more_time). */
+async function sayMoreTime(target, minutes) {
+  const address = displayAddress(target);
+  const status = await rulesStatus(address);
+  const now = new Date();
+  if (totalLimitToday(status.rules, now)) {
+    await giveMoreTime(address, "*", minutes);
+    return `${minutes} more minutes of TV today.`;
+  }
+  const app = status.app || (await activeApp(target, { deliver: false }));
+  if (app && app.id && limitToday(status.rules, app.id, now) !== undefined) {
+    await giveMoreTime(address, app.id, minutes);
+    return `${minutes} more minutes of ${plainName(app)} today.`;
+  }
+  throw new ValueError("There's no time limit on what's on, so there's nothing to add to.");
 }
 
 async function sayTimeLeft(target) {
@@ -151,6 +168,11 @@ export async function doPhrase(target, phrase, { strict = false, links = false, 
   if (["cancel sleep", "sleep off", "stop sleep timer", "cancel sleep timer"].includes(words)) {
     await setSleep(target, 0);
     return "Sleep timer off.";
+  }
+  const more = /^(?:give (?:me |us |him |her |them )?)?(?:(\d{1,3}) more minutes?|more time)(?: please)?$/.exec(words);
+  if (more) {
+    if (fromLink) throw new ValueError("More time can't be given from a link. Use the Rules menu."); // any site could open a #do= link
+    return sayMoreTime(target, boundedInt(more[1] ?? 15, 5, 120));
   }
   if (fromLink && ["pause rules", "pause the rules", "rules off", "resume rules", "rules on", "unpause rules"].includes(words)) {
     throw new ValueError("Rules can't be paused or resumed from a link. Use the Rules menu."); // any site could open a #do= link

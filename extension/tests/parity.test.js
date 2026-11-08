@@ -250,6 +250,14 @@ test("rules helpers", () => {
   same("total_limit_today", (r, when) => rules.totalLimitToday(r, new Date(when.replace(" ", "T") + ":00")),
     [[totals, "2026-11-06 12:00"], [totals, "2026-11-07 12:00"], [rules.cleanRules({ totalLimit: 120 }), "2026-11-07 12:00"], [rules.cleanRules({}), "2026-11-09 12:00"]]);
   same("rules_active", rules.rulesActive, [[rules.cleanRules({ totalLimit: 30 })]]);
+  // Extra time for one day.
+  same("clean_bonus", rules.cleanBonus, [[{ day: "2026-11-07", minutes: { "12": 15, "*": 30, "bad id!": 5, x: 0 } }], [{ day: "soon", minutes: { "12": 15 } }],
+    [{ day: "2026-11-07", minutes: {} }], [null], [{ day: "2026-11-07", minutes: { "12": 9999 } }]]);
+  const given = rules.cleanRules({ limits: { "12": 60 }, totalLimit: 120, bonus: { day: "2026-11-07", minutes: { "12": 15, "*": 30 } } });
+  same("bonus_minutes", (r, key, when) => rules.bonusMinutes(r, key, new Date(when.replace(" ", "T") + ":00")),
+    [[given, "12", "2026-11-07 20:00"], [given, "*", "2026-11-07 20:00"], [given, "12", "2026-11-08 00:01"], [given, "837", "2026-11-07 20:00"]]);
+  same("total_limit_today", (r, when) => rules.totalLimitToday(r, new Date(when.replace(" ", "T") + ":00")), [[given, "2026-11-07 20:00"], [given, "2026-11-08 20:00"]]);
+  same("limit_today", (r, when) => rules.limitToday(r, "12", new Date(when.replace(" ", "T") + ":00")) ?? null, [[given, "2026-11-07 20:00"], [given, "2026-11-08 20:00"]]);
   same("next_bedtime_on", (rule, when) => rules.nextBedtimeOn(rule, new Date(when.replace(" ", "T") + ":00")), [
     [late, "2026-11-05 23:00"], [late, "2026-11-07 23:00"], [school, "2026-11-06 20:00"], [school, "2026-11-08 20:00"],
     [daytime, "2026-11-07 16:00"], [daytime, "2026-11-07 12:00"]]);

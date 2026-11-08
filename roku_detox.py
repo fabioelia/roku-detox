@@ -1272,6 +1272,7 @@ RULES_DEFAULT = {
     "pausedUntil": 0,  # epoch seconds: every rule rests until then (guests over, movie night)
     "totalLimit": 0,         # minutes of TV a day, all apps and inputs together (0: none)
     "totalWeekendLimit": 0,  # ... on Saturdays and Sundays instead (0: the same)
+    "bonus": {"day": "", "minutes": {}},  # extra minutes given for one day: app id (or "*" for all TV) -> minutes
     "limits": {},      # app id -> minutes per day
     "weekendLimits": {},  # app id -> minutes on Saturdays and Sundays instead (only apps with a daily limit)
     "blocked": [],     # app ids sent back to the home screen
@@ -1337,6 +1338,7 @@ def clean_rules(raw):
         "pausedUntil": bounded_int(raw.get("pausedUntil"), 0, 4_102_444_800),
         "totalLimit": bounded_int(raw.get("totalLimit"), 0, 1440),
         "totalWeekendLimit": bounded_int(raw.get("totalWeekendLimit"), 0, 1440) if bounded_int(raw.get("totalLimit"), 0, 1440) else 0,
+        "bonus": clean_bonus(raw.get("bonus")),
     }
     for k, v in weekend.items():
         if app_id(k) in rules["limits"]:  # a weekend amount only for an app with a daily limit
@@ -1363,17 +1365,42 @@ def tv_rules(address):
         return json.loads(json.dumps(RULES_DEFAULT))
 
 
+def clean_bonus(raw):
+    """{"day": "YYYY-MM-DD", "minutes": {app id or "*": minutes}}: extra time given for one day."""
+    if not isinstance(raw, dict):
+        return {"day": "", "minutes": {}}
+    day = raw.get("day") if isinstance(raw.get("day"), str) and re.match(r"^\d{4}-\d\d-\d\d$", raw.get("day")) else ""
+    given = raw.get("minutes") if isinstance(raw.get("minutes"), dict) else {}
+    minutes = {}
+    for key, value in list(given.items())[:51]:
+        if key == "*" or (isinstance(key, str) and APP_ID_RE.match(key)):
+            amount = bounded_int(value, 0, 720)
+            if amount:
+                minutes[key] = amount
+    return {"day": day if minutes else "", "minutes": minutes}
+
+
+def bonus_minutes(rules, key, moment):
+    """Extra minutes given today for the app (or "*" for all TV together)."""
+    bonus = rules.get("bonus") or {}
+    return bonus.get("minutes", {}).get(key, 0) if bonus.get("day") == moment.strftime("%Y-%m-%d") else 0
+
+
 def limit_today(rules, app_id, moment):
-    """Minutes allowed on the app on moment's day: its weekend amount on Saturday and Sunday, if it has one."""
+    """Minutes allowed on the app on moment's day: its weekend amount on Saturday and Sunday, if it has one,
+    plus any extra time given today."""
     if moment.weekday() >= 5 and app_id in rules.get("weekendLimits", {}):
-        return rules["weekendLimits"][app_id]
-    return rules["limits"].get(app_id)
+        base = rules["weekendLimits"][app_id]
+    else:
+        base = rules["limits"].get(app_id)
+    return None if base is None else base + bonus_minutes(rules, app_id, moment)
 
 
 def total_limit_today(rules, moment):
-    """Minutes of TV allowed on moment's day for all apps and inputs together, or None."""
+    """Minutes of TV allowed on moment's day for all apps and inputs together (plus extra given today), or None."""
     weekend = moment.weekday() >= 5 and rules.get("totalWeekendLimit")
-    return (rules.get("totalWeekendLimit") if weekend else rules.get("totalLimit")) or None
+    base = (rules.get("totalWeekendLimit") if weekend else rules.get("totalLimit")) or None
+    return None if base is None else base + bonus_minutes(rules, "*", moment)
 
 
 def detox_home_playing(target):
@@ -1870,6 +1897,19 @@ def keep_owned_fields(rules, stored):
     rules["pausedUntil"] = stored.get("pausedUntil", 0)
     rules["bedtime"]["extendUntil"] = stored["bedtime"].get("extendUntil", 0)
     rules["autopilot"]["skipNext"] = stored["autopilot"].get("skipNext", False)
+    rules["bonus"] = stored.get("bonus", {"day": "", "minutes": {}})
+    return rules
+
+
+def give_more_time(address, key, minutes):
+    """Add minutes for today to an app's limit, or to all TV together ("*")."""
+    rules = tv_rules(address)
+    today = datetime.now().strftime("%Y-%m-%d")
+    bonus = rules.get("bonus") or {}
+    given = dict(bonus.get("minutes", {})) if bonus.get("day") == today else {}
+    given[key] = min(720, given.get(key, 0) + minutes)
+    rules["bonus"] = {"day": today, "minutes": given}
+    save_rules(address, rules)
     return rules
 
 
@@ -2002,6 +2042,7 @@ def fold_words(text):
 
 
 PAUSE_RULE_PHRASES = ("pause rules", "pause the rules", "rules off")
+MORE_TIME_RE = r"^(?:give (?:me |us |him |her |them )?)?(?:(\d{1,3}) more minutes?|more time)(?: please)?$"
 RESUME_RULE_PHRASES = ("resume rules", "rules on", "unpause rules")
 STATUS_ON_RE = r"^(?:(?:what s|whats|what is) (?:on|playing)(?: on)?(?: (?:the )?tv)?(?: right now| now)?|now playing|what am i watching)$"
 STATUS_TIME_RE = r"^(?:screen time|tv time|watch time|how much tv)(?: today)?$"
@@ -2058,6 +2099,21 @@ def say_screen_time(target):
     if len(usage) == 1:
         return f"{say_duration(total)} of TV today, all on {app_label(target, top)}."
     return f"{say_duration(total)} of TV today. The most: {app_label(target, top)}, {say_duration(usage[top])}."
+
+
+def say_more_time(target, minutes):
+    """"15 more minutes": for all TV together if there's a total today, else for the app that's on."""
+    address = display_address(target)
+    status = WATCHER.status(address)
+    rules, now = status["rules"], datetime.now()
+    if total_limit_today(rules, now):
+        give_more_time(address, "*", minutes)
+        return f"{minutes} more minutes of TV today."
+    app = status.get("app") or active_app(target, deliver=False)
+    if app and app.get("id") and limit_today(rules, app["id"], now) is not None:
+        give_more_time(address, app["id"], minutes)
+        return f"{minutes} more minutes of {plain_name(app)} today."
+    raise ValueError("There's no time limit on what's on, so there's nothing to add to.")
 
 
 def say_time_left(target):
@@ -2139,6 +2195,11 @@ def do_phrase(target, phrase, strict=False, links=False, from_link=False):
         return "Sleep timer off."
     if from_link and words in PAUSE_RULE_PHRASES + RESUME_RULE_PHRASES:  # any site could open a #do= link
         raise ValueError("Rules can't be paused or resumed from a link. Use the Rules menu.")
+    more = re.match(MORE_TIME_RE, words)
+    if more:
+        if from_link:  # any site could open a #do= link
+            raise ValueError("More time can't be given from a link. Use the Rules menu.")
+        return say_more_time(target, bounded_int(more.group(1) or 15, 5, 120))
     if words in PAUSE_RULE_PHRASES:
         rules = tv_rules(display_address(target))
         if not rules_enforcing(rules):
@@ -3471,13 +3532,14 @@ class Handler(BaseHTTPRequestHandler):
             if shortcut:
                 return self.fail(401, "That Shortcuts key doesn't work anymore. Make a new one in Roku Detox on your Mac (Phone menu).")
             return self.fail(401, "Enter the code from your Mac first.", pair=True)
-        pausing = path == "/api/do" and fold_words(str(body.get("do", "")))[:120] in PAUSE_RULE_PHRASES
+        folded = fold_words(str(body.get("do", "")))[:120] if path == "/api/do" else ""
+        pausing = path == "/api/do" and (folded in PAUSE_RULE_PHRASES or bool(re.match(MORE_TIME_RE, folded)))
         if path.startswith(PIN_PATHS) or pausing:
             pin = self.pin_check()
             if pin == "locked":
                 return self.fail(429, "Too many wrong PINs. Try again in 10 minutes.")
             if pin != "ok":
-                return self.fail(403, "Enter the household PIN to pause the rules." if pausing
+                return self.fail(403, "Enter the household PIN to change the rules." if pausing
                                  else "Enter the household PIN to change this.", pin=True)
         key_ok = bool(shortcut) and self.server.phone.is_shortcut_key(shortcut)
         if not self.port_ok(body.get("tv")):
@@ -3516,6 +3578,7 @@ class Handler(BaseHTTPRequestHandler):
             "/api/rules/extend": lambda: self.rules_extend(body),
             "/api/rules/skip": lambda: self.rules_skip(body),
             "/api/rules/pause": lambda: self.rules_pause(body),
+            "/api/rules/more": lambda: self.rules_more(body),
             "/api/tvapp/install": lambda: self.mac_only(lambda: (install_tv_app(self.server.phone, target(), str(body.get("password", ""))), self.send(200, tv_app_status(target())))),
             "/api/tvapp/remove": lambda: self.mac_only(lambda: (remove_tv_app(self.server.phone, target(), str(body.get("password", ""))), self.send(200, tv_app_status(target())))),
             "/api/tvapp/options": lambda: self.send(200, save_tv_app_options(target(), body)),
@@ -3742,6 +3805,12 @@ class Handler(BaseHTTPRequestHandler):
         if isinstance(body.get("rules"), dict) and "weekendLimits" not in body["rules"]:  # ... or weekend limits
             rules["weekendLimits"] = {k: v for k, v in stored.get("weekendLimits", {}).items() if k in rules["limits"]}
         save_rules(address, rules)
+        self.send(200, WATCHER.status(address))
+
+    def rules_more(self, body):
+        address = display_address(parse_target(body.get("tv")))
+        app = str(body.get("app") or "")
+        give_more_time(address, "*" if not app else app_id_from({"id": app}), bounded_int(body.get("minutes"), 5, 120))
         self.send(200, WATCHER.status(address))
 
     def rules_pause(self, body):

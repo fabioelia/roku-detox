@@ -20,7 +20,7 @@ import { cast, lookCloser, searchSites, sniffedForTab, tvMessage } from "./video
 import { setSleep, sleepStatus } from "./sleep.js";
 import { doPhrase } from "./phrases.js";
 import { discoverReport } from "./discover.js";
-import { cleanRules, doctor, extendBedtime, keepOwnedFields, pauseRules, rulesStatus, saveRules, skipAutopilot, tvRules, usageSummary } from "./rules.js";
+import { cleanRules, doctor, extendBedtime, giveMoreTime, keepOwnedFields, pauseRules, rulesStatus, saveRules, skipAutopilot, tvRules, usageSummary } from "./rules.js";
 
 export const VERSION = (() => {
   try { return chrome.runtime.getManifest().version; } catch { return "1.0.0"; }
@@ -221,6 +221,13 @@ const POST_ROUTES = {
   "/api/rules/extend": async (c) => {
     const address = c.address();
     await extendBedtime(address, boundedInt(c.body.minutes, 5, 120));
+    return rulesStatus(address);
+  },
+  "/api/rules/more": async (c) => {
+    const address = c.address();
+    const app = truthy(c.body.app) ? pyStr(c.body.app) : "";
+    if (app && !APP_ID_RE.test(app)) throw new ValueError("Bad channel id.");
+    await giveMoreTime(address, app || "*", boundedInt(c.body.minutes, 5, 120));
     return rulesStatus(address);
   },
   "/api/rules/pause": async (c) => {

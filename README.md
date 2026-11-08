@@ -66,7 +66,7 @@ The page has six menus:
   for Apple's Shortcuts app (or anything that can send a web request): POST `{"do": "pause"}` to
   `http://<this Mac>:8642/api/do` with the header `X-Detox-Key`. Phrases: pause, home, back, louder,
   quieter, mute, on, off, volume up 5, open Netflix, HDMI 2, one of your scene names, sleep 30,
-  cancel sleep, pause rules, resume rules, search The Bear; anything else searches the TV. The answer is a sentence Siri can read out,
+  cancel sleep, pause rules, resume rules, 15 more minutes (extra time today), search The Bear; anything else searches the TV. The answer is a sentence Siri can read out,
   and you can ask too: "what's on" (Netflix is on, playing, 12 minutes in), "screen time" (today's total and the top app,
   from the viewing log) and "time left" (what's left on each daily limit, and when bedtime is). With a household PIN set,
   "pause rules" needs it too. With the key, a YouTube or Netflix link as `do` plays it on the TV, so a shortcut

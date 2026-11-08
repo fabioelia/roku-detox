@@ -14,7 +14,7 @@ const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const PHRASES = ["pause", "Open Netflix", "hdmi 2", "volume up 3", "sleep 30", "cancel sleep", "home",
   "open zzzz", "YouTube", "watch the roku channel", "louder", "  ", "Pokémon", "It", "tv", "a", "Us",
   "search for cafe", "Run Lola Run", "sleep timer 20", "netflix", "What's on?", "What’s playing on the TV right now", "Where's Waldo?", "https://youtu.be/dQw4w9WgXcQ", "pause rules", "resume rules",
-  "screen time", "time left", "how much time is left today"];
+  "screen time", "time left", "how much time is left today", "15 more minutes", "give me more time please"];
 
 function python(phrases, strict = false) {
   const code = `import json, sys; sys.path.insert(0, ${JSON.stringify(ROOT)}); import roku_detox as rd, tempfile, os

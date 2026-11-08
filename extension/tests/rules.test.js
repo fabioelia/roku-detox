@@ -259,3 +259,21 @@ test("skip the home screen stays home when that app has no time left", async () 
   assert.ok((await messages()).includes("TV turned on. Netflix has no time left today, so it stayed on the home screen."));
   await setRules({});
 });
+
+test("15 more minutes: for today only, for an app or all TV together, and kept when the page saves", async () => {
+  mock.timers.setTime(new Date("2026-11-19T18:00:00").getTime());
+  await setRules({ limits: { "12": 30 }, totalLimit: 90 });
+  let status = await ok("POST", "/api/rules/more", { tv: TV, app: "12", minutes: 15 });
+  assert.equal(status.limitsToday["12"], 45);
+  status = await ok("POST", "/api/rules/more", { tv: TV, minutes: 15 });
+  assert.equal(status.totalToday, 105);
+  // The page saves its own copy of the rules (with no extra time in it): the extra time stays.
+  status = await ok("POST", "/api/rules", { tv: TV, rules: { limits: { "12": 30 }, totalLimit: 90 } });
+  assert.deepEqual(status.rules.bonus, { day: "2026-11-19", minutes: { "12": 15, "*": 15 } });
+  // The next day it's gone.
+  mock.timers.setTime(new Date("2026-11-20T09:00:00").getTime());
+  status = await ok("GET", "/api/rules", { tv: TV });
+  assert.equal(status.limitsToday["12"], 30);
+  assert.equal(status.totalToday, 90);
+  await setRules({});
+});
