@@ -133,6 +133,16 @@ export function pyStr(value) {
   try { return JSON.stringify(value); } catch { return String(value); }
 }
 
+/** Typed text from the page, like text_of() in roku_detox.py: a string, or "" for anything else. */
+export function textOf(value) {
+  return typeof value === "string" ? value : "";
+}
+
+/** Python's str.strip(): the same whitespace (JS trim() also strips U+FEFF but not U+001C-U+001F or U+0085). */
+export function pyStrip(text) {
+  return text.replace(/^[\t\n\v\f\r\x1c-\x20\x85\xa0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]+|[\t\n\v\f\r\x1c-\x20\x85\xa0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]+$/g, "");
+}
+
 /** Python truthiness. */
 export function truthy(value) {
   if (Array.isArray(value)) return value.length > 0;

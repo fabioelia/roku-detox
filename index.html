@@ -1547,6 +1547,13 @@ function liteFail(status, message, extra = {}) {
   return err;
 }
 
+// Typed text cleaned like roku_detox.py: strings only, Python's strip(), first n characters (not UTF-16 halves).
+function liteText(value, n) {
+  const space = "[\\t\\n\\v\\f\\r\\x1c-\\x20\\x85\\xa0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000]+";
+  const text = (typeof value === "string" ? value : "").replace(new RegExp(`^${space}|${space}$`, "g"), "");
+  return Array.from(text).slice(0, n).join("");
+}
+
 // Like Python's urllib.parse.quote(text, safe=""), which roku_detox.py uses for ECP paths.
 const quote = (text) => enc(text).replace(/[!'()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
 
@@ -1698,7 +1705,7 @@ function cleanScenes(raw) {
   if (!Array.isArray(raw) || raw.length > 20) throw liteFail(400, "Bad scene list.");
   return raw.map((item) => {
     if (!item || typeof item !== "object") throw liteFail(400, "Bad scene.");
-    const name = String(item.name ?? "").trim().slice(0, 40);
+    const name = liteText(item.name, 40);
     if (!name) throw liteFail(400, "Give each scene a name.");
     const steps = (Array.isArray(item.steps) ? item.steps : []).slice(0, 20).map((step) => {
       const action = step && typeof step === "object" ? step.do : null;
@@ -1715,7 +1722,7 @@ function cleanScenes(raw) {
       } else if (action === "sleep_timer") {
         clean.n = bounded(step.n, 1, 240);
       } else if (action === "message") {
-        const text = String(step.text ?? "").trim().slice(0, 200);
+        const text = liteText(step.text, 200);
         if (!text) throw liteFail(400, `Write the message in "${name}".`);
         clean.text = text;
       }
@@ -3214,7 +3221,7 @@ function sceneTemplate(kind) {
   const gameInput = inputs.find((a) => /switch|xbox|playstation|ps5|ps4|game/i.test(a.name)) || inputs.find((a) => a.id.startsWith("tvinput.hdmi"));
   if (kind === "game") return { name: "Game time", steps: [{ do: "power_on" }, ...(gameInput ? [{ do: "open", target: gameInput.id }] : [])], at: null };
   if (kind === "bedtime") return { name: "Bedtime", steps: [{ do: "power_off" }], at: isLite() ? null : "23:00" };
-  if (kind === "winddown") return { name: "Wind down", steps: [{ do: "message", text: "Time to start getting ready for bed." }, { do: "volume_down", n: 5 }, { do: "sleep_timer", n: 45 }], at: null };
+  if (kind === "winddown") return { name: "Wind down", steps: [{ do: "volume_down", n: 5 }, { do: "sleep_timer", n: 45 }, { do: "message", text: "Time to start getting ready for bed. The TV turns off in 45 minutes." }], at: null };
   return { name: "", steps: [{ do: "power_on" }, { do: "open", target: "" }], at: null };
 }
 
@@ -3248,7 +3255,7 @@ function renderSceneEditor() {
     if (step.do === "volume_up" || step.do === "volume_down") extra = `<input type="number" data-field="n" min="1" max="50" value="${step.n || 5}" aria-label="How many clicks"><span>clicks</span>`;
     if (step.do === "wait") extra = `<input type="number" data-field="n" min="1" max="30" value="${step.n || 3}" aria-label="Seconds"><span>seconds</span>`;
     if (step.do === "sleep_timer") extra = `<input type="number" data-field="n" min="1" max="240" value="${step.n || 45}" aria-label="Minutes until the TV turns off"><span>min, then off</span>`;
-    if (step.do === "message") extra = `<input type="text" data-field="text" maxlength="200" value="${esc(step.text || "")}" placeholder="Time for bed!" aria-label="Message to show on the TV"><span class="note">in Detox Home</span>`;
+    if (step.do === "message") extra = `<input type="text" data-field="text" maxlength="200" value="${esc(step.text || "")}" placeholder="Time for bed!" aria-label="Message to show on the TV"><span class="note" title="Detox Home opens to show it, which stops what's playing. Skipped while the TV is off.">in Detox Home (stops what's on)</span>`;
     return `<li data-i="${i}"><div class="step"><select data-field="do" aria-label="Step ${i + 1}">${actions}</select>${extra}
       <button class="btn quiet" type="button" data-step-remove="${i}" aria-label="Remove step ${i + 1}">Remove</button></div></li>`;
   }).join("");
@@ -5212,7 +5219,7 @@ function renderTvAppBody(app, status, body) {
     const canInstall = app.canInstall === true;   // only the extension's own pages can install
     // By hand, from any browser on the Wi-Fi (a phone too): the file, then the TV's installer page.
     const byHand = `<details class="by-hand"><summary>Or install it by hand</summary><ol class="app-steps">
-        <li>${state.engine?.kind === "extension" ? `<a href="detox-home.zip" download="detox-home.zip">Download Detox Home</a>` : `<a href="${esc(DETOX_HOME_DOWNLOAD)}" target="_blank" rel="noopener">Download Detox Home</a>`} (on a phone: <a href="${esc(DETOX_HOME_DOWNLOAD)}" target="_blank" rel="noopener">from GitHub</a>).</li>
+        <li>${location.protocol === "chrome-extension:" ? `<a href="detox-home.zip" download="detox-home.zip">Download Detox Home</a>` : `<a href="${esc(DETOX_HOME_DOWNLOAD)}" target="_blank" rel="noopener">Download Detox Home</a>`} (on a phone: <a href="${esc(DETOX_HOME_DOWNLOAD)}" target="_blank" rel="noopener">from GitHub</a>).</li>
         <li>Open <a href="${esc(app.installPage)}" target="_blank" rel="noopener">the TV's installer page</a> and sign in as <strong>rokudev</strong> with the developer-mode password.</li>
         <li>Choose the file, press Install, and wait for the TV to open Detox Home.</li>
       </ol></details>`;

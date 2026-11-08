@@ -371,13 +371,16 @@ export async function search(target, keyword) {
 /** Run a saved scene's steps in order (see clean_scenes in store.js). */
 export async function runScene(target, scene) {
   return keepAlive((async () => {
+    let woke = null; // true after a "turn on" step, false after "turn off", null: ask the TV
     for (const step of scene.steps) {
       const action = step.do;
       if (action === "power_on") {
         await press(target, "PowerOn");
+        woke = true;
         await sleep(4000); // give the TV time to wake up
       } else if (action === "power_off") {
         await press(target, "PowerOff");
+        woke = false;
       } else if (action === "open") {
         await launch(target, step.target);
         await sleep(2000);
@@ -393,8 +396,12 @@ export async function runScene(target, scene) {
         await setSleep(target, step.n);
       } else if (action === "message") {
         try { // needs Detox Home on the TV; without it the other steps still run
-          await showOnTv(target, "message", { text: step.text, from: scene.name || "Roku Detox" });
-          await sleep(2000);
+          // Never for a TV that's off: opening Detox Home could turn the screen on.
+          if (woke === null) woke = ((await deviceInfo(target))["power-mode"] ?? "PowerOn") === "PowerOn";
+          if (woke) {
+            await showOnTv(target, "message", { text: step.text, from: scene.name || "Roku Detox" });
+            await sleep(2000);
+          }
         } catch (err) {
           if (!(err instanceof TVError) && !(err instanceof ValueError)) throw err;
         }
@@ -406,6 +413,11 @@ export async function runScene(target, scene) {
 // --- Detox Home (Roku's "dev" app slot) ---------------------------------------------------
 
 const TV_APP_SEEN = new Map(); // target key -> {at, present}
+
+/** Forget whether Detox Home is installed (after installing or removing it). */
+export function forgetTvApp(target) {
+  TV_APP_SEEN.delete(targetKey(target));
+}
 
 /** Is Detox Home installed on this TV? */
 export async function tvAppPresent(target, maxAge = 60) {

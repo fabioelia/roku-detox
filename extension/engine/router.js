@@ -7,7 +7,7 @@ import {
 } from "./util.js";
 import {
   activeApp, canControl, deviceInfo, favoritesLink, fetchIcon, launch, listApps, nowPlaying, openStorePage, press,
-  pushToTvApp, restart, runScene, search, settingsLink, summarize, tvAppPresent, typeText,
+  forgetTvApp, pushToTvApp, restart, runScene, search, settingsLink, summarize, tvAppPresent, typeText,
 } from "./ecp.js";
 import {
   appendLog, cleanFavorites, cleanScenes, cleanServices, getLocal, preferredTv, readLog, rememberTv, saveSites,
@@ -250,19 +250,22 @@ const POST_ROUTES = {
     const password = pyStr(c.body.password ?? "");
     if (!password || password.length > 200) throw new ValueError("Type the developer password you chose on the TV.");
     await sendToInstaller(target, password, await detoxHomePackage());
-    // The new copy starts with this TV's favorites and options, like the program's install (they're
-    // delivered when it opens, which it does after installing).
+    forgetTvApp(target);
+    // The TV opens the new copy after installing; give it a moment to start listening before handing it
+    // this TV's favorites and options (like the program's install). If it isn't in front yet, they wait
+    // until the extension next sees it open.
+    await sleep(4000);
     const address = displayAddress(target);
     const { favorites } = await tvSettings(address);
     await pushToTvApp(target, "settings", settingsLink(await tvAppOptions(address)));
     await pushToTvApp(target, "favorites", favoritesLink(favorites));
-    await sleep(4000); // the TV restarts the app; give it a moment before asking what's installed
     return tvAppStatus(target);
   },
   "/api/tvapp/remove": async (c) => {
     if (!c.internal) throw new NotSupported("Remove Detox Home from the Roku Detox page on the computer.");
     const target = c.target();
     await sendToInstaller(target, pyStr(c.body.password ?? ""), null);
+    forgetTvApp(target);
     return tvAppStatus(target);
   },
   "/api/tvapp/options": async (c) => {

@@ -308,6 +308,13 @@ end sub
 ' mobile apps" setting says (Roku's ECP docs: support for sending ECP commands from within a Roku app has
 ' been discontinued). So Detox Home can't list or open apps there; its clock, messages and videos still work.
 function blockedText() as String
+    ' Roku OS 12 and later refuse apps on the TV whatever the setting; before that, the setting decides.
+    major = 0
+    v = CreateObject("roDeviceInfo").GetOSVersion()
+    if type(v) = "roAssociativeArray" then major = Val(asStr(v.major))
+    if major > 0 and major < 12
+        return "Roku is blocking requests from apps. On this TV, open Settings, System, Advanced system settings, Control by mobile apps, Network access, and choose Default or Permissive."
+    end if
     return "This Roku doesn't let apps on the TV open other apps (a Roku rule since Roku OS 12), so your apps can't show here. The clock, messages and videos still work. Open apps from the Roku home screen, or with Roku Detox on your phone or computer."
 end function
 

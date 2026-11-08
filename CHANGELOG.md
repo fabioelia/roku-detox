@@ -3,6 +3,21 @@
 Newest first. The extension's version is in `extension/manifest.json`; after pulling, reload it on
 `chrome://extensions`. The program has no version: restart `python3 roku_detox.py`.
 
+## Detox Home 2.0.2, and fixes from a review
+
+- **Scenes' "Show a message" step never turns on a TV that's off.** It's skipped while the TV is in
+  standby, unless the scene turned the TV on first. The editor now says the message opens Detox Home,
+  which stops what's playing, and the Wind down template shows its message last.
+- Detox Home's "blocked" note is right on older TVs too: before Roku OS 12 it points to the setting that
+  fixes it. When one of the TV's addresses refuses and another just fails, it still says why.
+- After the extension installs Detox Home, it waits for the app to start before handing it your favorites
+  and options, so they aren't lost.
+- Scene names and messages are cleaned the same way by the program, the extension and the phone page
+  (only text counts; spaces trimmed the same way; long messages cut by characters, so an emoji at the end
+  isn't cut in half).
+- The "install it by hand" download link works on a page opened from localhost with the extension.
+- The release workflow keeps the old download until the new one is in place, and moves the tag last.
+
 ## Detox Home 2.0.1
 
 - On Roku OS 12 and later, Roku refuses remote-control requests from apps on the TV itself, even with

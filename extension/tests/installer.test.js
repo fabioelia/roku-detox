@@ -45,6 +45,20 @@ test("the extension installs, updates and removes Detox Home itself (no installe
   assert.equal((await call("/api/scene", { tv: TV, id: saved.data.scenes[0].id })).status, 200);
   const shown = await (await fetch(`http://${TV}/test/last-dev`, { method: "POST" })).json();
   assert.deepEqual([shown.mediaType, shown.text, shown.from], ["message", "Time for bed!", "Wind down"]);
+  // A message never wakes a TV that's off (opening Detox Home could turn the screen on)...
+  const lastShown = async () => (await (await fetch(`http://${TV}/test/last-dev`, { method: "POST" })).json()).text;
+  const runSteps = async (steps) => {
+    const made = await call("/api/settings", { tv: TV, scenes: [{ name: "Night", steps }] });
+    assert.equal(made.status, 200, JSON.stringify(made.data));
+    assert.equal((await call("/api/scene", { tv: TV, id: made.data.scenes[0].id })).status, 200);
+  };
+  await runSteps([{ do: "power_off" }, { do: "message", text: "After off" }]);
+  assert.equal(await lastShown(), "Time for bed!", "not shown after turning the TV off");
+  await runSteps([{ do: "message", text: "While off" }]);
+  assert.equal(await lastShown(), "Time for bed!", "not shown while the TV is off");
+  // ...but a scene that turns it on first can show one.
+  await runSteps([{ do: "power_on" }, { do: "message", text: "Good morning" }]);
+  assert.equal(await lastShown(), "Good morning");
   // Phones (the relay) and web pages can't install, and their TV app menu says so (no password form).
   assert.equal((await call("/api/tvapp/install", { tv: "127.0.0.1", password: "testpass" }, false)).status, 501);
   const fromPhone = await handleMessage({ type: "api", method: "GET", path: "/api/tvapp", query: { tv: "127.0.0.1" } }, { internal: false });

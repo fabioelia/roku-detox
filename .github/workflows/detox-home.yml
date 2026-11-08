@@ -59,14 +59,16 @@ jobs:
           if ! gh release view detox-home >/dev/null 2>&1; then
             gh release create detox-home --title "Detox Home (Roku app)" --notes "$notes" --target "$GITHUB_SHA" --latest=false
           fi
-          # The tag follows the build, so the release's source matches its file.
-          gh api -X PATCH "repos/$GITHUB_REPOSITORY/git/refs/tags/detox-home" -f sha="$GITHUB_SHA" -F force=true > /dev/null
           # Upload the new file under another name first, then swap names, so the download link is never gone
           # for longer than a moment.
           cp detox-home.zip detox-home-next.zip
           gh release upload detox-home detox-home-next.zip --clobber
           old=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/detox-home" --jq '.assets[] | select(.name == "detox-home.zip") | .id')
           new=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/detox-home" --jq '.assets[] | select(.name == "detox-home-next.zip") | .id')
+          # Never delete the old file unless the new one is there to take its name.
+          if [ -z "$new" ]; then echo "The new file didn't show up on the release; keeping the old one." >&2; exit 1; fi
           if [ -n "$old" ]; then gh api -X DELETE "repos/$GITHUB_REPOSITORY/releases/assets/$old"; fi
           gh api -X PATCH "repos/$GITHUB_REPOSITORY/releases/assets/$new" -f name=detox-home.zip > /dev/null
+          # The tag follows the published file (moved last, so it never points at a build that wasn't published).
+          gh api -X PATCH "repos/$GITHUB_REPOSITORY/git/refs/tags/detox-home" -f sha="$GITHUB_SHA" -F force=true > /dev/null
           gh release edit detox-home --notes "$notes" --latest=false

@@ -1,7 +1,7 @@
 ' EcpTask - talks to this TV's own remote-control service (Roku ECP on port 8060), the same one
-' Roku Detox uses from a computer. Roku apps can't open other apps themselves, but they can ask
-' their own TV to, so Detox Home needs no computer. Runs on a Task thread because roUrlTransfer
-' isn't allowed on the render thread.
+' Roku Detox uses from a computer. Roku OS 12 and later refuse these requests from apps on the TV
+' (401/403); older TVs answer them when "Control by mobile apps" allows it. Runs on a Task thread
+' because roUrlTransfer isn't allowed on the render thread.
 
 sub init()
     m.top.functionName = "runRequest"
@@ -34,6 +34,7 @@ sub runRequest()
     end for
     if not hasValue(hosts, "127.0.0.1") then hosts.Push("127.0.0.1")
 
+    refused = 0
     for each host in hosts
         answer = sendOnce(host, method, path)
         if answer.code > 0
@@ -47,8 +48,10 @@ sub runRequest()
                 return
             end if
             result.error = "HTTP " + answer.code.ToStr()
-            ' Refused (401/403): another of the TV's addresses (the loopback last) may be treated differently.
-            if answer.code <> 401 and answer.code <> 403
+            if answer.code = 401 or answer.code = 403
+                ' Refused: another of the TV's addresses (the loopback last) may be treated differently.
+                refused = answer.code
+            else if refused = 0
                 m.top.response = result
                 return
             end if
@@ -56,6 +59,11 @@ sub runRequest()
             if result.code = 0 then result.error = answer.error
         end if
     end for
+    ' A refusal wins over other errors, so the screen says why.
+    if refused <> 0
+        result.code = refused
+        result.error = "HTTP " + refused.ToStr()
+    end if
     m.top.response = result
 end sub
 

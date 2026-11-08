@@ -7,7 +7,7 @@
 
 import {
   APP_ID_RE, ValueError, boundedInt, cut, displayAddress, isPlainObject, nowIso, parseTarget,
-  pyStr, randomHex, truthy,
+  pyStr, pyStrip, randomHex, textOf, truthy,
 } from "./util.js";
 
 const local = () => chrome.storage.local;
@@ -102,7 +102,7 @@ export function cleanScenes(raw) {
   const scenes = [];
   for (const item of raw) {
     if (!isPlainObject(item)) throw new ValueError("Bad scene.");
-    const name = cut(pyStr(item.name ?? "").trim(), 40);
+    const name = cut(pyStrip(textOf(item.name)), 40);
     if (!name) throw new ValueError("Give each scene a name.");
     const steps = [];
     const rawSteps = truthy(item.steps) ? item.steps : [];
@@ -122,7 +122,7 @@ export function cleanScenes(raw) {
       } else if (action === "sleep_timer") {
         clean.n = boundedInt(step.n, 1, 240);
       } else if (action === "message") {
-        const text = cut(pyStr(step.text ?? "").trim(), 200);
+        const text = cut(pyStrip(textOf(step.text)), 200);
         if (!text) throw new ValueError(`Write the message in "${name}".`);
         clean.text = text;
       }

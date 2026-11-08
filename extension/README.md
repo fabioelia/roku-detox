@@ -52,12 +52,17 @@ address once, or press Find TVs.
 
 ### Detox Home (the TV app)
 
-Videos, messages and rule notices open in Detox Home. It doesn't connect out to anything (it asks the
-TV for its apps itself, where Roku still allows that), so each item travels inside the launch link
+Videos, messages and rule notices open in Detox Home. Each item travels inside the launch link
 (`launch/dev?contentId=inline&mediaType=video&url=…&title=…`). Favorites saved on the page and the
 TV app options go to it as `contentId=favorites` / `contentId=settings` input events while it's open,
-or wait until the extension next sees it open. The extension can't install Detox Home itself: with
-developer mode on, open `http://<your TV's address>` in the browser and upload the Detox Home zip there.
+or wait until the extension next sees it open. (Roku OS 12 and later don't let apps on the TV open other
+apps, so Detox Home's tiles can't open them there; the clock, messages and videos still work.)
+
+The extension installs and updates Detox Home itself (TV app menu, with developer mode on): it signs in to
+the TV's installer as `rokudev` with the password typed on the page, used for that one request and never
+kept. From a phone, download `detox-home.zip` from the
+[detox-home release](https://github.com/fabioelia/roku-detox/releases/download/detox-home/detox-home.zip)
+and upload it on `http://<your TV's address>`.
 
 ### Needs the program at home
 

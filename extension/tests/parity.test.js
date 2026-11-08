@@ -174,6 +174,12 @@ test("clean_scenes, clean_sites, clean_favorites, clean_services", () => {
     [[{ id: "a", name: "Open", steps: [{ do: "open" }] }]], [[{ id: "a", name: "Late", steps: [{ do: "mute" }], at: "25:00" }]],
     [[{ id: "a", name: "Empty", steps: [] }]], [[{ id: "a1", name: "No time", steps: [{ do: "wait", n: "x" }], at: "" }]],
     ["nope"], [[1]],
+    // Only strings count as text, stripped like Python and cut by characters.
+    [[{ id: "a", name: "Bed", steps: [{ do: "message", text: null }] }]], [[{ id: "a", name: null, steps: [{ do: "mute" }] }]],
+    [[{ id: "a", name: "Bed", steps: [{ do: "message", text: ["hi"] }] }]], [[{ id: "a", name: 42, steps: [{ do: "mute" }] }]],
+    [[{ id: "a", name: "Bed", steps: [{ do: "message", text: "\u001c" }] }]], [[{ id: "a", name: "\u0085Bed\u001f", steps: [{ do: "mute" }] }]],
+    [[{ id: "a", name: "Bed", steps: [{ do: "message", text: "﻿hi﻿" }] }]],
+    [[{ id: "a", name: "Bed", steps: [{ do: "message", text: `${"a".repeat(199)}😀b` }] }]],
   ]);
   same("clean_sites", store.cleanSites, [
     [[{ id: "s1", name: "Archive", search: "https://archive.org/search?query={q}" }]],

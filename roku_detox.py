@@ -1101,6 +1101,11 @@ def clean_favorites(raw):
     return favorites
 
 
+def text_of(value):
+    """Typed text from the page: a string, or nothing (None, numbers or lists aren't text)."""
+    return value if isinstance(value, str) else ""
+
+
 def clean_scenes(raw):
     if not isinstance(raw, list) or len(raw) > 20:
         raise ValueError("Bad scene list.")
@@ -1108,7 +1113,7 @@ def clean_scenes(raw):
     for item in raw:
         if not isinstance(item, dict):
             raise ValueError("Bad scene.")
-        name = str(item.get("name", "")).strip()[:40]
+        name = text_of(item.get("name")).strip()[:40]
         if not name:
             raise ValueError("Give each scene a name.")
         steps = []
@@ -1129,7 +1134,7 @@ def clean_scenes(raw):
             elif action == "sleep_timer":
                 clean["n"] = bounded_int(step.get("n"), 1, MAX_SLEEP_MINUTES)
             elif action == "message":
-                text = str(step.get("text", "")).strip()[:200]
+                text = text_of(step.get("text")).strip()[:200]
                 if not text:
                     raise ValueError(f'Write the message in "{name}".')
                 clean["text"] = text
@@ -1147,13 +1152,16 @@ def clean_scenes(raw):
 
 
 def run_scene(target, scene):
+    woke = None  # True after a "turn on" step, False after "turn off", None: ask the TV
     for step in scene["steps"]:
         action = step["do"]
         if action == "power_on":
             press(target, "PowerOn")
+            woke = True
             time.sleep(4)  # give the TV time to wake up
         elif action == "power_off":
             press(target, "PowerOff")
+            woke = False
         elif action == "open":
             launch(target, step["target"])
             time.sleep(2)
@@ -1169,8 +1177,12 @@ def run_scene(target, scene):
             set_sleep(target, step["n"])
         elif action == "message":
             try:  # needs Detox Home on the TV; without it the other steps still run
-                show_on_tv(target, "message", {"text": step["text"], "from": scene.get("name") or "Roku Detox"})
-                time.sleep(2)
+                # Never for a TV that's off: opening Detox Home could turn the screen on.
+                if woke is None:
+                    woke = device_info(target).get("power-mode", "PowerOn") == "PowerOn"
+                if woke:
+                    show_on_tv(target, "message", {"text": step["text"], "from": scene.get("name") or "Roku Detox"})
+                    time.sleep(2)
             except (TVError, ValueError):
                 pass
 
