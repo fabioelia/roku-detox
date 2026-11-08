@@ -279,6 +279,9 @@
   .tips kbd { padding: 0 5px; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 5px; font: inherit; font-size: 14px; }
   .shortcuts-box { margin-top: 28px; padding-top: 22px; border-top: 1px solid var(--line); max-width: 74ch; }
   .shortcuts-box .note { margin-top: 8px; }
+  .home-links { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 2px; }
+  .home-links li { display: flex; justify-content: space-between; align-items: center; gap: 10px; border-bottom: 1px solid var(--line); padding: 2px 0; }
+  .home-links .btn.quiet { min-height: 32px; font-size: 14px; }
   .recipe { margin: 12px 0 0; padding-left: 22px; display: grid; gap: 8px; }
   .recipe code, .shortcuts-box code { padding: 1px 6px; border-radius: 6px; background: var(--surface); font-size: 14px; overflow-wrap: anywhere; }
   .recipe .btn.quiet { min-height: 30px; padding: 2px 6px; font-size: 14px; }
@@ -1040,6 +1043,14 @@
   <div class="row">
     <button class="btn primary" type="button" id="cast-send" style="background:var(--bg);color:var(--ink)">Send to TV</button>
     <button class="btn quiet" type="button" id="cast-cancel">Cancel</button>
+  </div>
+</div>
+
+<div class="cast-banner" id="do-banner" hidden role="alertdialog" aria-labelledby="do-text">
+  <p id="do-text" aria-live="assertive"></p>
+  <div class="row">
+    <button class="btn primary" type="button" id="do-now" style="background:var(--bg);color:var(--ink)">Do it now</button>
+    <button class="btn quiet" type="button" id="do-cancel">Cancel</button>
   </div>
 </div>
 

@@ -3734,6 +3734,46 @@ $("#cast-send").addEventListener("click", async () => {
   }
 });
 
+/* ---------- Links that do something: …/#do=open%20Netflix (home-screen buttons on a phone) ---------- */
+
+function takeDoLink() {
+  const match = /^#do=(.+)$/.exec(location.hash);
+  if (!match) return null;
+  history.replaceState(null, "", location.pathname + location.search);
+  try { return decodeURIComponent(match[1]).trim().slice(0, 120) || null; } catch { return null; }
+}
+// A short, visible pause first, so a link from somewhere else can't act without you seeing it.
+let doTimer = null;
+function offerDo(phrase) {
+  state.pendingDo = phrase;
+  $("#do-text").textContent = `Doing “${phrase}” on the TV in 2 seconds…`;
+  $("#do-banner").hidden = false;
+  clearTimeout(doTimer);
+  doTimer = setTimeout(runPendingDo, 2000);
+}
+async function runPendingDo() {
+  clearTimeout(doTimer);
+  const phrase = state.pendingDo;
+  $("#do-banner").hidden = true;
+  state.pendingDo = null;
+  if (!phrase) return;
+  if (!state.tv || !state.control) { toast("Couldn't reach the TV to do that."); return; }
+  try {
+    const { done } = await api("/api/do", { tv: state.tv, do: phrase });
+    toast(done);
+    setTimeout(pollNow, 2500);
+    if (/sleep|off in/i.test(phrase) || done.startsWith("Running")) setTimeout(loadSleep, 1500);
+  } catch (err) {
+    toast(err.needs ? "Links like this need Roku Detox on your computer or the browser extension." : err.message);
+  }
+}
+$("#do-now").addEventListener("click", runPendingDo);
+$("#do-cancel").addEventListener("click", () => { clearTimeout(doTimer); state.pendingDo = null; $("#do-banner").hidden = true; });
+window.addEventListener("hashchange", () => {
+  const phrase = takeDoLink();
+  if (phrase) offerDo(phrase);
+});
+
 /* ---------- Menus ---------- */
 
 const isLocal = ["127.0.0.1", "localhost"].includes(location.hostname);
@@ -3849,9 +3889,30 @@ function renderPhone() {
       <button class="btn" type="button" id="phone-off">Turn off phone remote</button>
       <button class="btn quiet" type="button" id="phone-forget">Turn off and forget paired phones</button>
     </div>
-    ${shortcutsHTML()}`;
+    ${shortcutsHTML()}
+    ${homeButtonsHTML(phone.url)}`;
   if (window.QRCode) new QRCode($("#phone-qr"), { text: phone.url, width: 152, height: 152, correctLevel: QRCode.CorrectLevel.M });
   else $("#phone-qr").hidden = true;
+}
+
+// Home-screen buttons: links that open this page and do one thing (after a 2-second "Cancel" pause).
+function homeButtonsHTML(base) {
+  if (!base) return "";
+  const names = new Map(state.apps.map((a) => [a.id, plain(a.name)]));
+  const items = [
+    ...state.favorites.filter((id) => names.has(id)).map((id) => [`Open ${names.get(id)}`, `open ${names.get(id)}`]),
+    ...state.scenes.map((sc) => [sc.name, sc.name]),
+    ["Play or pause", "pause"], ["Sleep in 30 minutes", "sleep 30"], ["Turn the TV off", "off"],
+  ].slice(0, 12);
+  return `
+    <div class="shortcuts-box">
+      <h3 class="subhead">Home-screen buttons</h3>
+      <p class="note">Open one of these on your phone (after entering the code once), then use Share > Add to Home Screen. Tapping it then does that on the TV.</p>
+      <ul class="home-links">${items.map(([label, phrase]) => {
+        const link = `${base}/#do=${encodeURIComponent(phrase)}`;
+        return `<li><span>${esc(label)}</span><button class="btn quiet" type="button" data-copy="${esc(link)}">Copy link</button></li>`;
+      }).join("")}</ul>
+    </div>`;
 }
 
 // Siri and the Shortcuts app: "Get Contents of URL" with a key, sending a phrase like "pause".
@@ -3953,6 +4014,7 @@ function takeFindLink() {
   renderTips();
   renderRecentLinks();
   const findLink = takeFindLink();
+  const doLink = takeDoLink();
   if (usesIconLoader()) watchIcons();
   loadSites().then(renderFindSource);
   renderViews();
@@ -3974,4 +4036,5 @@ function takeFindLink() {
     await findTVs();
   }
   if (findLink && state.tv) runFind(findLink);
+  if (doLink) offerDo(doLink);
 })();

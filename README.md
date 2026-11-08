@@ -64,6 +64,9 @@ The page has six menus:
   `http://<this Mac>:8642/api/do` with the header `X-Detox-Key`. Phrases: pause, home, back, louder,
   quieter, mute, on, off, volume up 5, open Netflix, HDMI 2, one of your scene names, sleep 30,
   cancel sleep, search The Bear; anything else searches the TV. The answer is a sentence Siri can read out.
+  The Phone menu also lists **home-screen buttons**: links like `http://<this Mac>:8642/#do=open%20Netflix`
+  that open the page and do that on the TV after a 2-second pause you can cancel. Add them to a phone's
+  home screen for one-tap Netflix, a scene, or "sleep 30".
 
 **Send a video link to the TV**: paste a link into the box under the remote, or use the "Send to TV"
 bookmark from the TV app menu. YouTube and Netflix links open in their own apps. For other pages the Mac

@@ -151,6 +151,19 @@ async function main() {
     return on && getComputedStyle(document.querySelector("main")).display !== "none"; })()`);
   check("Just the remote hides the rest and comes back", remoteOnly);
 
+  // A home-screen link: shows "Doing … in 2 seconds", then does it; Cancel stops it.
+  const doLink = await page(`(async () => {
+    location.hash = "do=open%20netflix"; await new Promise((r) => setTimeout(r, 300));
+    const banner = !document.querySelector("#do-banner").hidden;
+    await new Promise((r) => setTimeout(r, 2800));
+    const opened = document.querySelector("#toast").textContent;
+    location.hash = "do=off"; await new Promise((r) => setTimeout(r, 300)); document.querySelector("#do-cancel").click();
+    await new Promise((r) => setTimeout(r, 2300));
+    const dev = await api("/api/device?tv=" + encodeURIComponent(state.tv));
+    return { banner, opened, power: dev.device.powerMode }; })()`);
+  check("a #do= link waits, then does it", doLink.banner && doLink.opened === "Opening Netflix.", JSON.stringify(doLink));
+  check("Cancel stops a #do= link", doLink.power === "PowerOn", JSON.stringify(doLink));
+
   // The send-only page (phones without the program): every menu opens without errors, and the
   // things it can't do stay out of the way.
   await send("Emulation.clearDeviceMetricsOverride");
