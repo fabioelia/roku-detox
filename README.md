@@ -10,6 +10,20 @@ Find a Roku TV on your Wi-Fi and clean it up from a web page on your computer.
 
 (Screenshots use the pretend TV in `mock_roku.py`.)
 
+## Quick start
+
+1. On the TV: Settings > System > Advanced system settings > Control by mobile apps > Network access >
+   **Default** (set it back to Limited when you're done).
+2. Either run the program, `python3 roku_detox.py` (Python 3, nothing to install; the page opens at
+   http://127.0.0.1:8642), or load `extension/` in Chrome (chrome://extensions > Developer mode >
+   Load unpacked) and click its toolbar button.
+3. The page finds the TV. If it doesn't, type the TV's address (on the TV: Settings > Network > About).
+
+Then try: tap an app, hold Volume up, press `/` and type "open Netflix", set a sleep timer. With the
+extension: type `tv pause` in Chrome's address bar, or right-click a video and pick "Play this video on the TV".
+
+## What's in it
+
 The page has six menus:
 
 - **Remote**: open any app or input, favorites, scenes, the on-screen remote (arrow buttons or a
