@@ -291,7 +291,7 @@ test("15 more minutes goes where it's needed: the app's limit and the total, or 
   assert.equal(reply.done, "15 more minutes of Netflix today.", JSON.stringify(reply));
   const status = await ok("GET", "/api/rules", { tv: TV });
   assert.equal(status.limitsToday["12"], 16, "from the home screen, the app that was just closed");
-  assert.equal(status.totalToday, 105, "and all TV together");
+  assert.equal(status.totalToday, 90, "not all TV together: it wasn't what stopped Netflix");
   // At bedtime it moves bedtime instead.
   await setRules({ bedtime: { enabled: true, start: "21:00", end: "06:30" } });
   mock.timers.setTime(new Date("2026-11-23T21:30:00").getTime());
@@ -327,12 +327,35 @@ test("15 more minutes: Detox Home's video, an extended bedtime, and the daily ca
   assert.equal((await say("15 more minutes")).done, "Bedtime is 15 minutes later tonight.");
   assert.equal((await ok("GET", "/api/rules", { tv: TV })).rules.bedtime.extendUntil, before + 15 * 60);
   // The cap, the next day at noon: 720 extra minutes a day at most.
-  await setRules({ limits: { "12": 30 }, totalLimit: 120 });
+  await setRules({ limits: { "12": 30 } });
   mock.timers.setTime(new Date("2026-11-25T12:00:00").getTime());
   await tv("/launch/12");
   await roundAt("2026-11-25T12:00:05");
   for (let i = 0; i < 6; i++) await ok("POST", "/api/rules/more", { tv: TV, app: "12", minutes: 120 });
   assert.equal((await say("15 more minutes")).done, "Netflix already has as much extra time as can be given today.");
+  await setRules({});
+  await tv("/keypress/Home");
+});
+
+test("15 more minutes: Detox Home closed for time gets it even while bedtime is put off", async () => {
+  const { handleMessage } = await import("../engine/router.js");
+  const say = async (text) => (await handleMessage({ type: "api", method: "POST", path: "/api/do", query: {}, body: { tv: TV, do: text } }, { internal: true })).data;
+  await setRules({ totalLimit: 1, bedtime: { enabled: true, start: "21:00", end: "06:30" } });
+  mock.timers.setTime(new Date("2026-11-26T21:00:10").getTime());
+  await ok("POST", "/api/rules/extend", { tv: TV, minutes: 30 });
+  await tv("/keypress/PowerOn");
+  await tv("/input?contentId=inline&mediaType=video&url=https%3A%2F%2Fcdn.example.com%2Fv.mp4");
+  for (const at of ["21:01:00", "21:01:30", "21:02:00", "21:02:30", "21:02:40"]) await roundAt(`2026-11-26T${at}`);
+  assert.match((await messages())[0], /Closed Detox Home/);
+  assert.equal((await say("15 more minutes")).done, "15 more minutes of TV today.");
+  // Nothing used up and nothing put off: whichever runs out first.
+  await setRules({ limits: { "12": 60 }, totalLimit: 30 });
+  mock.timers.setTime(new Date("2026-11-27T10:00:00").getTime());
+  await tv("/launch/12");
+  await roundAt("2026-11-27T10:00:05");
+  assert.equal((await say("15 more minutes")).done, "15 more minutes of TV today.");
+  const status = await ok("GET", "/api/rules", { tv: TV });
+  assert.deepEqual([status.limitsToday["12"], status.totalToday], [60, 45]);
   await setRules({});
   await tv("/keypress/Home");
 });

@@ -2112,39 +2112,51 @@ def say_screen_time(target):
 
 
 def say_more_time(target, minutes):
-    """"15 more minutes": the time goes to whatever is stopping what's on (or, from the home screen, what was
-    last closed for time). At bedtime that's bedtime, unless bedtime is already put off and a limit is what
-    stopped the app; otherwise its own limit and all TV together, both if both apply."""
+    """"15 more minutes": the time goes to what's stopping what's on: bedtime (when it's on and not put off), and
+    the app's own limit and all TV together when they're used up. If nothing has stopped it yet, it goes to
+    whichever runs out first. From the home screen (or Detox Home's own screens), "what's on" is the app last
+    closed for time today."""
     address = display_address(target)
     status = WATCHER.status(address)
-    rules, now = status["rules"], datetime.now()
+    rules, now, usage = status["rules"], datetime.now(), status["usage"]
     app = status.get("app")
     if not app:
         try:
             app = active_app(target, deliver=False)
-        except TVError:
+        except (TVError, ET.ParseError):
             app = None  # not answering right now: what was last closed for time, or the total
     if app and app.get("id") == "dev":
         app_id = "dev" if status.get("devPlaying") else status.get("timedOut")  # its videos count; its screens don't
     else:
         app_id = app.get("id") if app and not is_home(app) else status.get("timedOut")
-    if status["bedtimeNow"]:
-        put_off = time.time() < rules["bedtime"].get("extendUntil", 0)
-        if not (put_off and app_id and time_used_up(rules, status["usage"], app_id, now)):
-            extend_bedtime(address, minutes)
-            return f"Bedtime is {minutes} minutes later tonight."
-    given = []  # (name, minutes really added): the app's own limit, then all TV together
-    if app_id and limit_today(rules, app_id, now) is not None:
-        given.append((app_label(target, app_id), give_more_time(address, app_id, minutes)))
-    if total_limit_today(rules, now):
-        given.append(("all TV together", give_more_time(address, "*", minutes)))
-    if not given:
+    limit = limit_today(rules, app_id, now) if app_id else None
+    total = total_limit_today(rules, now)
+    lefts = {"app": limit * 60 - usage.get(app_id, 0) if limit is not None else None,
+             "total": total * 60 - watched_today(usage) if total else None}
+    bedtime = status["bedtimeNow"] and time.time() >= rules["bedtime"].get("extendUntil", 0)
+    stopping = [k for k, left in lefts.items() if left is not None and left <= 0]
+    if not stopping and not bedtime:
+        running = {k: left for k, left in lefts.items() if left is not None}
+        if running:  # nothing has stopped it yet: whichever runs out first
+            soonest = min(running.values())
+            stopping = [k for k, left in running.items() if left == soonest]
+        elif status["bedtimeNow"]:
+            bedtime = True  # bedtime is put off, and there's nothing else to add to
+    if not stopping and not bedtime:
         raise ValueError("There's no time limit on what's on, so there's nothing to add to.")
-    capped = [name for name, added in given if not added]
+    said = []
+    if bedtime:
+        extend_bedtime(address, minutes)
+        said.append(f"Bedtime is {minutes} minutes later tonight.")
+    given = [("app", give_more_time(address, app_id, minutes)) if k == "app" else ("total", give_more_time(address, "*", minutes))
+             for k in stopping]
+    capped = [k for k, added in given if not added]
     if capped:  # 720 extra minutes a day at most
-        return f"{capped[0][0].upper() + capped[0][1:]} already has as much extra time as can be given today."
-    usable = min(added for _, added in given)  # what's on can use only as much as the tighter one got
-    return f"{usable} more minutes of {'TV' if given[0][0] == 'all TV together' else given[0][0]} today."
+        said.append(f"{app_label(target, app_id) if capped[0] == 'app' else 'All TV together'} already has as much extra time as can be given today.")
+    elif given:
+        usable = min(added for _, added in given)  # what's on can use only as much as the tighter one got
+        said.append(f"{usable} more minutes of {app_label(target, app_id) if given[0][0] == 'app' else 'TV'} today.")
+    return " ".join(said)
 
 
 def say_time_left(target):

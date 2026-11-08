@@ -205,7 +205,7 @@ async function loadNow() {
         // All TV together counts too: whichever runs out first.
         const watched = Object.entries(status.usage || {}).reduce((n, [k, v]) => n + (k === "home" ? 0 : v), 0);
         const lefts = [];
-        if (appLimit) lefts.push(appLimit - (status.usage?.[appId] || 0) / 60);
+        if (appLimit && (appId !== "dev" || status.devPlaying)) lefts.push(appLimit - (status.usage?.[appId] || 0) / 60);
         if (status.totalToday && (appId !== "dev" || status.devPlaying)) lefts.push(status.totalToday - watched / 60);
         const paused = (status.rules?.pausedUntil || 0) > Date.now() / 1000;   // nothing closes while paused
         if (lefts.length && !paused) {
