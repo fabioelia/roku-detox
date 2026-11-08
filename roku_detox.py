@@ -79,6 +79,8 @@ ROKU_OWNED_IDS = {"151908", "2213"}  # The Roku Channel, Roku Media Player
 APP_ID_RE = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
 MAX_BODY = 64 * 1024
 # Changes that need the household PIN (when one is set) from phones and other computers.
+PIN_TRIES = {}  # device address -> times of wrong household PINs (the last 10 minutes)
+PIN_TRIES_LOCK = threading.Lock()
 MAC_ONLY_PATHS = ("/api/phone/key", "/api/tvapp/install", "/api/tvapp/remove")
 PIN_PATHS = ("/api/rules", "/api/tvapp", "/api/sites", "/api/phone", "/api/household")
 
@@ -3265,10 +3267,14 @@ class Handler(BaseHTTPRequestHandler):
             return self.run(lambda: self.from_tv_app(path, {}, body))
         if path in MAC_ONLY_PATHS and self.on_lan:  # say so first, instead of asking for a PIN that won't help
             return self.fail(403, "Do this on your Mac.")
-        if path.startswith(PIN_PATHS) and not self.pin_ok():
-            return self.fail(403, "Enter the household PIN to change this.", pin=True)
-        if path == "/api/do" and fold_words(str(body.get("do", "")))[:120] in PAUSE_RULE_PHRASES and not self.pin_ok():
-            return self.fail(403, "Enter the household PIN to pause the rules.", pin=True)
+        pausing = path == "/api/do" and fold_words(str(body.get("do", "")))[:120] in PAUSE_RULE_PHRASES
+        if path.startswith(PIN_PATHS) or pausing:
+            pin = self.pin_check()
+            if pin == "locked":
+                return self.fail(429, "Too many wrong PINs. Try again in 10 minutes.")
+            if pin != "ok":
+                return self.fail(403, "Enter the household PIN to pause the rules." if pausing
+                                 else "Enter the household PIN to change this.", pin=True)
         if path == "/api/pair":
             return self.run(lambda: self.pair(body))
         if not self.paired(allow_key=path == "/api/do"):
@@ -3415,13 +3421,27 @@ class Handler(BaseHTTPRequestHandler):
         update_settings(lambda data: data.update(sites=sites))
         self.send(200, {"sites": sites})
 
-    def pin_ok(self):
-        """The Mac itself never needs the PIN; others do when one is set."""
+    def pin_check(self):
+        """"ok", "missing", "wrong" or "locked". The Mac itself never needs the PIN; others do when one is
+        set. Five wrong tries from one device within 10 minutes lock it out for the rest of those minutes,
+        so the PIN can't simply be guessed (there are only 10,000 four-digit ones)."""
         pin = household()["pin"]
         if not self.on_lan or not pin:
-            return True
+            return "ok"
         given = self.headers.get("X-Detox-Pin", "")
-        return bool(given) and hmac.compare_digest(token_hash(given), pin)
+        if not given:
+            return "missing"
+        device, now = self.client_address[0], time.time()
+        with PIN_TRIES_LOCK:
+            tries = [t for t in PIN_TRIES.get(device, []) if now - t < 600]
+            PIN_TRIES[device] = tries
+            if len(tries) >= 5:
+                return "locked"
+        if hmac.compare_digest(token_hash(given), pin):
+            return "ok"
+        with PIN_TRIES_LOCK:
+            PIN_TRIES.setdefault(device, []).append(now)
+        return "wrong"
 
     def household_status(self):
         if self.on_lan:
