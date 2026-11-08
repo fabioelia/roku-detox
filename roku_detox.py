@@ -1981,6 +1981,9 @@ def do_phrase(target, phrase, strict=False):
     Anything else, single button words like "home" included, is a search, because people type
     show names there.
     """
+    if re.match(r"^\s*https?://\S+\s*$", phrase, re.I):  # a link, say from the iPhone share sheet
+        result = cast(target, phrase.strip()[:4000])
+        return f"Playing it on the TV in {result['app']}."
     words = fold_words(phrase)[:120]
     if not words:
         raise ValueError("Say what to do, like pause, open Netflix or sleep 30.")

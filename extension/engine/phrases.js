@@ -3,6 +3,7 @@
 
 import { deviceInfo, launch, listApps, nowPlaying, press, pressSequence, runScene, search } from "./ecp.js";
 import { setSleep } from "./sleep.js";
+import { cast } from "./video.js";
 import { appLabel, isHome, pauseRules, plainName, rulesEnforcing, rulesStatus, tvRules } from "./rules.js";
 import { tvSettings } from "./store.js";
 import { ValueError, cut, displayAddress, pyLen } from "./util.js";
@@ -103,6 +104,10 @@ export function foldWords(text) {
  * Anything else, single button words like "home" included, is a search.
  */
 export async function doPhrase(target, phrase, { strict = false } = {}) {
+  if (/^\s*https?:\/\/\S+\s*$/i.test(phrase)) { // a link, say from the iPhone share sheet
+    const result = await cast(target, cut(String(phrase).trim(), 4000));
+    return `Playing it on the TV in ${result.app}.`;
+  }
   const words = cut(foldWords(phrase), 120);
   if (!words) throw new ValueError("Say what to do, like pause, open Netflix or sleep 30.");
   if (!strict) {

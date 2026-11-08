@@ -4104,6 +4104,7 @@ function shortcutsHTML() {
       <li>Request Body <strong>JSON</strong>, with a text field <code>do</code>: what to do, like <em>pause</em>, <em>open Netflix</em>, <em>HDMI 2</em>, <em>game time</em> (one of your scenes), <em>sleep 30</em> or <em>search The Bear</em>. It answers questions too: <em>what's on</em>, <em>screen time</em>, <em>time left</em>.</li>
       <li>Add <strong>Speak Text</strong> after it to hear what happened. Name the shortcut, and "Hey Siri, <em>name</em>" runs it.</li>
     </ol>
+    <p class="note">From the share sheet: in the shortcut's details turn on <strong>Show in Share Sheet</strong> for URLs and use <strong>Shortcut Input</strong> as <code>do</code>. Then share a YouTube or Netflix link (or a page with a video) and pick the shortcut to play it on the TV.</p>
     <p class="note">Tip: put <strong>Dictate Text</strong> first and use its text as <code>do</code>, and one shortcut does whatever you say. From a computer: <code>curl -X POST -H "X-Detox-Key: ${esc(k.key)}" -d '{"do":"pause"}' ${esc(k.url)}</code></p>
     <p class="note">This key is shown once. "Forget paired phones" also turns it off. If your router gives this Mac a new address, make a new key.</p>` : "";
   return `
