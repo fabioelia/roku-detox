@@ -726,7 +726,7 @@ export async function rulesStatus(address) {
     usage: Object.fromEntries(Object.entries(usage).map(([k, v]) => [k, Math.trunc(v)])),
     limitsToday: Object.fromEntries(Object.keys(rules.limits).map((id) => [id, limitToday(rules, id, new Date())])),
     totalToday: totalLimitToday(rules, new Date()),
-    timedOut: state ? state.timedOut || null : null,
+    timedOut: state && state.usageDay === day ? state.timedOut || null : null,
     devPlaying: Boolean(state && state.devPlaying),
     events: mine.reverse(),
   };

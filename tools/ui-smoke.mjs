@@ -144,10 +144,13 @@ async function main() {
     const before = state.favorites; state.favorites = ["837", "12"]; renderShortcuts();
     const favs = [...document.querySelectorAll("#fav-row .shortcut[data-launch]")].map((b) => b.dataset.launch);
     document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "2", bubbles: true, cancelable: true }));
+    for (let i = 0; i < 5; i++) document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "2", repeat: true, bubbles: true, cancelable: true }));
+    document.querySelector("#fav-row .shortcut[data-launch]").focus();   // after a click, a button has focus
+    document.activeElement.dispatchEvent(new KeyboardEvent("keydown", { key: "1", bubbles: true, cancelable: true }));
     await new Promise((r) => setTimeout(r, 600)); api = real;
     state.favorites = before; renderShortcuts();
     return { favs, asked }; })()`);
-  check("1 to 9 open the favorites", numbered.favs.join() === "837,12" && numbered.asked[0] === "12", JSON.stringify(numbered));
+  check("1 to 9 open the favorites (once when held, also with a button focused)", numbered.favs.join() === "837,12" && numbered.asked.join() === "12,837", JSON.stringify(numbered));
   check("a held key doesn't pile up presses", keysHelp.sent <= 3, JSON.stringify(keysHelp));
 
   // Phrases in the search box, the sleep timer, favorites suggestions.

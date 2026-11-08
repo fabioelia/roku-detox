@@ -127,7 +127,7 @@ const ServerEngine = {
     const options = { headers: { "X-Detox": "1" } };
     // Only the changes that need it carry it (and renew its hour): rules, the TV app, sites, phone settings.
     const needsPin = /^\/api\/(rules|tvapp|sites|phone|household)\b/.test(path)
-      || (path === "/api/do" && /rules|more/i.test(String(body?.do ?? "")));   // an extra header on a search is harmless
+      || (path === "/api/do" && /\brules\b|\bmore[\s-]+(time|mins?|minutes?)\b/i.test(String(body?.do ?? "")));
     const pin = body !== undefined && (needsPin || withPin) ? pinGet() : "";
     if (pin) options.headers["X-Detox-Pin"] = pin;
     if (body !== undefined) {
@@ -1627,9 +1627,14 @@ document.addEventListener("keydown", (e) => {
     return;
   }
   // 1 to 9 open the favorites in order, like a remote's number buttons.
-  if (/^[1-9]$/.test(e.key) && !target.closest("button, a, label")) {
+  // (Digits do nothing on a focused button or link, so they work after a click too.)
+  if (/^[1-9]$/.test(e.key)) {
     const fav = document.querySelectorAll("#fav-row .shortcut[data-launch]")[Number(e.key) - 1];
-    if (fav) { e.preventDefault(); launchApp(fav.dataset.launch, fav); }
+    const shown = fav && (fav.checkVisibility ? fav.checkVisibility() : fav.offsetParent !== null);
+    if (shown) {
+      e.preventDefault();
+      if (!e.repeat) launchApp(fav.dataset.launch, fav);   // holding the key opens it once
+    }
     return;
   }
   let key = KEYBOARD[e.key];
@@ -2357,6 +2362,7 @@ function noteLimits(status, tv = state.tv) {
     bedtime: status.rules?.bedtime?.enabled ? status.rules.bedtime : null,
     pausedUntil: status.rules?.pausedUntil || 0,
     total: status.totalToday ?? null,   // all apps together, as the program or extension counts it
+    devPlaying: Boolean(status.devPlaying),
   } : null;
 }
 // Rules are paused: no limit or bedtime notes, since nothing will happen until the pause ends.
@@ -2391,7 +2397,7 @@ function limitNote(appId) {
   if (!appId || !l || l.tv !== state.tv || limitsPaused()) return "";
   const lefts = [];   // minutes left on this app, and on all TV together: whichever runs out first
   if (l.limits[appId]) lefts.push(l.limits[appId] - (l.usage[appId] || 0) / 60);
-  if (l.total) lefts.push(l.total - watchedSeconds(l.usage) / 60);
+  if (l.total && (appId !== "dev" || l.devPlaying)) lefts.push(l.total - watchedSeconds(l.usage) / 60);   // Detox Home's own screens don't count
   if (!lefts.length) return "";
   const left = Math.round(Math.min(...lefts));
   return left > 0 ? `${minutesText(left * 60)} left today` : "time's up for today";
@@ -3800,7 +3806,8 @@ $("#rule-list").addEventListener("click", async (e) => {
       noteLimits(status, state.tv);
       renderRules();
       renderNow();
-      toast(btn.dataset.moreApp ? `15 more minutes of ${appLabel(btn.dataset.moreApp) || "it"} today.` : "15 more minutes of TV today.");
+      const added = status.added ?? 15;
+      toast(btn.dataset.moreApp ? `${added} more minutes of ${appLabel(btn.dataset.moreApp) || "it"} today.` : `${added} more minutes of TV today.`);
     } catch (err) {
       toast(err.message);
     }

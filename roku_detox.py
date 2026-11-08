@@ -1871,7 +1871,7 @@ class Watcher:
             # Today's minutes per app by this computer's clock (weekend amounts on Saturday and Sunday).
             "limitsToday": {app_id: limit_today(rules, app_id, datetime.now()) for app_id in rules["limits"]},
             "totalToday": total_limit_today(rules, datetime.now()),
-            "timedOut": state.timed_out if state else None,
+            "timedOut": state.timed_out if state and state.usage_day == day else None,
             "devPlaying": bool(state and state.dev_playing),
             "events": events[::-1],
         }
@@ -2112,14 +2112,12 @@ def say_screen_time(target):
 
 
 def say_more_time(target, minutes):
-    """"15 more minutes": at bedtime, bedtime moves; otherwise the time goes to whatever would stop what's on (or
-    what was last closed for time, from the home screen): its own limit and all TV together, both if both apply."""
+    """"15 more minutes": the time goes to whatever is stopping what's on (or, from the home screen, what was
+    last closed for time). At bedtime that's bedtime, unless bedtime is already put off and a limit is what
+    stopped the app; otherwise its own limit and all TV together, both if both apply."""
     address = display_address(target)
     status = WATCHER.status(address)
     rules, now = status["rules"], datetime.now()
-    if status["bedtimeNow"] and time.time() >= rules["bedtime"].get("extendUntil", 0):  # bedtime is what's stopping it
-        extend_bedtime(address, minutes)
-        return f"Bedtime is {minutes} minutes later tonight."
     app = status.get("app")
     if not app:
         try:
@@ -2130,18 +2128,23 @@ def say_more_time(target, minutes):
         app_id = "dev" if status.get("devPlaying") else status.get("timedOut")  # its videos count; its screens don't
     else:
         app_id = app.get("id") if app and not is_home(app) else status.get("timedOut")
-    gave, added = [], 0
+    if status["bedtimeNow"]:
+        put_off = time.time() < rules["bedtime"].get("extendUntil", 0)
+        if not (put_off and app_id and time_used_up(rules, status["usage"], app_id, now)):
+            extend_bedtime(address, minutes)
+            return f"Bedtime is {minutes} minutes later tonight."
+    given = []  # (name, minutes really added): the app's own limit, then all TV together
     if app_id and limit_today(rules, app_id, now) is not None:
-        added = max(added, give_more_time(address, app_id, minutes))
-        gave.append(app_label(target, app_id))
+        given.append((app_label(target, app_id), give_more_time(address, app_id, minutes)))
     if total_limit_today(rules, now):
-        added = max(added, give_more_time(address, "*", minutes))
-        gave.append("TV")
-    if not gave:
+        given.append(("all TV together", give_more_time(address, "*", minutes)))
+    if not given:
         raise ValueError("There's no time limit on what's on, so there's nothing to add to.")
-    if not added:
-        return "That's already as much extra time as can be given today."
-    return f"{added} more minutes of {gave[0]} today."
+    capped = [name for name, added in given if not added]
+    if capped:  # 720 extra minutes a day at most
+        return f"{capped[0][0].upper() + capped[0][1:]} already has as much extra time as can be given today."
+    usable = min(added for _, added in given)  # what's on can use only as much as the tighter one got
+    return f"{usable} more minutes of {'TV' if given[0][0] == 'all TV together' else given[0][0]} today."
 
 
 def say_time_left(target):
@@ -3838,9 +3841,10 @@ class Handler(BaseHTTPRequestHandler):
     def rules_more(self, body):
         address = display_address(parse_target(body.get("tv")))
         app = str(body.get("app") or "")
-        if not give_more_time(address, "*" if not app else app_id_from({"id": app}), bounded_int(body.get("minutes"), 5, 120)):
+        added = give_more_time(address, "*" if not app else app_id_from({"id": app}), bounded_int(body.get("minutes"), 5, 120))
+        if not added:
             raise ValueError("That's already as much extra time as can be given today.")
-        self.send(200, WATCHER.status(address))
+        self.send(200, {**WATCHER.status(address), "added": added})
 
     def rules_pause(self, body):
         address = display_address(parse_target(body.get("tv")))

@@ -318,9 +318,21 @@ test("15 more minutes: Detox Home's video, an extended bedtime, and the daily ca
   await tv("/launch/12");
   for (const at of ["21:01:00", "21:01:30", "21:02:00", "21:02:10"]) await roundAt(`2026-11-24T${at}`);
   assert.equal((await say("15 more minutes")).done, "15 more minutes of Netflix today.");
-  // The cap: 720 extra minutes a day at most.
+  // Bedtime put off and nothing out of time: bedtime moves again.
+  await setRules({ bedtime: { enabled: true, start: "21:00", end: "06:30" } });
+  await tv("/keypress/Home");
+  mock.timers.setTime(new Date("2026-11-24T21:10:00").getTime());
+  await ok("POST", "/api/rules/extend", { tv: TV, minutes: 15 });
+  const before = (await ok("GET", "/api/rules", { tv: TV })).rules.bedtime.extendUntil;
+  assert.equal((await say("15 more minutes")).done, "Bedtime is 15 minutes later tonight.");
+  assert.equal((await ok("GET", "/api/rules", { tv: TV })).rules.bedtime.extendUntil, before + 15 * 60);
+  // The cap, the next day at noon: 720 extra minutes a day at most.
+  await setRules({ limits: { "12": 30 }, totalLimit: 120 });
+  mock.timers.setTime(new Date("2026-11-25T12:00:00").getTime());
+  await tv("/launch/12");
+  await roundAt("2026-11-25T12:00:05");
   for (let i = 0; i < 6; i++) await ok("POST", "/api/rules/more", { tv: TV, app: "12", minutes: 120 });
-  assert.equal((await say("15 more minutes")).done, "That's already as much extra time as can be given today.");
+  assert.equal((await say("15 more minutes")).done, "Netflix already has as much extra time as can be given today.");
   await setRules({});
   await tv("/keypress/Home");
 });
