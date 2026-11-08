@@ -1024,7 +1024,7 @@ def append_log(raw):
 # --- Shortcuts, scenes and phone pairing (remote-settings.json) ------------------
 
 SETTINGS_LOCK = threading.Lock()
-SCENE_STEPS = {"power_on", "power_off", "open", "volume_up", "volume_down", "mute", "wait", "sleep_timer"}
+SCENE_STEPS = {"power_on", "power_off", "open", "volume_up", "volume_down", "mute", "wait", "sleep_timer", "message"}
 SCENE_ID_RE = re.compile(r"^[a-z0-9]{1,16}$")
 TIME_RE = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
 
@@ -1128,6 +1128,11 @@ def clean_scenes(raw):
                 clean["n"] = bounded_int(step.get("n"), 1, 30)
             elif action == "sleep_timer":
                 clean["n"] = bounded_int(step.get("n"), 1, MAX_SLEEP_MINUTES)
+            elif action == "message":
+                text = str(step.get("text", "")).strip()[:200]
+                if not text:
+                    raise ValueError(f'Write the message in "{name}".')
+                clean["text"] = text
             steps.append(clean)
         if not steps:
             raise ValueError(f'"{name}" needs at least one step.')
@@ -1162,6 +1167,12 @@ def run_scene(target, scene):
             time.sleep(step["n"])
         elif action == "sleep_timer":
             set_sleep(target, step["n"])
+        elif action == "message":
+            try:  # needs Detox Home on the TV; without it the other steps still run
+                show_on_tv(target, "message", {"text": step["text"], "from": scene.get("name") or "Roku Detox"})
+                time.sleep(2)
+            except (TVError, ValueError):
+                pass
 
 
 def scheduler():

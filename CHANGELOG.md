@@ -32,6 +32,8 @@ Newest first. The extension's version is in `extension/manifest.json`; after pul
 - **Bedtime on the nights you pick**: Sun to Sat buttons, "School nights" (Sunday to Thursday) and
   "Every night". A night counts from its start time; a start after midnight or in the morning belongs to
   the night before (so "school nights" with 00:30 means early Monday to early Friday).
+- **Scenes can show a message on the TV** (in Detox Home): "Wind down" now starts with "Time to start getting
+  ready for bed." Messages are sent in from outside, so they work even where Roku blocks Detox Home's tiles.
 - **15 more minutes**: "+15 min today" on each limit (and on all TV together) in the Rules menu, or say
   "15 more minutes" / "more time" to Siri (it needs the household PIN, like pausing). Just for that day. It goes
   to what's stopping what's on: bedtime (unless it's already put off), the app's own limit, all TV together;

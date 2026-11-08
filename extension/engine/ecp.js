@@ -391,6 +391,13 @@ export async function runScene(target, scene) {
         await sleep(step.n * 1000);
       } else if (action === "sleep_timer") {
         await setSleep(target, step.n);
+      } else if (action === "message") {
+        try { // needs Detox Home on the TV; without it the other steps still run
+          await showOnTv(target, "message", { text: step.text, from: scene.name || "Roku Detox" });
+          await sleep(2000);
+        } catch (err) {
+          if (!(err instanceof TVError) && !(err instanceof ValueError)) throw err;
+        }
       }
     }
   })());

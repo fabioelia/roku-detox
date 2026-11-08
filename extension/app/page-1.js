@@ -251,7 +251,7 @@ const LITE_KEYS = new Set([
 ]);
 const RESTART_SEQUENCE = [...Array(5).fill("Home"), "Up", "Rev", "Rev", "Fwd", "Fwd"];   // Roku's restart shortcut
 const APP_ID_RE = /^[A-Za-z0-9._-]{1,64}$/;
-const SCENE_STEPS = new Set(["power_on", "power_off", "open", "volume_up", "volume_down", "mute", "wait", "sleep_timer"]);
+const SCENE_STEPS = new Set(["power_on", "power_off", "open", "volume_up", "volume_down", "mute", "wait", "sleep_timer", "message"]);
 const SCENE_ID_RE = /^[a-z0-9]{1,16}$/;
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 // Same tile labels as roku_detox.py.
@@ -503,6 +503,10 @@ function cleanScenes(raw) {
         clean.n = bounded(step.n, 1, 30);
       } else if (action === "sleep_timer") {
         clean.n = bounded(step.n, 1, 240);
+      } else if (action === "message") {
+        const text = String(step.text ?? "").trim().slice(0, 200);
+        if (!text) throw liteFail(400, `Write the message in "${name}".`);
+        clean.text = text;
       }
       return clean;
     });
@@ -548,6 +552,9 @@ async function liteRunScene(target, scene) {
       await litePress(target, "VolumeMute");
     } else if (step.do === "wait") {
       await sleep(step.n * 1000);
+    } else if (step.do === "message") {   // shows in Detox Home if it's on the TV (the phone can't tell)
+      await liteLaunch(target, "dev", { contentId: "inline", mediaType: "message", text: step.text, from: scene.name || "Roku Detox" }).catch(() => {});
+      await sleep(2000);
     }   // sleep_timer: nothing here would keep the timer, so the lite page skips it
   }
 }
@@ -1952,6 +1959,7 @@ async function launchApp(id, btn) {
 const STEP_LABELS = {
   power_on: "Turn TV on", power_off: "Turn TV off", open: "Open", volume_up: "Volume up",
   volume_down: "Volume down", mute: "Mute or unmute", wait: "Wait", sleep_timer: "Sleep timer",
+  message: "Show a message",
 };
 
 function describeStep(step) {
@@ -1960,6 +1968,7 @@ function describeStep(step) {
   if (step.do === "volume_down") return `volume down ${step.n}`;
   if (step.do === "wait") return `wait ${step.n} ${step.n === 1 ? "second" : "seconds"}`;
   if (step.do === "sleep_timer") return `turn off in ${step.n} min`;
+  if (step.do === "message") return `show “${step.text}”`;
   return { power_on: "turn the TV on", power_off: "turn the TV off", mute: "mute or unmute" }[step.do];
 }
 
@@ -1994,7 +2003,7 @@ function sceneTemplate(kind) {
   const gameInput = inputs.find((a) => /switch|xbox|playstation|ps5|ps4|game/i.test(a.name)) || inputs.find((a) => a.id.startsWith("tvinput.hdmi"));
   if (kind === "game") return { name: "Game time", steps: [{ do: "power_on" }, ...(gameInput ? [{ do: "open", target: gameInput.id }] : [])], at: null };
   if (kind === "bedtime") return { name: "Bedtime", steps: [{ do: "power_off" }], at: isLite() ? null : "23:00" };
-  if (kind === "winddown") return { name: "Wind down", steps: [{ do: "volume_down", n: 5 }, { do: "sleep_timer", n: 45 }], at: null };
+  if (kind === "winddown") return { name: "Wind down", steps: [{ do: "message", text: "Time to start getting ready for bed." }, { do: "volume_down", n: 5 }, { do: "sleep_timer", n: 45 }], at: null };
   return { name: "", steps: [{ do: "power_on" }, { do: "open", target: "" }], at: null };
 }
 
@@ -2028,6 +2037,7 @@ function renderSceneEditor() {
     if (step.do === "volume_up" || step.do === "volume_down") extra = `<input type="number" data-field="n" min="1" max="50" value="${step.n || 5}" aria-label="How many clicks"><span>clicks</span>`;
     if (step.do === "wait") extra = `<input type="number" data-field="n" min="1" max="30" value="${step.n || 3}" aria-label="Seconds"><span>seconds</span>`;
     if (step.do === "sleep_timer") extra = `<input type="number" data-field="n" min="1" max="240" value="${step.n || 45}" aria-label="Minutes until the TV turns off"><span>min, then off</span>`;
+    if (step.do === "message") extra = `<input type="text" data-field="text" maxlength="200" value="${esc(step.text || "")}" placeholder="Time for bed!" aria-label="Message to show on the TV"><span class="note">in Detox Home</span>`;
     return `<li data-i="${i}"><div class="step"><select data-field="do" aria-label="Step ${i + 1}">${actions}</select>${extra}
       <button class="btn quiet" type="button" data-step-remove="${i}" aria-label="Remove step ${i + 1}">Remove</button></div></li>`;
   }).join("");
@@ -2187,11 +2197,12 @@ $("#scene-editor").addEventListener("input", (e) => {
   const step = draft.steps[i];
   const field = e.target.dataset.field;
   if (field === "do") {
-    draft.steps[i] = { do: e.target.value, ...(e.target.value === "open" ? { target: "" } : {}), ...(["volume_up", "volume_down"].includes(e.target.value) ? { n: 5 } : {}), ...(e.target.value === "wait" ? { n: 3 } : {}), ...(e.target.value === "sleep_timer" ? { n: 45 } : {}) };
+    draft.steps[i] = { do: e.target.value, ...(e.target.value === "open" ? { target: "" } : {}), ...(["volume_up", "volume_down"].includes(e.target.value) ? { n: 5 } : {}), ...(e.target.value === "wait" ? { n: 3 } : {}), ...(e.target.value === "sleep_timer" ? { n: 45 } : {}), ...(e.target.value === "message" ? { text: "" } : {}) };
     return redrawDraft(`.scene-steps li[data-i="${i}"] select`);
   }
   if (field === "target") step.target = e.target.value;
   if (field === "n") step.n = Number(e.target.value) || 1;
+  if (field === "text") step.text = e.target.value;
 });
 
 /* ---------- Now playing ---------- */

@@ -108,7 +108,8 @@ the browser doesn't open other pages for it.
 - Keeps an undo list (`undo-list.json`). "Add back" reopens the store page so you can re-add a channel.
 - On-screen remote, with keyboard shortcuts.
 - Shortcuts: one-tap buttons for your favorite apps and every HDMI input, plus scenes
-  (several steps in a row, like "turn on, switch to the Nintendo Switch, volume down 5").
+  (several steps in a row, like "turn on, switch to the Nintendo Switch, volume down 5", or "show 'Time for
+  bed' on the TV, volume down 5, turn off in 45 minutes").
   A scene can also run every day at a set time, while this program is running.
 - Now playing: which app is on, playing or paused, and how far in.
 - One box for searching across all apps (opens Roku's search screen and types for you), pasting a

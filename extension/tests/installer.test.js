@@ -39,6 +39,12 @@ test("the extension installs, updates and removes Detox Home itself (no installe
   assert.equal(installed.data.outdated, false, "the copy in the extension runs on its own");
   const again = await call("/api/tvapp/install", { tv: TV, password: "testpass" });
   assert.equal(again.status, 200, "installing again updates it");
+  // A scene's "Show a message" step reaches Detox Home.
+  const saved = await call("/api/settings", { tv: TV, scenes: [{ name: "Wind down", steps: [{ do: "message", text: "Time for bed!" }, { do: "mute" }] }] });
+  assert.equal(saved.status, 200, JSON.stringify(saved.data));
+  assert.equal((await call("/api/scene", { tv: TV, id: saved.data.scenes[0].id })).status, 200);
+  const shown = await (await fetch(`http://${TV}/test/last-dev`, { method: "POST" })).json();
+  assert.deepEqual([shown.mediaType, shown.text, shown.from], ["message", "Time for bed!", "Wind down"]);
   // Phones (the relay) and web pages can't install, and their TV app menu says so (no password form).
   assert.equal((await call("/api/tvapp/install", { tv: "127.0.0.1", password: "testpass" }, false)).status, 501);
   const fromPhone = await handleMessage({ type: "api", method: "GET", path: "/api/tvapp", query: { tv: "127.0.0.1" } }, { internal: false });

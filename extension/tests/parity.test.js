@@ -169,6 +169,8 @@ test("clean_scenes, clean_sites, clean_favorites, clean_services", () => {
     [[{ id: "abc123", name: "  Movie night  ", steps: [{ do: "power_on" }, { do: "open", target: "tvinput.hdmi1" }, { do: "volume_up", n: "7" },
       { do: "volume_down", n: 99 }, { do: "mute" }, { do: "wait", n: 100 }, { do: "power_off" }], at: "21:30" }]],
     [[{ id: "a", name: "x", steps: [{ do: "dance" }] }]], [[{ id: "a", name: "", steps: [{ do: "mute" }] }]],
+    [[{ id: "a", name: "Bed", steps: [{ do: "message", text: "  Time for bed!  " }, { do: "message", text: "x".repeat(300) }] }]],
+    [[{ id: "a", name: "Bed", steps: [{ do: "message", text: "   " }] }]], [[{ id: "a", name: "Bed", steps: [{ do: "message" }] }]],
     [[{ id: "a", name: "Open", steps: [{ do: "open" }] }]], [[{ id: "a", name: "Late", steps: [{ do: "mute" }], at: "25:00" }]],
     [[{ id: "a", name: "Empty", steps: [] }]], [[{ id: "a1", name: "No time", steps: [{ do: "wait", n: "x" }], at: "" }]],
     ["nope"], [[1]],
