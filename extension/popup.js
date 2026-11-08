@@ -178,7 +178,21 @@ async function loadNow() {
     const screen = now?.screen || {};
     const home = !screen.id || ["roku", "roku dynamic menu", "home"].includes((screen.name || "").toLowerCase());
     const name = now?.app || (home ? "Home screen" : screen.name);
-    $("#now").textContent = name ? `On the TV: ${name}${state && now?.app ? `, ${state}` : ""}` : "";
+    // A daily time limit on what's showing: say how much is left today.
+    let left = "";
+    const appId = now?.appId || (home ? "" : screen.id);
+    if (appId) {
+      try {
+        const status = await api("GET", "/api/rules", { query: { tv } });
+        const limit = status.rules?.limits?.[appId];
+        if (limit) {
+          const minutes = Math.round(limit - (status.usage?.[appId] || 0) / 60);
+          left = minutes > 0 ? ` (${minutes} min left today)` : " (time's up for today)";
+        }
+      } catch { /* no rules: no note */ }
+    }
+    if (tvOff) return;
+    $("#now").textContent = name ? `On the TV: ${name}${state && now?.app ? `, ${state}` : ""}${left}` : "";
   } catch {
     if (!tvOff) $("#now").textContent = "";
   }
