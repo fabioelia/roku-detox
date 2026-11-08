@@ -3193,7 +3193,22 @@ setInterval(() => { if (state.sleep) { if (state.sleep.until * 1000 <= Date.now(
 
 state.limitStatus = null;   // {tv, limits: {appId: minutes}, usage: {appId: seconds today}}
 function noteLimits(status) {
-  state.limitStatus = status ? { tv: state.tv, limits: status.rules?.limits || {}, usage: status.usage || {} } : null;
+  state.limitStatus = status ? {
+    tv: state.tv, limits: status.rules?.limits || {}, usage: status.usage || {},
+    bedtime: status.rules?.bedtime?.enabled ? status.rules.bedtime : null,
+  } : null;
+}
+// "bedtime at 10:00 PM" when it starts within the hour.
+function bedtimeNote() {
+  const b = state.limitStatus?.tv === state.tv ? state.limitStatus.bedtime : null;
+  if (!b || !/^\d\d:\d\d$/.test(b.start || "")) return "";
+  const [h, m] = b.start.split(":").map(Number);
+  const now = new Date();
+  const start = new Date(now);
+  start.setHours(h, m, 0, 0);
+  if (start < now) start.setDate(start.getDate() + 1);
+  const minutes = (start - now) / 60000;
+  return minutes <= 60 ? `bedtime at ${formatClock(b.start)}` : "";
 }
 async function loadLimits() {
   if (!state.tv || !state.control || isLite()) return;
@@ -3207,7 +3222,7 @@ function limitNote(appId) {
   return left > 0 ? `${minutesText(left * 60)} left today` : "time's up for today";
 }
 setInterval(() => {
-  if (!document.hidden && state.limitStatus && Object.keys(state.limitStatus.limits).length) loadLimits();
+  if (!document.hidden && state.limitStatus && (Object.keys(state.limitStatus.limits).length || state.limitStatus.bedtime)) loadLimits();
 }, 60000);
 
 async function pollNow() {
@@ -3255,8 +3270,8 @@ function renderNow() {
       <div><p class="now-app"></p><p class="now-state"></p><div class="now-bar" hidden><span></span></div></div>`;
   }
   box.querySelector(".now-app").textContent = name;
-  const left = off ? "" : limitNote(appId);
-  box.querySelector(".now-state").textContent = left ? `${detail} · ${left}` : detail;
+  const notes = off ? [] : [limitNote(appId), bedtimeNote()].filter(Boolean);
+  box.querySelector(".now-state").textContent = [detail, ...notes].join(" · ");
   // Channel buttons only make sense while the TV shows its antenna input.
   $("#ch-row").hidden = screen.id !== "tvinput.dtv";
   const bar = box.querySelector(".now-bar");
