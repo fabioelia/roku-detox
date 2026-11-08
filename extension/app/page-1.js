@@ -1776,6 +1776,9 @@ function renderShortcuts() {
     : `<p class="empty">This TV didn't list any inputs.</p>`;
   if (isLite()) renderLiteApps();
   renderScenes();
+  // The Phone menu's home-screen buttons list favorites and scenes: redraw it once they're known.
+  const sig = JSON.stringify([state.favorites, state.scenes.map((sc) => sc.name), state.apps.length]);
+  if (state.phone?.enabled && state.homeButtonsSig !== sig) { state.homeButtonsSig = sig; renderPhone(); }
 }
 
 function renderLiteApps() {
@@ -3907,11 +3910,14 @@ function homeButtonsHTML(base) {
   return `
     <div class="shortcuts-box">
       <h3 class="subhead">Home-screen buttons</h3>
-      <p class="note">Open one of these on your phone (after entering the code once), then use Share > Add to Home Screen. Tapping it then does that on the TV.</p>
-      <ul class="home-links">${items.map(([label, phrase]) => {
-        const link = `${base}/#do=${encodeURIComponent(phrase)}`;
-        return `<li><span>${esc(label)}</span><button class="btn quiet" type="button" data-copy="${esc(link)}">Copy link</button></li>`;
-      }).join("")}</ul>
+      <p class="note">Scan a code with your phone's camera (or copy the link to it), then use Share > Add to Home Screen. Tapping it then does that on the TV. The phone needs the code above once.</p>
+      <div class="home-grid">
+        <ul class="home-links">${items.map(([label, phrase]) => {
+          const link = `${base}/#do=${encodeURIComponent(phrase)}`;
+          return `<li><span>${esc(label)}</span><span class="home-actions">${window.QRCode ? `<button class="btn quiet" type="button" data-qr="${esc(link)}" data-qr-label="${esc(label)}">Show code</button>` : ""}<button class="btn quiet" type="button" data-copy="${esc(link)}">Copy link</button></span></li>`;
+        }).join("")}</ul>
+        <figure class="home-qr" id="home-qr" hidden><div id="home-qr-code" aria-hidden="true"></div><figcaption id="home-qr-label"></figcaption></figure>
+      </div>
     </div>`;
 }
 
@@ -3947,6 +3953,15 @@ async function switchPhone(change) {
 }
 
 $("#phone-body").addEventListener("click", async (e) => {
+  const qr = e.target.closest("[data-qr]");
+  if (qr && window.QRCode) {
+    const box = $("#home-qr-code");
+    box.innerHTML = "";
+    new QRCode(box, { text: qr.dataset.qr, width: 150, height: 150, correctLevel: QRCode.CorrectLevel.M });
+    $("#home-qr-label").textContent = qr.dataset.qrLabel;
+    $("#home-qr").hidden = false;
+    return;
+  }
   const copy = e.target.closest("[data-copy]");
   if (copy) {
     try { await navigator.clipboard.writeText(copy.dataset.copy); toast("Copied."); } catch { toast("Couldn't copy. Select it and copy instead."); }
