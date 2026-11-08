@@ -4,6 +4,7 @@
 
 import { handleMessage } from "./router.js";
 import { preferredTv } from "./store.js";
+import { STATUS_LEFT_RE, STATUS_ON_RE, STATUS_TIME_RE } from "./phrases.js";
 
 const NO_TV = "Pick your TV first: open Roku Detox from the toolbar button.";
 
@@ -154,7 +155,7 @@ async function appsForOmnibox() {
   return appCache.apps;
 }
 
-/** What a numbered or input phrase will do, in words, or "" (the same patterns as phrases.js). */
+/** What a numbered, input or question phrase will do, in words, or "" (the same patterns as phrases.js). */
 function phraseLabel(folded) {
   let m = /^(?:sleep|sleep timer|turn off in|off in|sleep in)(?: for)? (\d{1,3})(?: ?(?:m|min|mins|minute|minutes))?$/.exec(folded);
   if (m) return Number(m[1]) ? `Turn the TV off in ${Number(m[1])} minutes` : "Turn the sleep timer off";
@@ -163,6 +164,12 @@ function phraseLabel(folded) {
   if (m) return `Volume ${m[1]} ${m[2]}`;
   m = /^(?:open |go to |switch to )?hdmi ?(\d)$/.exec(folded);
   if (m) return `Switch to HDMI ${m[1]}`;
+  // Questions: the answer shows as a notification.
+  if (STATUS_ON_RE.test(folded)) return "Tell me what's on the TV";
+  if (STATUS_TIME_RE.test(folded)) return "Tell me today's screen time";
+  if (STATUS_LEFT_RE.test(folded)) return "Tell me the time left today";
+  if (["pause rules", "pause the rules", "rules off"].includes(folded)) return "Pause all rules for an hour";
+  if (["resume rules", "rules on", "unpause rules"].includes(folded)) return "Turn the rules back on";
   return "";
 }
 

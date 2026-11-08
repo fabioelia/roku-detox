@@ -22,9 +22,9 @@ const PHRASE_KEYS = [
   [["fast forward", "forward"], "Fwd", "Fast forwarding."],
 ];
 
-const STATUS_ON_RE = /^(?:(?:what s|whats|what is) (?:on|playing)(?: on)?(?: (?:the )?tv)?(?: right now| now)?|now playing|what am i watching)$/;
-const STATUS_TIME_RE = /^(?:screen time|tv time|watch time|how much tv)(?: today)?$/;
-const STATUS_LEFT_RE = /^(?:time left|how much time is left|how much time left)(?: today)?$/;
+export const STATUS_ON_RE = /^(?:(?:what s|whats|what is) (?:on|playing)(?: on)?(?: (?:the )?tv)?(?: right now| now)?|now playing|what am i watching)$/;
+export const STATUS_TIME_RE = /^(?:screen time|tv time|watch time|how much tv)(?: today)?$/;
+export const STATUS_LEFT_RE = /^(?:time left|how much time is left|how much time left)(?: today)?$/;
 
 /** 1 hour 5 minutes, 45 minutes, less than a minute (say_duration in roku_detox.py). */
 export function sayDuration(seconds) {
