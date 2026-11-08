@@ -42,21 +42,19 @@
     <p class="status" id="tv-status" role="status" aria-live="polite"></p>
   </section>
 
-  <section class="card" aria-labelledby="id-heading">
-    <h2 id="id-heading">Use the extension from a web page</h2>
-    <p>The Roku Detox page can also run from <code>http://localhost</code> or <code>http://127.0.0.1</code> and use this extension to reach the TV. The page needs this extension's id to find it:</p>
-    <div class="row">
-      <code class="id" id="ext-id"></code>
-      <button class="btn" type="button" id="copy-id">Copy id</button>
-    </div>
-    <ol class="small">
-      <li>Open the Roku Detox page in this browser.</li>
-      <li>Open the browser console there (View &gt; Developer &gt; JavaScript Console) and run:<br><code id="snippet"></code></li>
-      <li>Reload the page. It now shows that it's using the extension.</li>
-    </ol>
-    <p class="muted small">Published copies of the page have the id built in, so this step is only for an unpacked install. Other web addresses can't talk to the extension.</p>
-    <p class="status" id="id-status" role="status" aria-live="polite"></p>
+  <section class="card" aria-labelledby="ways-heading">
+    <h2 id="ways-heading">Ways to use it</h2>
+    <ul class="ways">
+      <li><strong>Address bar:</strong> type <kbd>tv</kbd>, a space, then a show, an app, one of your scenes, a button (pause, home, louder, off) or a link.</li>
+      <li><strong>Right-click</strong> a video or a link: "Play this video on the TV". Select text: "Search the TV for …".</li>
+      <li><strong>Toolbar button:</strong> send this tab's video, a small remote, your favorites and scenes, and a sleep timer.</li>
+    </ul>
+    <h3 class="sub">Keyboard shortcuts</h3>
+    <ul class="ways" id="shortcut-list"><li class="muted">Loading…</li></ul>
+    <div class="row"><button class="btn" type="button" id="shortcuts-edit">Change shortcuts</button></div>
+    <p class="muted small">On that page you can also set a shortcut to work when Chrome isn't in front ("Global").</p>
   </section>
+
 
   <section class="card" aria-labelledby="relay-heading">
     <h2 id="relay-heading">Use it from your phone</h2>
@@ -79,17 +77,21 @@
     <p class="muted small">You set up the relay once with a free Cloudflare account; see relay/README.md in the Roku Detox folder.</p>
   </section>
 
-  <section class="card" aria-labelledby="ways-heading">
-    <h2 id="ways-heading">Ways to use it</h2>
-    <ul class="ways">
-      <li><strong>Address bar:</strong> type <kbd>tv</kbd>, a space, then a show, an app, one of your scenes, a button (pause, home, louder, off) or a link.</li>
-      <li><strong>Right-click</strong> a video or a link: "Play this video on the TV". Select text: "Search the TV for …".</li>
-      <li><strong>Toolbar button:</strong> send this tab's video, a small remote, your favorites and scenes, and a sleep timer.</li>
-    </ul>
-    <h3 class="sub">Keyboard shortcuts</h3>
-    <ul class="ways" id="shortcut-list"><li class="muted">Loading…</li></ul>
-    <div class="row"><button class="btn" type="button" id="shortcuts-edit">Change shortcuts</button></div>
-    <p class="muted small">On that page you can also set a shortcut to work when Chrome isn't in front ("Global").</p>
+
+  <section class="card" aria-labelledby="id-heading">
+    <h2 id="id-heading">Use the extension from a web page</h2>
+    <p>The Roku Detox page can also run from <code>http://localhost</code> or <code>http://127.0.0.1</code> and use this extension to reach the TV. The page needs this extension's id to find it:</p>
+    <div class="row">
+      <code class="id" id="ext-id"></code>
+      <button class="btn" type="button" id="copy-id">Copy id</button>
+    </div>
+    <ol class="small">
+      <li>Open the Roku Detox page in this browser.</li>
+      <li>Open the browser console there (View &gt; Developer &gt; JavaScript Console) and run:<br><code id="snippet"></code></li>
+      <li>Reload the page. It now shows that it's using the extension.</li>
+    </ol>
+    <p class="muted small">Published copies of the page have the id built in, so this step is only for an unpacked install. Other web addresses can't talk to the extension.</p>
+    <p class="status" id="id-status" role="status" aria-live="polite"></p>
   </section>
 
   <section class="card" aria-labelledby="open-heading">
