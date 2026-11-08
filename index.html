@@ -184,6 +184,15 @@
   }
   .pause-chip:hover:not(:disabled) { border-color: var(--muted); }
   .pause-chip:disabled { opacity: .55; cursor: not-allowed; }
+  .nights { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .night-chip {
+    min-width: 46px; min-height: 36px; padding: 4px 8px; border: 1px solid var(--line); border-radius: 999px;
+    background: var(--raised); color: var(--muted); cursor: pointer; font: inherit; font-size: 14px; font-weight: 600;
+  }
+  .nights-presets { gap: 0 4px; }
+  .nights-presets .note { margin-right: 6px; }
+  .night-chip[aria-pressed="true"] { border-color: var(--keep); background: var(--keep-soft); color: var(--ink); }
+  @media (pointer: coarse) { .night-chip { min-height: 44px; } }
   @media (pointer: coarse) { .pause-chip { min-height: 44px; padding-inline: 14px; } }
   .rules-status { display: flex; align-items: center; gap: 10px; margin: -6px 0 18px; font-weight: 600; }
   .rules-status::before { content: ""; width: 10px; height: 10px; border-radius: 50%; background: var(--line); flex: none; }
@@ -3512,6 +3521,7 @@ function bedtimeNote() {
   const start = new Date(now);
   start.setHours(h, m, 0, 0);
   if (start < now) start.setDate(start.getDate() + 1);
+  if (!(b.days || ALL_NIGHTS).includes(nightOf(start))) return "";   // not one of its nights
   const minutes = (start - now) / 60000;
   return minutes <= 60 ? `bedtime at ${formatClock(b.start)}` : "";
 }
@@ -4609,6 +4619,37 @@ function renderRules() {
 function isHomeScreen(app) { return !app.id || ["roku", "roku dynamic menu", "home"].includes(String(app.name || "").trim().toLowerCase()); }
 function is_home_label(app) { return isHomeScreen(app) ? "the home screen" : plain(app.name); }
 
+// Bedtime nights. A night counts from its start time: Friday's late night belongs to Friday.
+const ALL_NIGHTS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
+const SCHOOL_NIGHTS = ["mon", "tue", "wed", "thu", "sun"];
+const NIGHT_NAMES = [["sun", "Sun", "Sunday"], ["mon", "Mon", "Monday"], ["tue", "Tue", "Tuesday"], ["wed", "Wed", "Wednesday"],
+  ["thu", "Thu", "Thursday"], ["fri", "Fri", "Friday"], ["sat", "Sat", "Saturday"]];
+const nightOf = (date) => ALL_NIGHTS[(date.getDay() + 6) % 7];
+function nightsText(days) {
+  const set = new Set(days);
+  if (ALL_NIGHTS.every((d) => set.has(d))) return "Every night.";
+  if (set.size === 5 && SCHOOL_NIGHTS.every((d) => set.has(d))) return "School nights: Sunday to Thursday. Friday and Saturday nights are free.";
+  if (set.size === 2 && set.has("fri") && set.has("sat")) return "Only Friday and Saturday nights.";
+  if (set.size === 6) return `Every night except ${NIGHT_NAMES.find(([k]) => !set.has(k))[2]}.`;
+  return `Only ${NIGHT_NAMES.filter(([k]) => set.has(k)).map(([, , long]) => long).join(", ").replace(/, ([^,]*)$/, " and $1")} nights.`;
+}
+function nightsHTML(days) {
+  return `<div class="line nights" role="group" aria-label="Which nights">
+      ${NIGHT_NAMES.map(([key, short, long]) => `<button type="button" class="night-chip" data-night="${key}" aria-pressed="${days.includes(key)}" aria-label="${long}">${short}</button>`).join("")}
+    </div>
+    <div class="line nights-presets">
+      <span class="note" id="nights-note">${esc(nightsText(days))}</span>
+      <button class="btn quiet" type="button" data-nights="school">School nights</button>
+      <button class="btn quiet" type="button" data-nights="all">Every night</button>
+    </div>`;
+}
+function syncNights() {
+  const days = state.rules?.bedtime?.days || ALL_NIGHTS;
+  for (const chip of document.querySelectorAll("[data-night]")) chip.setAttribute("aria-pressed", String(days.includes(chip.dataset.night)));
+  const note = $("#nights-note");
+  if (note) note.textContent = nightsText(days);
+}
+
 function ruleHTML(key, title, description, enabled, body) {
   return `<li class="rule" data-rule="${key}">
     <label class="rule-head"><input type="checkbox" data-toggle="${key}" ${enabled ? "checked" : ""}><strong>${title}</strong></label>
@@ -4642,9 +4683,10 @@ function renderRuleList() {
      <div class="line"><button class="btn" type="button" data-action="skip" ${r.autopilot.skipNext ? "disabled" : ""}>${r.autopilot.skipNext ? "Will skip next time" : "Skip next time"}</button></div>`);
 
   const bedtime = ruleHTML("bedtime", "Bedtime",
-    "Turns the TV off during these hours, after a 1-minute grace period. If someone turns it back on, it goes off again after 15 seconds.",
+    "Turns the TV off during these hours on the nights you pick, after a 1-minute grace period. If someone turns it back on, it goes off again after 15 seconds.",
     r.bedtime.enabled,
     `<div class="line"><span>From</span>${time("bedtime", "start")}<span>until</span>${time("bedtime", "end")}</div>
+     ${nightsHTML(r.bedtime.days || ALL_NIGHTS)}
      <div class="line"><button class="btn" type="button" id="bedtime-extend" data-action="extend" ${state.rulesStatus.bedtimeNow && !((state.rulesStatus.rules?.pausedUntil || 0) * 1000 > Date.now()) ? "" : "hidden"}>Give 15 more minutes</button></div>`);
 
   const limitRows = Object.entries(r.limits).map(([id, minutes]) => `<div class="line" data-limit="${esc(id)}">
@@ -4800,6 +4842,18 @@ $("#rule-list").addEventListener("click", async (e) => {
     const id = block.dataset.block;
     r.blocked = r.blocked.includes(id) ? r.blocked.filter((x) => x !== id) : [...r.blocked, id];
     block.setAttribute("aria-pressed", String(r.blocked.includes(id)));
+    return saveRulesSoon();
+  }
+  const night = e.target.closest("[data-night]");
+  const preset = e.target.closest("[data-nights]");
+  if (night || preset) {
+    let days = new Set(r.bedtime.days || ALL_NIGHTS);
+    if (preset) days = new Set(preset.dataset.nights === "school" ? SCHOOL_NIGHTS : ALL_NIGHTS);
+    else if (days.has(night.dataset.night)) days.delete(night.dataset.night);
+    else days.add(night.dataset.night);
+    if (!days.size) { toast("Pick at least one night, or turn Bedtime off."); return; }
+    r.bedtime.days = ALL_NIGHTS.filter((d) => days.has(d));
+    syncNights();
     return saveRulesSoon();
   }
   const action = e.target.closest("[data-action]")?.dataset.action;

@@ -157,6 +157,7 @@ test("clean_rules", () => {
     [{ redirects: { a: "b" }, blocked: ["b"] }], [{ autopilot: { enabled: true, target: "b" }, blocked: ["b"] }],
     [{ autopilot: { enabled: true, target: "b" }, redirects: { b: "c" } }], [{ limits: { "bad id!": 5 } }], [{ nightGuard: { idleMinutes: 0 } }],
     [{ nightGuard: { idleMinutes: 99, start: "", end: null } }], [{ blocked: [12, "13"] }], [{ redirects: { "12": 12 } }],
+    [{ bedtime: { days: ["fri", "sat", "fri", 3] } }], [{ bedtime: { days: [] } }], [{ bedtime: { days: "mon" } }], [{ bedtime: { days: null } }],
   ]);
 });
 
@@ -211,6 +212,16 @@ test("rules helpers", () => {
   same("in_window", (s, e, clock) => rules.inWindow(s, e, new Date(`2026-11-07T${clock}:00`)), [
     ["21:00", "06:30", "23:00"], ["21:00", "06:30", "06:30"], ["21:00", "06:30", "05:00"], ["21:00", "06:30", "12:00"],
     ["09:00", "17:00", "09:00"], ["09:00", "17:00", "17:00"], ["00:30", "06:00", "00:29"]]);
+  // School nights (Sun-Thu): Thursday night runs into Friday morning; Friday and Saturday nights are free.
+  const school = rules.cleanRules({ bedtime: { start: "21:00", end: "06:30", days: ["sun", "thu", "mon", "tue", "wed", "x"] } }).bedtime;
+  assert.deepEqual(school.days, ["mon", "tue", "wed", "thu", "sun"]);
+  const moments = ["2026-11-05 23:00", "2026-11-06 02:00", "2026-11-06 23:00", "2026-11-07 02:00", "2026-11-07 23:00",
+    "2026-11-08 02:00", "2026-11-08 22:00", "2026-11-09 03:00", "2026-11-09 12:00", "2026-11-06 06:30"];
+  const daytime = { start: "13:00", end: "15:00", days: ["sat"] };
+  const cases = [...moments.map((m) => [school, m]), [daytime, "2026-11-07 14:00"], [daytime, "2026-11-08 14:00"], [{ start: "21:00", end: "06:30" }, "2026-11-06 23:00"]];
+  same("bedtime_now", (rule, when) => rules.bedtimeNow(rule, new Date(when.replace(" ", "T") + ":00")), cases);
+  assert.deepEqual(moments.map((m) => rules.bedtimeNow(school, new Date(m.replace(" ", "T") + ":00"))),
+    [true, true, false, false, false, false, true, true, false, false]);
   same("is_home", rules.isHome, [[{ id: "", name: "Roku" }], [{ id: "562859", name: "Roku Dynamic Menu" }], [{ id: "12", name: "Netflix" }], [{ id: "x", name: " HOME " }]]);
   same("bounded_int", util.boundedInt, [["5", 1, 10], [5.9, 1, 10], [null, 1, 10], ["x", 1, 10], [99, 1, 10], [true, 0, 10], [" 7 ", 1, 10], ["-3", -5, 5], ["1_0", 1, 99]]);
 });

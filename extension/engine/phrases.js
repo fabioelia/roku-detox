@@ -4,7 +4,7 @@
 import { deviceInfo, launch, listApps, nowPlaying, press, pressSequence, runScene, search } from "./ecp.js";
 import { setSleep } from "./sleep.js";
 import { cast } from "./video.js";
-import { appLabel, isHome, pauseRules, plainName, rulesEnforcing, rulesStatus, tvRules } from "./rules.js";
+import { BEDTIME_DAYS, appLabel, dayKey, isHome, pauseRules, plainName, rulesEnforcing, rulesStatus, tvRules } from "./rules.js";
 import { tvSettings } from "./store.js";
 import { ValueError, cut, displayAddress, pyLen } from "./util.js";
 
@@ -85,7 +85,10 @@ async function sayTimeLeft(target) {
   for (const [name, left] of limits) parts.push(left <= 0 ? `${name}: time's up for today.` : `${name}: ${sayDuration(left)} left.`);
   if (rules.bedtime.enabled) {
     const later = (rules.bedtime.extendUntil || 0) - nowSeconds;
-    if (!status.bedtimeNow) parts.push(`Bedtime is at ${sayClock(rules.bedtime.start)}.`);
+    if (!status.bedtimeNow) {
+      const tonight = (rules.bedtime.days || BEDTIME_DAYS).includes(dayKey(new Date()));
+      parts.push(tonight ? `Bedtime is at ${sayClock(rules.bedtime.start)}.` : "No bedtime tonight.");
+    }
     else parts.push(later > 0 ? `Bedtime is put off for ${sayDuration(later)} more.` : "It's bedtime.");
   }
   return parts.join(" ") || "There's no daily limit or bedtime set.";

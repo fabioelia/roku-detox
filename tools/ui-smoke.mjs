@@ -157,6 +157,19 @@ async function main() {
       weekTrend(days([0, 0, 0, 0, 0, 0, 0, 1800, 1800, 1800, 1800, 1800, 1800, 1800]), "2026-11-15"),
       weekTrend(days([3600, 3600, 3600, 3600, 3600, 3600]), today),
     ]; })()`);
+  const nights = await page(`(async () => {
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    await api("/api/rules", { tv: state.tv, rules: { bedtime: { enabled: true, start: "23:30", end: "06:30" } } });
+    document.querySelector('#views [data-view="rules"]').click(); await wait(1200);
+    await loadRules(); await wait(200);
+    document.querySelector('[data-nights="school"]').click(); await wait(800);
+    document.querySelector('[data-night="sat"]').click(); await wait(800);
+    const saved = (await api("/api/rules?tv=" + encodeURIComponent(state.tv))).rules.bedtime.days;
+    const note = document.querySelector("#nights-note").textContent;
+    await api("/api/rules", { tv: state.tv, rules: {} }); await loadRules();
+    document.querySelector('#views [data-view="remote"]').click();
+    return { saved, note }; })()`);
+  check("bedtime can be set for school nights", nights.saved.join() === "mon,tue,wed,thu,sat,sun" && nights.note === "Every night except Friday.", JSON.stringify(nights));
   check("screen time compares the past week with the one before",
     trend[0] === "Past week: about 1 h a day, 50% less than the week before." && trend[1] === "Past week: about 1 h a day, about the same as the week before."
     && trend[2] === "Past week: about 30 min a day, up from almost nothing the week before." && trend[3] === "", JSON.stringify(trend));

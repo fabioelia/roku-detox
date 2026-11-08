@@ -33,7 +33,7 @@ import urllib.request
 import webbrowser
 import zipfile
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from xml.etree import ElementTree as ET
 
@@ -1260,7 +1260,8 @@ def run_scheduled(address, scene):
 
 RULES_DEFAULT = {
     "autopilot": {"enabled": False, "target": "", "skipNext": False},
-    "bedtime": {"enabled": False, "start": "21:00", "end": "06:30", "extendUntil": 0},
+    "bedtime": {"enabled": False, "start": "21:00", "end": "06:30",
+                "days": ["mon", "tue", "wed", "thu", "fri", "sat", "sun"], "extendUntil": 0},
     "nightGuard": {"enabled": False, "start": "00:30", "end": "06:00", "idleMinutes": 3},
     "pausedUntil": 0,  # epoch seconds: every rule rests until then (guests over, movie night)
     "limits": {},      # app id -> minutes per day
@@ -1307,6 +1308,7 @@ def clean_rules(raw):
             "enabled": bool(bedtime.get("enabled")),
             "start": clock(bedtime.get("start"), "21:00"),
             "end": clock(bedtime.get("end"), "06:30"),
+            "days": clean_days(bedtime.get("days")),
             "extendUntil": bounded_int(bedtime.get("extendUntil"), 0, 4_102_444_800),
         },
         "nightGuard": {
@@ -1358,6 +1360,27 @@ def rules_active(rules):
         or rules["bedtime"]["enabled"] or rules["nightGuard"]["enabled"]
         or rules["limits"] or rules["blocked"] or rules["redirects"] or rules["log"]
     )
+
+
+BEDTIME_DAYS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
+
+
+def clean_days(raw):
+    """The nights a bedtime applies to, in week order; none given (or none left) means every night."""
+    if raw is None:
+        return list(BEDTIME_DAYS)
+    if not isinstance(raw, list):
+        raise ValueError("Bad rules.")
+    return [day for day in BEDTIME_DAYS if day in raw] or list(BEDTIME_DAYS)
+
+
+def bedtime_now(rule, moment):
+    """Inside the bedtime hours of a night it applies to. A night counts from its start time, so with
+    21:00-06:30 on school nights (Sun-Thu), Thursday night runs into Friday morning, but Friday night is free."""
+    if not in_window(rule["start"], rule["end"], moment):
+        return False
+    started = moment if rule["start"] <= rule["end"] or moment.strftime("%H:%M") >= rule["start"] else moment - timedelta(days=1)
+    return BEDTIME_DAYS[started.weekday()] in rule.get("days", BEDTIME_DAYS)
 
 
 def in_window(start, end, moment):
@@ -1614,7 +1637,7 @@ class Watcher:
 
     def bedtime(self, address, rules, state, target, local, now):
         rule = rules["bedtime"]
-        if not rule["enabled"] or not in_window(rule["start"], rule["end"], local) or now < rule["extendUntil"]:
+        if not rule["enabled"] or not bedtime_now(rule, local) or now < rule["extendUntil"]:
             state.bedtime_warned = None
             return False
         if state.bedtime_warned is None:
@@ -1729,7 +1752,7 @@ class Watcher:
             "awake": self.awake is not None,
             "power": state.power if state else None,
             "app": state.app if state else None,
-            "bedtimeNow": rules["bedtime"]["enabled"] and in_window(rules["bedtime"]["start"], rules["bedtime"]["end"], datetime.now()),
+            "bedtimeNow": rules["bedtime"]["enabled"] and bedtime_now(rules["bedtime"], datetime.now()),
             "usage": {k: int(v) for k, v in usage.items()},
             "events": events[::-1],
         }
@@ -1968,7 +1991,8 @@ def say_time_left(target):
     if bedtime["enabled"]:
         later = bedtime.get("extendUntil", 0) - time.time()
         if not status["bedtimeNow"]:
-            parts.append(f"Bedtime is at {say_clock(bedtime['start'])}.")
+            tonight = BEDTIME_DAYS[datetime.now().weekday()] in bedtime.get("days", BEDTIME_DAYS)
+            parts.append(f"Bedtime is at {say_clock(bedtime['start'])}." if tonight else "No bedtime tonight.")
         else:
             parts.append(f"Bedtime is put off for {say_duration(later)} more." if later > 0 else "It's bedtime.")
     return " ".join(parts) or "There's no daily limit or bedtime set."

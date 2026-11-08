@@ -17,7 +17,7 @@ import { discover, rangeOf } from "./discover.js";
 export const ALARM = "detox-rules";
 export const RULES_DEFAULT = {
   autopilot: { enabled: false, target: "", skipNext: false },
-  bedtime: { enabled: false, start: "21:00", end: "06:30", extendUntil: 0 },
+  bedtime: { enabled: false, start: "21:00", end: "06:30", days: ["mon", "tue", "wed", "thu", "fri", "sat", "sun"], extendUntil: 0 },
   nightGuard: { enabled: false, start: "00:30", end: "06:00", idleMinutes: 3 },
   pausedUntil: 0, // epoch seconds: every rule rests until then (guests over, movie night)
   limits: {},    // app id -> minutes per day
@@ -73,6 +73,7 @@ export function cleanRules(raw) {
       enabled: truthy(bedtime.enabled),
       start: clock(bedtime.start, "21:00"),
       end: clock(bedtime.end, "06:30"),
+      days: cleanDays(bedtime.days),
       extendUntil: boundedInt(bedtime.extendUntil, 0, 4_102_444_800),
     },
     nightGuard: {
@@ -139,6 +140,29 @@ export function rulesActive(rules) {
 }
 
 /** Is the moment inside start-end, where end may be after midnight? */
+export const BEDTIME_DAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
+
+/** The nights a bedtime applies to, in week order; none given (or none left) means every night. */
+function cleanDays(raw) {
+  if (raw === undefined || raw === null) return [...BEDTIME_DAYS];
+  if (!Array.isArray(raw)) throw new ValueError("Bad rules.");
+  const days = BEDTIME_DAYS.filter((day) => raw.includes(day));
+  return days.length ? days : [...BEDTIME_DAYS];
+}
+
+/** A day's key: "mon" for a Monday (getDay() counts from Sunday). */
+export const dayKey = (moment) => BEDTIME_DAYS[(moment.getDay() + 6) % 7];
+
+/**
+ * Inside the bedtime hours of a night it applies to (bedtime_now). A night counts from its start time,
+ * so with 21:00-06:30 on school nights, Thursday night runs into Friday morning, but Friday night is free.
+ */
+export function bedtimeNow(rule, moment) {
+  if (!inWindow(rule.start, rule.end, moment)) return false;
+  const started = rule.start <= rule.end || localClock(moment) >= rule.start ? moment : new Date(moment.getTime() - 86400000);
+  return (rule.days || BEDTIME_DAYS).includes(dayKey(started));
+}
+
 export function inWindow(start, end, moment) {
   const clock = localClock(moment);
   return start <= end ? (start <= clock && clock < end) : (clock >= start || clock < end);
@@ -369,7 +393,7 @@ async function tickUsage(address, state, app, t) {
 
 async function bedtime(address, rules, state, target, local, t) {
   const rule = rules.bedtime;
-  if (!rule.enabled || !inWindow(rule.start, rule.end, local) || t < rule.extendUntil) {
+  if (!rule.enabled || !bedtimeNow(rule, local) || t < rule.extendUntil) {
     state.bedtimeWarned = null;
     return false;
   }
@@ -593,7 +617,7 @@ export async function rulesStatus(address) {
     awake: false,
     power: state ? state.power : null,
     app: state ? state.app : null,
-    bedtimeNow: rules.bedtime.enabled && inWindow(rules.bedtime.start, rules.bedtime.end, new Date()),
+    bedtimeNow: rules.bedtime.enabled && bedtimeNow(rules.bedtime, new Date()),
     usage: Object.fromEntries(Object.entries(usage).map(([k, v]) => [k, Math.trunc(v)])),
     events: mine.reverse(),
   };

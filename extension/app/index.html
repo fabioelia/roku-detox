@@ -184,6 +184,15 @@
   }
   .pause-chip:hover:not(:disabled) { border-color: var(--muted); }
   .pause-chip:disabled { opacity: .55; cursor: not-allowed; }
+  .nights { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .night-chip {
+    min-width: 46px; min-height: 36px; padding: 4px 8px; border: 1px solid var(--line); border-radius: 999px;
+    background: var(--raised); color: var(--muted); cursor: pointer; font: inherit; font-size: 14px; font-weight: 600;
+  }
+  .nights-presets { gap: 0 4px; }
+  .nights-presets .note { margin-right: 6px; }
+  .night-chip[aria-pressed="true"] { border-color: var(--keep); background: var(--keep-soft); color: var(--ink); }
+  @media (pointer: coarse) { .night-chip { min-height: 44px; } }
   @media (pointer: coarse) { .pause-chip { min-height: 44px; padding-inline: 14px; } }
   .rules-status { display: flex; align-items: center; gap: 10px; margin: -6px 0 18px; font-weight: 600; }
   .rules-status::before { content: ""; width: 10px; height: 10px; border-radius: 50%; background: var(--line); flex: none; }

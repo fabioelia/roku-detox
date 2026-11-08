@@ -41,7 +41,7 @@ The page has six menus:
   page in a hidden, muted tab for a few seconds, reads it and closes it, and remembers to do that for the site.
   YouTube results open in the YouTube app; other videos play in Detox Home.
 - **Rules**: things that run in the background while the program is open on your Mac:
-  skip the home screen when the TV turns on, bedtime, daily time limits, blocked apps, swap apps,
+  skip the home screen when the TV turns on, bedtime (every night, school nights, or the nights you pick), daily time limits, blocked apps, swap apps,
   night guard (turns the TV back off when it wakes itself up at night), and a viewing log.
   It checks the TV every 4 seconds and keeps the Mac from sleeping (`caffeinate`) while any rule is on.
   Alerts show as macOS notifications. "Pause all rules" turns them off for an hour, three hours or until
