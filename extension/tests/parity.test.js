@@ -158,6 +158,8 @@ test("clean_rules", () => {
     [{ autopilot: { enabled: true, target: "b" }, redirects: { b: "c" } }], [{ limits: { "bad id!": 5 } }], [{ nightGuard: { idleMinutes: 0 } }],
     [{ nightGuard: { idleMinutes: 99, start: "", end: null } }], [{ blocked: [12, "13"] }], [{ redirects: { "12": 12 } }],
     [{ bedtime: { days: ["fri", "sat", "fri", 3] } }], [{ bedtime: { days: [] } }], [{ bedtime: { days: "mon" } }], [{ bedtime: { days: null } }],
+    [{ limits: { "12": 60 }, weekendLimits: { "12": 120, "837": 30 } }], [{ limits: { "12": 60 }, weekendLimits: { "12": 9999 } }],
+    [{ limits: { "12": 60 }, weekendLimits: [] }], [{ limits: { "12": 60 }, weekendLimits: { "bad id!": 5 } }],
   ]);
 });
 
@@ -233,6 +235,13 @@ test("rules helpers", () => {
   same("bedtime_now", (rule, when) => rules.bedtimeNow(rule, new Date(when.replace(" ", "T") + ":00")), cases);
   assert.deepEqual(cases.slice(-7).map(([rule, when]) => rules.bedtimeNow(rule, new Date(when.replace(" ", "T") + ":00"))),
     [true, false, false, true, true, false, true]);
+  // Weekend amounts: Saturday and Sunday (Nov 7 and 8, 2026), the daily one otherwise.
+  const withWeekend = rules.cleanRules({ limits: { "12": 60, "837": 30 }, weekendLimits: { "12": 120 } });
+  same("limit_today", (r, when) => rules.limitToday(r, "12", new Date(when.replace(" ", "T") + ":00")) ?? null,
+    ["2026-11-06 23:59", "2026-11-07 00:00", "2026-11-08 23:59", "2026-11-09 00:00"].map((when) => [withWeekend, when]));
+  assert.deepEqual(["2026-11-06 12:00", "2026-11-07 12:00", "2026-11-08 12:00", "2026-11-09 12:00"]
+    .map((when) => rules.limitToday(withWeekend, "12", new Date(when.replace(" ", "T") + ":00"))), [60, 120, 120, 60]);
+  assert.equal(rules.limitToday(withWeekend, "837", new Date("2026-11-07T12:00:00")), 30, "no weekend amount: the daily one");
   same("next_bedtime_on", (rule, when) => rules.nextBedtimeOn(rule, new Date(when.replace(" ", "T") + ":00")), [
     [late, "2026-11-05 23:00"], [late, "2026-11-07 23:00"], [school, "2026-11-06 20:00"], [school, "2026-11-08 20:00"],
     [daytime, "2026-11-07 16:00"], [daytime, "2026-11-07 12:00"]]);

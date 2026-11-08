@@ -207,6 +207,9 @@ const POST_ROUTES = {
     const rules = keepOwnedFields(cleanRules(c.body.rules), stored);
     const rawBedtime = isPlainObject(c.body.rules) ? c.body.rules.bedtime : null;
     if (isPlainObject(rawBedtime) && !("days" in rawBedtime)) rules.bedtime.days = stored.bedtime.days; // a page from before bedtime nights
+    if (isPlainObject(c.body.rules) && !("weekendLimits" in c.body.rules)) { // ... or weekend limits
+      rules.weekendLimits = Object.fromEntries(Object.entries(stored.weekendLimits || {}).filter(([k]) => k in rules.limits));
+    }
     await saveRules(address, rules);
     return rulesStatus(address);
   },

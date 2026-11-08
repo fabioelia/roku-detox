@@ -2341,7 +2341,8 @@ state.limitStatus = null;   // {tv, limits: {appId: minutes}, usage: {appId: sec
 function noteLimits(status, tv = state.tv) {
   if (tv !== state.tv) return;   // switched TVs while this was loading
   state.limitStatus = status ? {
-    tv, limits: status.rules?.limits || {}, usage: status.usage || {},
+    tv, limits: { ...(status.rules?.limits || {}), ...([0, 6].includes(new Date().getDay()) ? status.rules?.weekendLimits || {} : {}) },
+    usage: status.usage || {},
     bedtime: status.rules?.bedtime?.enabled ? status.rules.bedtime : null,
     pausedUntil: status.rules?.pausedUntil || 0,
   } : null;
@@ -3567,9 +3568,11 @@ function renderRuleList() {
      ${nightsHTML(r.bedtime.days || ALL_NIGHTS, r.bedtime.start)}
      <div class="line"><button class="btn" type="button" id="bedtime-extend" data-action="extend" ${state.rulesStatus.bedtimeNow && !((state.rulesStatus.rules?.pausedUntil || 0) * 1000 > Date.now()) ? "" : "hidden"}>Give 15 more minutes</button></div>`);
 
+  r.weekendLimits = r.weekendLimits || {};   // an older program sends none
   const limitRows = Object.entries(r.limits).map(([id, minutes]) => `<div class="line" data-limit="${esc(id)}">
       <select data-limit-app aria-label="App">${anyOptions(id)}</select>
-      <input type="number" min="1" max="720" value="${minutes}" data-limit-minutes aria-label="Minutes per day"><span>minutes a day</span>
+      <input type="number" min="1" max="720" value="${minutes}" data-limit-minutes aria-label="Minutes per day"><span>minutes a day,</span>
+      <span class="weekend-limit"><input type="number" min="1" max="720" value="${r.weekendLimits[id] ?? ""}" placeholder="same" data-limit-weekend aria-label="Minutes a day on Saturdays and Sundays (empty: the same)"> on weekends</span>
       <span class="used" data-used="${esc(id)}"></span>
       <button class="btn quiet" type="button" data-action="limit-remove">Remove</button></div>`).join("");
   const pendingLimit = state.pendingLimit ? `<div class="line" data-limit="">
@@ -3577,7 +3580,7 @@ function renderRuleList() {
       <input type="number" min="1" max="720" value="${state.pendingLimit.minutes}" data-limit-minutes aria-label="Minutes per day"><span>minutes a day</span>
       <button class="btn quiet" type="button" data-action="limit-remove">Remove</button></div>` : "";
   const limits = ruleHTML("limits", "Daily time limits",
-    "When an app or input reaches its time for the day, the TV is sent to the home screen each time it's opened again. Counts reset at midnight.",
+    "When an app or input reaches its time for the day, the TV is sent to the home screen each time it's opened again. Counts reset at midnight. Leave \"on weekends\" empty for the same time on Saturdays and Sundays.",
     Object.keys(r.limits).length > 0 || state.limitsOpen,
     `${limitRows}${pendingLimit}<div class="line"><button class="btn quiet" type="button" data-action="limit-add" ${state.pendingLimit ? "hidden" : ""}>Add a time limit</button></div>`);
 
@@ -3678,9 +3681,14 @@ $("#rule-list").addEventListener("change", (e) => {
       return;
     }
     if (t.matches("[data-limit-minutes]")) r.limits[id] = Number(t.value) || 1;
+    if (t.matches("[data-limit-weekend]")) {
+      if (t.value.trim()) r.weekendLimits[id] = Math.min(720, Math.max(1, Number(t.value) || 1));
+      else delete r.weekendLimits[id];
+    }
     if (t.matches("[data-limit-app]") && t.value && t.value !== id) {
       r.limits[t.value] = r.limits[id];
       delete r.limits[id];
+      if (id in r.weekendLimits) { r.weekendLimits[t.value] = r.weekendLimits[id]; delete r.weekendLimits[id]; }
       state.rulesVersion += 1;
       renderRuleList();
     }
@@ -3752,7 +3760,7 @@ $("#rule-list").addEventListener("click", async (e) => {
   if (action === "limit-add") state.pendingLimit = { minutes: 60 };
   if (action === "limit-remove") {
     const id = e.target.closest("[data-limit]").dataset.limit;
-    if (id) delete r.limits[id]; else state.pendingLimit = null;
+    if (id) { delete r.limits[id]; if (r.weekendLimits) delete r.weekendLimits[id]; } else state.pendingLimit = null;
   }
   if (action === "swap-add") state.pendingSwap = { from: "", to: "" };
   if (action === "swap-remove") {

@@ -187,3 +187,21 @@ test("after a pause, bedtime warns again before turning the TV off; saving rules
   await tv("/keypress/PowerOn");
   await tv("/keypress/Home");
 });
+
+test("a weekend amount replaces the daily limit on Saturday and Sunday", async () => {
+  await setRules({ limits: { "41468": 1 }, weekendLimits: { "41468": 3 } });
+  await tv("/keypress/PowerOn");
+  await ok("POST", "/api/launch", { tv: TV, id: "41468" });
+  // Saturday, Nov 14: two and a half minutes in, still on (three allowed).
+  for (const at of ["12:00:00", "12:00:30", "12:01:00", "12:01:30", "12:02:00", "12:02:30"]) await roundAt(`2026-11-14T${at}`);
+  assert.equal((await active()).id, "41468");
+  for (const at of ["12:03:00", "12:03:15"]) await roundAt(`2026-11-14T${at}`);
+  assert.notEqual((await active()).id, "41468", "over three minutes: closed");
+  assert.match((await messages())[0], /\(3 minutes\)/);
+  // Monday, Nov 16: the daily minute again.
+  await ok("POST", "/api/launch", { tv: TV, id: "41468" });
+  for (const at of ["12:00:00", "12:00:30", "12:01:00", "12:01:10"]) await roundAt(`2026-11-16T${at}`);
+  assert.notEqual((await active()).id, "41468", "over a minute on a weekday: closed");
+  await setRules({});
+  await tv("/keypress/Home");
+});

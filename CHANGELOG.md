@@ -12,6 +12,8 @@ Newest first. The extension's version is in `extension/manifest.json`; after pul
 - **Bedtime on the nights you pick**: Sun to Sat buttons, "School nights" (Sunday to Thursday) and
   "Every night". A night counts from its start time; a start after midnight or in the morning belongs to
   the night before (so "school nights" with 00:30 means early Monday to early Friday).
+- **Weekend limits**: a daily time limit can have a different amount on Saturdays and Sundays
+  ("60 minutes a day, 120 on weekends"); leave it empty for the same every day.
 - **Ask the TV** (Siri, the popup, `tv …` in Chrome's address bar): "what's on", "screen time",
   "time left". The answer is a sentence ("Netflix is on, playing, 12 minutes in, 36 minutes to go.").
 - **Share sheet**: with a Shortcuts key, a YouTube or Netflix link sent as `do` plays on the TV, so a

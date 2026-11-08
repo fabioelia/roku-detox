@@ -1271,6 +1271,7 @@ RULES_DEFAULT = {
     "nightGuard": {"enabled": False, "start": "00:30", "end": "06:00", "idleMinutes": 3},
     "pausedUntil": 0,  # epoch seconds: every rule rests until then (guests over, movie night)
     "limits": {},      # app id -> minutes per day
+    "weekendLimits": {},  # app id -> minutes on Saturdays and Sundays instead (only apps with a daily limit)
     "blocked": [],     # app ids sent back to the home screen
     "redirects": {},   # app id -> app id to open instead
     "log": False,      # keep a viewing log even with no other rules on
@@ -1301,8 +1302,11 @@ def clean_rules(raw):
     bedtime = raw.get("bedtime") or {}
     night = raw.get("nightGuard") or {}
     limits = raw.get("limits") or {}
+    weekend = raw.get("weekendLimits") or {}
     redirects = raw.get("redirects") or {}
     if not isinstance(limits, dict) or not isinstance(redirects, dict) or len(limits) > 50 or len(redirects) > 50:
+        raise ValueError("Bad rules.")
+    if not isinstance(weekend, dict) or len(weekend) > 50:
         raise ValueError("Bad rules.")
     enabled_autopilot = bool(autopilot.get("enabled"))
     target = app_id(autopilot.get("target"), allow_empty=True)
@@ -1324,11 +1328,15 @@ def clean_rules(raw):
             "idleMinutes": bounded_int(night.get("idleMinutes", 3), 1, 30),
         },
         "limits": {app_id(k): bounded_int(v, 1, 720) for k, v in limits.items()},
+        "weekendLimits": {},
         "blocked": sorted({app_id(a) for a in (raw.get("blocked") or [])[:50]}),
         "redirects": {app_id(k): app_id(v) for k, v in redirects.items() if k != v},
         "log": bool(raw.get("log")),
         "pausedUntil": bounded_int(raw.get("pausedUntil"), 0, 4_102_444_800),
     }
+    for k, v in weekend.items():
+        if app_id(k) in rules["limits"]:  # a weekend amount only for an app with a daily limit
+            rules["weekendLimits"][app_id(k)] = bounded_int(v, 1, 720)
     # Refuse rules that would fight each other.
     for source, dest in rules["redirects"].items():
         if rules["redirects"].get(dest) == source:
@@ -1349,6 +1357,13 @@ def tv_rules(address):
         return clean_rules(raw)
     except ValueError:
         return json.loads(json.dumps(RULES_DEFAULT))
+
+
+def limit_today(rules, app_id, moment):
+    """Minutes allowed on the app on moment's day: its weekend amount on Saturday and Sunday, if it has one."""
+    if moment.weekday() >= 5 and app_id in rules.get("weekendLimits", {}):
+        return rules["weekendLimits"][app_id]
+    return rules["limits"].get(app_id)
 
 
 def rules_enforcing(rules):
@@ -1747,7 +1762,7 @@ class Watcher:
             if self.act(state, lambda: friendly_notice(target, "Not on this TV", f"{name} is blocked.") or press(target, "Home")):
                 self.event(address, f"{name} is blocked. Closed it.", key=f"blocked-{app_id}", every=300)
             return
-        limit = rules["limits"].get(app_id)
+        limit = limit_today(rules, app_id, datetime.now())
         if limit is not None and state.usage.get(app_id, 0) >= limit * 60:
             if self.act(state, lambda: friendly_notice(target, "Time's up", f"{name} is done for today.") or press(target, "Home")):
                 self.event(address, f"Time's up for {name} today ({limit} minute{'s' if limit != 1 else ''}). Closed it.", key=f"limit-{app_id}", every=900)
@@ -2005,8 +2020,9 @@ def say_time_left(target):
     parts = []
     if time.time() < rules.get("pausedUntil", 0):
         parts.append("Rules are paused, so nothing closes for now.")
-    for name, left in sorted((app_label(target, app_id), minutes * 60 - status["usage"].get(app_id, 0))
-                             for app_id, minutes in rules["limits"].items()):
+    today = datetime.now()
+    for name, left in sorted((app_label(target, app_id), limit_today(rules, app_id, today) * 60 - status["usage"].get(app_id, 0))
+                             for app_id in rules["limits"]):
         parts.append(f"{name}: time's up for today." if left <= 0 else f"{name}: {say_duration(left)} left.")
     bedtime = rules["bedtime"]
     if bedtime["enabled"] and bedtime["start"] != bedtime["end"]:
@@ -3665,6 +3681,8 @@ class Handler(BaseHTTPRequestHandler):
         raw_bedtime = body["rules"].get("bedtime") if isinstance(body.get("rules"), dict) else None
         if isinstance(raw_bedtime, dict) and "days" not in raw_bedtime:  # a page from before bedtime nights
             rules["bedtime"]["days"] = stored["bedtime"].get("days", list(BEDTIME_DAYS))
+        if isinstance(body.get("rules"), dict) and "weekendLimits" not in body["rules"]:  # ... or weekend limits
+            rules["weekendLimits"] = {k: v for k, v in stored.get("weekendLimits", {}).items() if k in rules["limits"]}
         save_rules(address, rules)
         self.send(200, WATCHER.status(address))
 

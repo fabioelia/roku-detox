@@ -4,7 +4,7 @@
 import { deviceInfo, launch, listApps, nowPlaying, press, pressSequence, runScene, search } from "./ecp.js";
 import { setSleep } from "./sleep.js";
 import { parseLink } from "./video.js";
-import { appLabel, isHome, nextBedtimeOn, pauseRules, plainName, rulesEnforcing, rulesStatus, tvRules } from "./rules.js";
+import { appLabel, isHome, limitToday, nextBedtimeOn, pauseRules, plainName, rulesEnforcing, rulesStatus, tvRules } from "./rules.js";
 import { tvSettings } from "./store.js";
 import { ValueError, cut, displayAddress, pyLen } from "./util.js";
 
@@ -80,7 +80,8 @@ async function sayTimeLeft(target) {
   const parts = [];
   if (nowSeconds < (rules.pausedUntil || 0)) parts.push("Rules are paused, so nothing closes for now.");
   const limits = [];
-  for (const [appId, minutes] of Object.entries(rules.limits)) limits.push([await appLabel(target, appId), minutes * 60 - (status.usage[appId] || 0)]);
+  const today = new Date();
+  for (const appId of Object.keys(rules.limits)) limits.push([await appLabel(target, appId), limitToday(rules, appId, today) * 60 - (status.usage[appId] || 0)]);
   limits.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : a[1] - b[1]));
   for (const [name, left] of limits) parts.push(left <= 0 ? `${name}: time's up for today.` : `${name}: ${sayDuration(left)} left.`);
   if (rules.bedtime.enabled && rules.bedtime.start !== rules.bedtime.end) {

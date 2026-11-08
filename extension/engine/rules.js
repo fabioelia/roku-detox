@@ -21,6 +21,7 @@ export const RULES_DEFAULT = {
   nightGuard: { enabled: false, start: "00:30", end: "06:00", idleMinutes: 3 },
   pausedUntil: 0, // epoch seconds: every rule rests until then (guests over, movie night)
   limits: {},    // app id -> minutes per day
+  weekendLimits: {}, // app id -> minutes on Saturdays and Sundays instead (only apps with a daily limit)
   blocked: [],   // app ids sent back to the home screen
   redirects: {}, // app id -> app id to open instead
   log: false,    // keep a viewing log even with no other rules on
@@ -58,6 +59,8 @@ export function cleanRules(raw) {
   const bedtime = section(raw.bedtime);
   const night = section(raw.nightGuard);
   const limits = truthy(raw.limits) ? raw.limits : {};
+  const weekend = truthy(raw.weekendLimits) ? raw.weekendLimits : {};
+  if (!isPlainObject(weekend) || Object.keys(weekend).length > 50) throw new ValueError("Bad rules.");
   const redirects = truthy(raw.redirects) ? raw.redirects : {};
   if (!isPlainObject(limits) || !isPlainObject(redirects) || Object.keys(limits).length > 50 || Object.keys(redirects).length > 50) {
     throw new ValueError("Bad rules.");
@@ -83,12 +86,16 @@ export function cleanRules(raw) {
       idleMinutes: boundedInt("idleMinutes" in night ? night.idleMinutes : 3, 1, 30),
     },
     limits: {},
+    weekendLimits: {},
     blocked: [],
     redirects: {},
     log: truthy(raw.log),
     pausedUntil: boundedInt(raw.pausedUntil, 0, 4_102_444_800),
   };
   for (const [k, v] of Object.entries(limits)) rules.limits[appId(k)] = boundedInt(v, 1, 720);
+  for (const [k, v] of Object.entries(weekend)) { // a weekend amount only for an app with a daily limit
+    if (appId(k) in rules.limits) rules.weekendLimits[appId(k)] = boundedInt(v, 1, 720);
+  }
   rules.blocked = [...new Set(blockedRaw.slice(0, 50).map((a) => appId(a)))].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
   for (const [k, v] of Object.entries(redirects)) if (k !== v) rules.redirects[appId(k)] = appId(v);
   // Refuse rules that would fight each other.
@@ -111,6 +118,13 @@ export async function tvRules(address) {
     if (err instanceof ValueError) return copy(RULES_DEFAULT);
     throw err;
   }
+}
+
+/** Minutes allowed on the app on moment's day: its weekend amount on Saturday and Sunday, if any (limit_today). */
+export function limitToday(rules, appId, moment) {
+  const weekendDay = moment.getDay() === 0 || moment.getDay() === 6;
+  if (weekendDay && rules.weekendLimits && appId in rules.weekendLimits) return rules.weekendLimits[appId];
+  return rules.limits[appId];
 }
 
 /** Any rule that acts on the TV (the viewing log alone only watches). */
@@ -512,7 +526,7 @@ async function appRules(address, rules, state, target, app) {
     }
     return;
   }
-  const limit = rules.limits[appId];
+  const limit = limitToday(rules, appId, new Date());
   if (limit !== undefined && (state.usage[appId] || 0) >= limit * 60) {
     if (await act(state, closeWith("Time's up", `${name} is done for today.`))) {
       await event(address, `Time's up for ${name} today (${limit} minute${limit !== 1 ? "s" : ""}). Closed it.`, "action", `limit-${appId}`, 900);
