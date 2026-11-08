@@ -2805,6 +2805,8 @@ def tv_config(address, base, token):
 BROWSER_UA = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/605.1.15 "
               "(KHTML, like Gecko) Version/17.0 Safari/605.1.15")
 VIDEO_URL_RE = re.compile(r"""https?:(?:\\?/){2}[^\s"'<>]+?\.(?:m3u8|mp4|m4v|mov|mpd)(?:\?[^\s"'<>]*)?""", re.I)
+# A quoted path on the page's own site (or //host/..), as players are often set up: file: "/media/clip.m3u8".
+VIDEO_PATH_RE = re.compile(r"""["']((?:\\?/)[^\s"'<>]+?\.(?:m3u8|mp4|m4v|mov|mpd)(?:\?[^\s"'<>]*)?)["']""", re.I)
 FORMAT_SCORE = {"hls": 3, "mp4": 2, "dash": 1}
 YTDLP_FORMAT = ("best[protocol^=m3u8][vcodec!=none][acodec!=none]/best[ext=mp4][vcodec!=none][acodec!=none]/"
                 "best[vcodec!=none][acodec!=none]")
@@ -2963,34 +2965,74 @@ def page_title(page):
     return title
 
 
+def clean_video_link(raw, base_url):
+    """A video address as written in a page (HTML-escaped, or with JSON's \\/), made absolute; None if unusable."""
+    clean = html_module.unescape(raw).replace("\\/", "/").replace("\\u002F", "/").replace("\\u0026", "&")
+    absolute = urllib.parse.urljoin(base_url, clean)
+    if absolute.startswith(("http://", "https://")) and not is_ad_url(absolute):
+        return absolute
+    return None
+
+
 def video_candidates(page, base_url):
     """Every video address a page mentions, as absolute URLs, ads left out."""
     found = [v for v in (page_meta(page, "og:video:secure_url", "og:video:url", "og:video"), page_meta(page, "twitter:player:stream")) if v]
     found += re.findall(r'<(?:video|source)[^>]+src=["\']([^"\']+)', page, re.I)
     found += re.findall(r'"contentUrl"\s*:\s*"([^"]+)"', page)
     found += VIDEO_URL_RE.findall(page)
+    found += VIDEO_PATH_RE.findall(page)  # players set up with a path on the same site: file: "/media/clip.m3u8"
     candidates = []
     for raw in found:
-        clean = html_module.unescape(raw).replace("\\/", "/").replace("\\u002F", "/").replace("\\u0026", "&")
-        absolute = urllib.parse.urljoin(base_url, clean)
-        if absolute.startswith(("http://", "https://")) and absolute not in candidates and not is_ad_url(absolute):
+        absolute = clean_video_link(raw, base_url)
+        if absolute and absolute not in candidates:
             candidates.append(absolute)
     return candidates
 
 
-def pick_video(candidates):
-    """An embedded YouTube video, or the best playable file, or None."""
+def typed_sources(page, base_url):
+    """[[url, format]] for <video>/<source> tags whose type says what they are, for addresses with no
+    .m3u8/.mp4 ending (like /hls/playlist?token=..)."""
+    out = []
+    for tag in re.findall(r"<(?:video|source)\b[^>]*>", page, re.I):
+        src = re.search(r'\ssrc=["\']([^"\']+)', tag, re.I)
+        kind = re.search(r'\stype=["\']([^"\']+)', tag, re.I)
+        if not src or not kind:
+            continue
+        kind = kind.group(1).lower()
+        fmt = "hls" if "mpegurl" in kind else "dash" if "dash+xml" in kind else "mp4" if kind.startswith("video/mp4") else None
+        absolute = clean_video_link(src.group(1), base_url) if fmt else None
+        if absolute and not any(url == absolute for url, _ in out):
+            out.append([absolute, fmt])
+    return out
+
+
+def pick_video(candidates, typed=()):
+    """An embedded YouTube video, or the best playable file (typed: [[url, format]] from typed_sources), or None."""
     for candidate in candidates:
         try:
             if parse_link(candidate):
                 return {"url": candidate, "format": "app", "how": "an embedded YouTube video"}
         except ValueError:
             pass
-    playable = [c for c in candidates if PLAYABLE_RE.search(urllib.parse.urlparse(c).path)]
+    playable = [[c, stream_format(c)] for c in candidates if PLAYABLE_RE.search(urllib.parse.urlparse(c).path)]
+    playable += [[url, fmt] for url, fmt in typed if not any(url == c for c, _ in playable)]
     if not playable:
         return None
-    best = max(playable, key=lambda c: FORMAT_SCORE[stream_format(c)])
-    return {"url": best, "format": stream_format(best), "how": "the page"}
+    best = max(playable, key=lambda c: FORMAT_SCORE[c[1]])
+    return {"url": best[0], "format": best[1], "how": "the page"}
+
+
+def video_frames(page, base_url):
+    """Embedded players to look in: <iframe> addresses (also lazy-loaded data-src ones), then a schema.org
+    VideoObject's embedUrl."""
+    found = re.findall(r'<iframe[^>]+src=["\']([^"\']+)', page, re.I)
+    found += re.findall(r'"embedUrl"\s*:\s*"([^"]+)"', page)
+    frames = []
+    for raw in found:
+        absolute = clean_video_link(raw, base_url)
+        if absolute and absolute not in frames:
+            frames.append(absolute)
+    return frames
 
 
 def find_video(page_url, direct=None, public_only=False):
@@ -3017,24 +3059,19 @@ def find_video(page_url, direct=None, public_only=False):
         return {"url": final_url, "title": "", "format": "hls" if "mpegurl" in ctype else "mp4", "how": "a direct video link", "referer": ""}
     title = page_title(page)
 
-    found = pick_video(video_candidates(page, final_url))
+    found = pick_video(video_candidates(page, final_url), typed_sources(page, final_url))
     if found:
         return {**found, "title": title, "referer": final_url}
 
     # Many sites put the player in an embedded frame. Look one level in (never into ad frames).
-    frames = []
-    for src in re.findall(r'<iframe[^>]+src=["\']([^"\']+)', page, re.I):
-        absolute = urllib.parse.urljoin(final_url, html_module.unescape(src))
-        if absolute.startswith(("http://", "https://")) and not is_ad_url(absolute) and absolute not in frames:
-            frames.append(absolute)
-    for frame in frames[:3]:
+    for frame in video_frames(page, final_url)[:3]:
         try:
             frame_url, frame_page = fetch_page(frame, referer=final_url, public_only=public_only)[:2]
         except (TVError, ValueError):
             continue
         if frame_page is None:
             return {"url": frame_url, "title": title, "format": stream_format(frame_url), "how": "the page's video player", "referer": final_url}
-        found = pick_video(video_candidates(frame_page, frame_url))
+        found = pick_video(video_candidates(frame_page, frame_url), typed_sources(frame_page, frame_url))
         if found:
             return {**found, "title": title, "how": "the page's video player", "referer": frame_url}
 

@@ -58,6 +58,8 @@ export const AD_HOSTS = [
 export const AD_PATH_RE = /(^|[/_.-])(ads?|adserver|preroll|pre-roll|vast|vpaid|sponsor(ed)?)([/_.-]|$)/i;
 export const PLAYABLE_RE = /\.(m3u8|mp4|m4v|mov|mpd)$/i;
 const VIDEO_URL_RE = /https?:(?:\\?\/){2}[^\s"'<>]+?\.(?:m3u8|mp4|m4v|mov|mpd)(?:\?[^\s"'<>]*)?/gi;
+// A quoted path on the page's own site (or //host/..), as players are often set up: file: "/media/clip.m3u8".
+const VIDEO_PATH_RE = /["']((?:\\?\/)[^\s"'<>]+?\.(?:m3u8|mp4|m4v|mov|mpd)(?:\?[^\s"'<>]*)?)["']/gi;
 const FORMAT_SCORE = { hls: 3, mp4: 2, dash: 1 };
 
 function urlParts(url) {
@@ -203,33 +205,68 @@ export function pageTitle(page) {
   return title;
 }
 
+/** A video address as written in a page (HTML-escaped, or with JSON's \\/), made absolute; null if unusable. */
+function cleanVideoLink(raw, baseUrl) {
+  const clean = unescapeHtml(raw).replaceAll("\\/", "/").replaceAll("\\u002F", "/").replaceAll("\\u0026", "&");
+  const absolute = urljoin(baseUrl, clean);
+  return absolute && /^https?:\/\//.test(absolute) && !isAdUrl(absolute) ? absolute : null;
+}
+
 /** Every video address a page mentions, as absolute URLs, ads left out. */
 export function videoCandidates(page, baseUrl) {
   const found = [pageMeta(page, "og:video:secure_url", "og:video:url", "og:video"), pageMeta(page, "twitter:player:stream")].filter(Boolean);
   for (const m of page.matchAll(/<(?:video|source)[^>]+src=["']([^"']+)/gi)) found.push(m[1]);
   for (const m of page.matchAll(/"contentUrl"\s*:\s*"([^"]+)"/g)) found.push(m[1]);
   for (const m of page.matchAll(VIDEO_URL_RE)) found.push(m[0]);
+  for (const m of page.matchAll(VIDEO_PATH_RE)) found.push(m[1]); // players set up with a path on the same site
   const candidates = [];
   for (const raw of found) {
-    const clean = unescapeHtml(raw).replaceAll("\\/", "/").replaceAll("\\u002F", "/").replaceAll("\\u0026", "&");
-    const absolute = urljoin(baseUrl, clean);
-    if (absolute && /^https?:\/\//.test(absolute) && !candidates.includes(absolute) && !isAdUrl(absolute)) candidates.push(absolute);
+    const absolute = cleanVideoLink(raw, baseUrl);
+    if (absolute && !candidates.includes(absolute)) candidates.push(absolute);
   }
   return candidates;
 }
 
-/** An embedded YouTube video, or the best playable file, or null. */
-export function pickVideo(candidates) {
+/** [[url, format]] for <video>/<source> tags whose type says what they are (addresses with no .m3u8/.mp4 ending). */
+export function typedSources(page, baseUrl) {
+  const out = [];
+  for (const [tag] of page.matchAll(/<(?:video|source)\b[^>]*>/gi)) {
+    const src = /\ssrc=["']([^"']+)/i.exec(tag);
+    const type = /\stype=["']([^"']+)/i.exec(tag);
+    if (!src || !type) continue;
+    const kind = type[1].toLowerCase();
+    const format = kind.includes("mpegurl") ? "hls" : kind.includes("dash+xml") ? "dash" : kind.startsWith("video/mp4") ? "mp4" : null;
+    const absolute = format ? cleanVideoLink(src[1], baseUrl) : null;
+    if (absolute && !out.some(([url]) => url === absolute)) out.push([absolute, format]);
+  }
+  return out;
+}
+
+/** Embedded players to look in: <iframe> addresses (lazy data-src ones too), then a VideoObject's embedUrl. */
+export function videoFrames(page, baseUrl) {
+  const found = [...page.matchAll(/<iframe[^>]+src=["']([^"']+)/gi)].map((m) => m[1]);
+  for (const m of page.matchAll(/"embedUrl"\s*:\s*"([^"]+)"/g)) found.push(m[1]);
+  const frames = [];
+  for (const raw of found) {
+    const absolute = cleanVideoLink(raw, baseUrl);
+    if (absolute && !frames.includes(absolute)) frames.push(absolute);
+  }
+  return frames;
+}
+
+/** An embedded YouTube video, or the best playable file (typed: [[url, format]] from typedSources), or null. */
+export function pickVideo(candidates, typed = []) {
   for (const candidate of candidates) {
     try {
       if (parseLink(candidate)) return { url: candidate, format: "app", how: "an embedded YouTube video" };
     } catch { /* not a single video */ }
   }
-  const playable = candidates.filter((c) => PLAYABLE_RE.test(urlParts(c).path));
+  const playable = candidates.filter((c) => PLAYABLE_RE.test(urlParts(c).path)).map((c) => [c, streamFormat(c)]);
+  for (const [url, format] of typed) if (!playable.some(([c]) => c === url)) playable.push([url, format]);
   if (!playable.length) return null;
   let best = playable[0];
-  for (const c of playable) if (FORMAT_SCORE[streamFormat(c)] > FORMAT_SCORE[streamFormat(best)]) best = c;
-  return { url: best, format: streamFormat(best), how: "the page" };
+  for (const c of playable) if (FORMAT_SCORE[c[1]] > FORMAT_SCORE[best[1]]) best = c;
+  return { url: best[0], format: best[1], how: "the page" };
 }
 
 function basename(path) {
@@ -291,16 +328,11 @@ export async function findVideo(pageUrl, direct = null, sniffed = [], { publicOn
     return { url: finalUrl, title: "", format: fetched.ctype.includes("mpegurl") ? "hls" : "mp4", how: "a direct video link", referer: "" };
   }
   const title = pageTitle(page);
-  let found = pickVideo(videoCandidates(page, finalUrl));
+  let found = pickVideo(videoCandidates(page, finalUrl), typedSources(page, finalUrl));
   if (found) return { ...found, title, referer: finalUrl };
 
   // Many sites put the player in an embedded frame. Look one level in (never into ad frames).
-  const frames = [];
-  for (const m of page.matchAll(/<iframe[^>]+src=["']([^"']+)/gi)) {
-    const absolute = urljoin(finalUrl, unescapeHtml(m[1]));
-    if (absolute && /^https?:\/\//.test(absolute) && !isAdUrl(absolute) && !frames.includes(absolute)) frames.push(absolute);
-  }
-  for (const frame of frames.slice(0, 3)) {
+  for (const frame of videoFrames(page, finalUrl).slice(0, 3)) {
     let framed;
     try {
       framed = await fetchPage(frame, { referer: finalUrl });
@@ -311,7 +343,7 @@ export async function findVideo(pageUrl, direct = null, sniffed = [], { publicOn
     if (framed.page === null) {
       return { url: framed.finalUrl, title, format: streamFormat(framed.finalUrl), how: "the page's video player", referer: finalUrl };
     }
-    found = pickVideo(videoCandidates(framed.page, framed.finalUrl));
+    found = pickVideo(videoCandidates(framed.page, framed.finalUrl), typedSources(framed.page, framed.finalUrl));
     if (found) return { ...found, title, how: "the page's video player", referer: framed.finalUrl };
   }
 

@@ -127,12 +127,24 @@ const PAGE = `<!doctype html><html><head>
 <script>var cfg = {"contentUrl": "https:\\/\\/cdn.example.com\\/v\\/master.m3u8", "x": "https:\\/\\/cdn.example.com\\/v\\/other.mpd"};</script>
 <a href="https://pubads.g.doubleclick.net/vast/ad.mp4">ad</a> https://cdn.example.com/raw/file.mov?token=abc
 <iframe src="https://player.example.com/embed/1"></iframe>
+<script>jwplayer("p").setup({file: "/media/show/master.m3u8?t=1", image: "/x.jpg", backup: '\\/media\\/show\\/low.mp4'});</script>
+<video id="v" src="/hls/playlist?token=9" type="application/x-mpegURL"></video>
+<source type="application/dash+xml" src="https://cdn.example.com/dash/manifest">
+<source src="/stream/plain" type="video/mp4; codecs=avc1"><source src="/stream/webm" type="video/webm">
+<iframe loading="lazy" data-src="//embed.example.org/v/3"></iframe>
+<script type="application/ld+json">{"@type": "VideoObject", "embedUrl": "https:\\/\\/player.example.com\\/e\\/7", "x": "/a.mp4.jpg"}</script>
 </body></html>`;
 
 test("video_candidates, pick_video, page_title, page_meta", () => {
   same("video_candidates", video.videoCandidates, [[PAGE, "https://example.com/page/1"], ["<p>nothing</p>", "https://example.com/"],
     ['<video src="javascript:alert(1)"></video><source src="//cdn.example.com/x.mp4">', "https://example.com/a/b"]]);
+  same("typed_sources", video.typedSources, [[PAGE, "https://example.com/page/1"], ["<source src='x'>", "https://example.com/"]]);
+  same("video_frames", video.videoFrames, [[PAGE, "https://example.com/page/1"], ["<p>none</p>", "https://example.com/"]]);
   same("pick_video", video.pickVideo, [
+    [[], [["https://cdn.example.com/hls/p", "hls"], ["https://cdn.example.com/m", "mp4"]]],
+    [["https://cdn.example.com/a.mp4"], [["https://cdn.example.com/hls/p", "hls"]]],
+    [["https://cdn.example.com/a.m3u8"], [["https://cdn.example.com/hls/p", "hls"]]],
+    [["https://cdn.example.com/a.mp4"], [["https://cdn.example.com/a.mp4", "hls"]]],
     [["https://cdn.example.com/a.mp4", "https://cdn.example.com/b.m3u8", "https://cdn.example.com/c.mpd"]],
     [["https://cdn.example.com/a.mp4", "https://www.youtube.com/embed/dQw4w9WgXcQ"]],
     [["https://cdn.example.com/a.webm"]], [[]], [["https://cdn.example.com/a.mpd", "https://cdn.example.com/b.mp4", "https://cdn.example.com/c.mp4"]],

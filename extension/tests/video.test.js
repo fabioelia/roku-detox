@@ -38,6 +38,15 @@ writeFileSync(path.join(site, "watch.html"), `<!doctype html><html><head><title>
 <meta property="og:title" content="Big Buck Bunny"></head><body>
 <video controls><source src="media/bunny.mp4" type="video/mp4"><source src="https://ads.doubleclick.net/x.mp4"></video>
 </body></html>`);
+// Players set up in other common ways: a schema.org embedUrl to a player page whose script names a path on
+// its own site, and a <source> whose type (not its ending) says it's HLS.
+writeFileSync(path.join(site, "show.html"), `<!doctype html><html><head><title>Open Movie</title>
+<script type="application/ld+json">{"@type": "VideoObject", "name": "Open Movie", "embedUrl": "\\/player.html?id=7"}</script>
+</head><body><p>Watch below.</p></body></html>`);
+writeFileSync(path.join(site, "player.html"), `<!doctype html><html><body><div id="p"></div>
+<script>player.setup({ file: "/streams/open/master.m3u8?sig=1", image: "/poster.jpg" });</script></body></html>`);
+writeFileSync(path.join(site, "typed.html"), `<!doctype html><html><head><title>Typed</title></head><body>
+<video controls><source src="/live/playlist?token=9" type="application/x-mpegURL"></video></body></html>`);
 const server = spawn("python3", ["-m", "http.server", String(SITE_PORT), "--bind", "127.0.0.1", "--directory", site], { stdio: "ignore" });
 after(() => server.kill());
 for (let i = 0; i < 50; i++) {
@@ -54,6 +63,17 @@ test("find_video on a video page matches the Python finder", async () => {
   assert.ok(py.value, py.error);
   assert.deepEqual(js, py.value);
   console.log(`  found ${js.url} (${js.format}, via ${js.how}), title "${js.title}"`);
+});
+
+test("find_video follows a VideoObject's embedUrl and reads typed sources, like the Python finder", async () => {
+  const base = `http://127.0.0.1:${SITE_PORT}`;
+  const embedded = await video.findVideo(`${base}/show.html`);
+  assert.deepEqual([embedded.url, embedded.format, embedded.how, embedded.referer],
+    [`${base}/streams/open/master.m3u8?sig=1`, "hls", "the page's video player", `${base}/player.html?id=7`]);
+  assert.deepEqual(embedded, pythonExpr(`rd.find_video(${JSON.stringify(`${base}/show.html`)})`).value);
+  const typed = await video.findVideo(`${base}/typed.html`);
+  assert.deepEqual([typed.url, typed.format], [`${base}/live/playlist?token=9`, "hls"]);
+  assert.deepEqual(typed, pythonExpr(`rd.find_video(${JSON.stringify(`${base}/typed.html`)})`).value);
 });
 
 test("find_video errors match", async () => {

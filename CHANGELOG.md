@@ -3,6 +3,15 @@
 Newest first. The extension's version is in `extension/manifest.json`; after pulling, reload it on
 `chrome://extensions`. The program has no version: restart `python3 roku_detox.py`.
 
+## Finding a page's video: more players understood
+
+- Players set up with a path on the site itself (like `file: "/media/clip.m3u8"`) are found, not only
+  full `https://` addresses.
+- `<video>`/`<source>` tags whose type says HLS, DASH or MP4 are played even when the address has no
+  `.m3u8`/`.mp4` ending.
+- A schema.org VideoObject's `embedUrl`, and lazy-loaded frames (`data-src`), are looked in like other
+  embedded players. Same in the program and the extension (checked against each other).
+
 ## Detox Home 2.0.2, and fixes from a review
 
 - **Scenes' "Show a message" step never turns on a TV that's off.** It's skipped while the TV is in

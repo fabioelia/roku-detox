@@ -56,6 +56,8 @@ CALLS = {
     "display_address": lambda h, p: rd.display_address((h, p)),
     "video_candidates": rd.video_candidates,
     "pick_video": rd.pick_video,
+    "typed_sources": rd.typed_sources,
+    "video_frames": rd.video_frames,
     "page_title": rd.page_title,
     "page_meta": lambda page, *names: rd.page_meta(page, *names),
     "strip_tags": rd.strip_tags,
