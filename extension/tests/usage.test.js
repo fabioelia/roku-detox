@@ -17,3 +17,15 @@ test("totals over the days on record", async () => {
   }, "127.0.0.1:9073": { "2026-11-01": { 12: 99 } } } });
   assert.deepEqual((await get()).data, { days: 2, since: "2026-11-01", totals: { 12: 1950, home: 60, 837: 1200 } });
 });
+
+test("the page's polling doesn't undo a TV picked in the popup", async () => {
+  const get = (tv) => handleMessage({ type: "api", method: "GET", path: "/api/usage", query: { tv }, body: null }, { internal: true });
+  await chrome.storage.local.remove("lastTv");
+  await get("127.0.0.1:9072");
+  assert.equal((await chrome.storage.local.get("lastTv")).lastTv, "127.0.0.1:9072", "the first TV used becomes the one");
+  await chrome.storage.local.set({ lastTv: "127.0.0.1:9074" });   // picked in the popup
+  await get("127.0.0.1:9072");
+  assert.equal((await chrome.storage.local.get("lastTv")).lastTv, "127.0.0.1:9074");
+  await handleMessage({ type: "api", method: "POST", path: "/api/sleep", query: {}, body: { tv: "127.0.0.1:9072", minutes: 0 } }, { internal: true });
+  assert.equal((await chrome.storage.local.get("lastTv")).lastTv, "127.0.0.1:9072", "doing something on a TV picks it");
+});

@@ -238,7 +238,7 @@ const POST_ROUTES = {
   "/api/sleep": async (c) => setSleep(c.target(), c.body.minutes),
   "/api/do": async (c) => {
     const target = c.body.tv ? c.target() : parseTarget(await preferredTv() || "");
-    return { done: await doPhrase(target, pyStr(c.body.do ?? "")) };
+    return { done: await doPhrase(target, pyStr(c.body.do ?? ""), { strict: c.body.strict === true }) };
   },
   "/api/sites/look": async (c) => ({ group: await lookCloser(String(c.body.siteId ?? ""), words(c.body.q, "Type something to search for.")) }),
   "/api/phone": async () => { throw new NotSupported(PHONE); },
@@ -303,7 +303,9 @@ export async function apiRequest({ method = "GET", path, query, body } = {}) {
     };
     const context = { query: q, body: b, target, address: () => displayAddress(target()) };
     const data = await keepAlive(handler(context));
-    if (used) rememberTv(used);
+    // Actions pick "the TV" for the toolbar, shortcuts and address bar; the page's polling (GETs) only
+    // fills it in when there's none, so switching TVs in the popup sticks while the page is open.
+    if (used && (method !== "GET" || !(await getLocal("lastTv", null)))) rememberTv(used);
     return { status: 200, data };
   } catch (err) {
     return errorResponse(err);

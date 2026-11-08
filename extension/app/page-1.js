@@ -1501,6 +1501,8 @@ document.addEventListener("keydown", (e) => {
   if (e.metaKey || e.ctrlKey || e.altKey || !state.control) return;
   const target = e.target;
   if (target.closest("input, select, textarea")) return;
+  // Page Up/Down change channels only while the channel buttons show (Live TV); otherwise they scroll.
+  if ((e.key === "PageUp" || e.key === "PageDown") && $("#ch-row").hidden) return;
   if (e.key === "/") {   // jump to the search box
     e.preventDefault();
     const box = state.view === "find" ? $("#find-input") : $("#smart-input");
@@ -1538,13 +1540,15 @@ $("#smart-form").addEventListener("submit", async (e) => {
       // else is a search on the TV. The lite page can't run phrases, so it just searches.
       let said = "";
       try {
-        ({ done: said } = await api("/api/do", { tv: state.tv, do: text }));
+        // strict: only clear commands act ("open ...", "sleep 30", an exact app or scene name);
+        // a show's name, even "Home" or "It", is a search.
+        ({ done: said } = await api("/api/do", { tv: state.tv, do: text, strict: true }));
       } catch (err) {
-        if (!err.needs) throw err;
+        if (!err.needs && err.status !== 404) throw err;   // lite, or an older program or extension
         await api("/api/search", { tv: state.tv, text });
       }
       toast(said && !said.startsWith("Searching the TV") ? said : "Search results are on the TV.");
-      if (/sleep|off in/i.test(text)) loadSleep();
+      if (/sleep|off in/i.test(text) || said.startsWith("Running")) setTimeout(loadSleep, 1500);
     }
     input.value = "";
     renderSmart();
@@ -1758,7 +1762,8 @@ function renderSceneEditor() {
   if (box.dataset.v === String(state.draftVersion)) return;   // don't wipe what's being typed
   box.dataset.v = String(state.draftVersion);
   const steps = draft.steps.map((step, i) => {
-    const actions = Object.entries(STEP_LABELS).map(([value, label]) => `<option value="${value}" ${value === step.do ? "selected" : ""}>${label}</option>`).join("");
+    // The lite page can't keep a sleep timer, so it doesn't offer that step.
+    const actions = Object.entries(STEP_LABELS).filter(([value]) => !(isLite() && value === "sleep_timer" && step.do !== value)).map(([value, label]) => `<option value="${value}" ${value === step.do ? "selected" : ""}>${label}</option>`).join("");
     let extra = "";
     if (step.do === "open") extra = `<select data-field="target" aria-label="What to open">${targetOptions(step.target)}</select>`;
     if (step.do === "volume_up" || step.do === "volume_down") extra = `<input type="number" data-field="n" min="1" max="50" value="${step.n || 5}" aria-label="How many clicks"><span>clicks</span>`;
@@ -1838,6 +1843,7 @@ async function runScene(id) {
   try {
     await api("/api/scene", { tv: state.tv, id });
     toast(`Ran ${scene.name}.`);
+    if (scene.steps.some((step) => step.do === "sleep_timer")) loadSleep();
   } catch (err) {
     toast(err.message);
   } finally {

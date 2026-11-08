@@ -79,8 +79,9 @@ Videos locked by DRM (Netflix, Disney+ and most paid services) can't be sent thi
   A scene can also run every day at a set time, while this program is running.
 - Now playing: which app is on, playing or paused, and how far in.
 - One box for searching across all apps (opens Roku's search screen and types for you), pasting a
-  YouTube or Netflix link to play it on the TV, or typing into a sign-in field on the TV. It also takes
-  the same phrases as Siri Shortcuts, typed or spoken: "open Netflix", "HDMI 2", "sleep 30", a scene's name.
+  YouTube or Netflix link to play it on the TV, or typing into a sign-in field on the TV. It also acts on
+  clear commands, typed or spoken: "open Netflix", "watch YouTube", "HDMI 2", "sleep 30", or an app or scene's
+  exact name. Anything else, even a show called "Home" or "It", is a search.
 - Phone remote: open the page on your phone over home Wi-Fi. A phone needs a one-time
   6-digit code from the Mac page. Shortcuts, scenes, rules and paired phones are kept in `remote-settings.json`;
   rule activity in `activity-log.json` and the viewing log in `viewing-log.json`.

@@ -1,12 +1,13 @@
 // A quick check of the Chrome extension in a real browser: loads extension/ into a headless Chrome
 // with a fresh profile, points it at a pretend TV, and opens the page, the toolbar popup and the
-// options page, checking what they show and failing on any page error. Run
+// options page, checking what they show and failing on any page error. Finding TVs is faked, so
+// nothing on your network is asked. Run
 // `python3 tools/build_extension.py` first if you changed index.html.
 //
 //   node tools/extension-smoke.mjs     (Chrome from /Applications, or set CHROME=/path/to/chrome)
 
 import { spawn } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -21,6 +22,7 @@ const children = [];
 
 function start(cmd, args) {
   const child = spawn(cmd, args, { cwd: ROOT, stdio: "ignore" });
+  child.on("error", (err) => console.error(`Couldn't start ${cmd}: ${err.message}`));
   children.push(child);
   return child;
 }
@@ -61,12 +63,31 @@ async function connect(wsUrl, problems, label) {
   };
 }
 
+// Finding TVs would sweep the real network; the page gets an empty answer instead.
+const NO_DISCOVERY = `{
+  const real = chrome.runtime.sendMessage.bind(chrome.runtime);
+  chrome.runtime.sendMessage = (...args) => {
+    const msg = args.find((a) => a && typeof a === "object");
+    if (!msg || msg.path !== "/api/discover") return real(...args);
+    const answer = { status: 200, data: { tvs: [], hint: null } };
+    const callback = args.find((a) => typeof a === "function");
+    if (callback) { setTimeout(() => callback(answer), 0); return undefined; }
+    return Promise.resolve(answer);
+  };
+}`;
+
 async function openPage(url, problems, label) {
-  const target = await (await fetch(`http://127.0.0.1:${DEBUG_PORT}/json/new?${encodeURIComponent(url)}`, { method: "PUT" })).json();
-  return connect(target.webSocketDebuggerUrl, problems, label);
+  const target = await (await fetch(`http://127.0.0.1:${DEBUG_PORT}/json/new?about:blank`, { method: "PUT" })).json();
+  const page = await connect(target.webSocketDebuggerUrl, problems, label);
+  await page.send("Page.enable");
+  await page.send("Page.addScriptToEvaluateOnNewDocument", { source: NO_DISCOVERY });
+  await page.send("Page.navigate", { url });
+  await wait(500);
+  return page;
 }
 
 async function main() {
+  if (!existsSync(CHROME)) throw new Error(`Chrome isn't at ${CHROME}. Set CHROME=/path/to/chrome.`);
   start("python3", ["mock_roku.py", "--port", TV.split(":")[1]]);
   start(CHROME, ["--headless=new", `--user-data-dir=${profile}`, `--remote-debugging-port=${DEBUG_PORT}`,
     "--enable-unsafe-extension-debugging", "--no-first-run", "--no-default-browser-check", "about:blank"]);

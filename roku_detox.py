@@ -1854,20 +1854,27 @@ def fold_words(text):
     return " ".join(re.sub(r"[^\w\s+]", " ", plain.lower()).split())
 
 
-def do_phrase(target, phrase):
-    """Do what a short phrase says on the TV. Returns a sentence saying what happened."""
+def do_phrase(target, phrase, strict=False):
+    """Do what a short phrase says on the TV. Returns a sentence saying what happened.
+
+    strict (the page's search box): only clear commands act, meaning a verb ("open ...", "watch ..."),
+    a number phrase ("sleep 30", "volume up 5", "hdmi 2"), or an app or scene's exact name.
+    Anything else, single button words like "home" included, is a search, because people type
+    show names there.
+    """
     words = fold_words(phrase)[:120]
     if not words:
         raise ValueError("Say what to do, like pause, open Netflix or sleep 30.")
-    for names, key, said in PHRASE_KEYS:
-        if words in names:
-            press(target, key)
-            return said
+    if not strict:
+        for names, key, said in PHRASE_KEYS:
+            if words in names:
+                press(target, key)
+                return said
     match = re.match(r"^(?:volume |turn it )?(up|down) (\d{1,2})$", words)
     if match:
         press_sequence(target, [("VolumeUp" if match.group(1) == "up" else "VolumeDown")] * min(int(match.group(2)), 30), delay=0.15)
         return f"Volume {match.group(1)} {match.group(2)}."
-    match = re.match(r"^(?:sleep|sleep timer|turn off in|off in|sleep in)(?: for)? (\d{1,3})(?: ?(?:m|min|mins|minute|minutes))?$", words)
+    match = re.match(r"^(?:sleep timer|sleep in|sleep|turn off in|off in)(?: for)? (\d{1,3})(?: ?(?:m|min|mins|minute|minutes))?$", words)
     if match:
         minutes = int(match.group(1))
         set_sleep(target, minutes)
@@ -1875,25 +1882,27 @@ def do_phrase(target, phrase):
     if words in ("cancel sleep", "sleep off", "stop sleep timer", "cancel sleep timer"):
         set_sleep(target, 0)
         return "Sleep timer off."
-    match = re.match(r"^(?:search|search for|find|look for|look up) (.+)$", words)
+    match = re.match(r"^(?:search for|search|find|look for|look up) (.+)$", words)
     if match:
         search(target, match.group(1))
         return f"Searching the TV for {match.group(1)}."
-    match = re.match(r"^(?:open|launch|start|go to|switch to|put on|watch|run) (.+)$", words)
-    asked = match.group(1) if match else words
-    asked = re.sub(r"^the ", "", asked)
+    opening = re.match(r"^(?:open|launch|start|go to|switch to|put on|watch|run) (.+)$", words)
+    asked = re.sub(r"^the ", "", opening.group(1) if opening else words)
+    loose = opening or not strict  # strict and no verb: exact names only
 
     scenes = tv_settings(display_address(target))["scenes"]
     for scene in scenes:
-        if fold_words(scene.get("name", "")) in (asked, words):
+        if fold_words(scene.get("name", "")) in ((asked, words) if loose else (words,)):
             threading.Thread(target=run_scheduled, args=(display_address(target), scene), daemon=True).start()
             return f"Running {scene['name']}."
     apps = list_apps(target)
 
     def name_of(app):
         return fold_words(app["name"])
-    choices = [a for a in apps if name_of(a) == asked] or [a for a in apps if name_of(a).startswith(asked)] \
-        or [a for a in apps if asked in name_of(a).split()] or [a for a in apps if asked in name_of(a)]
+    choices = [a for a in apps if name_of(a) == asked]
+    if not choices and loose and len(asked) >= 3:  # short words ("it", "tv") only match a whole name
+        choices = [a for a in apps if name_of(a).startswith(asked)] or [a for a in apps if asked in name_of(a).split()] \
+            or [a for a in apps if asked in name_of(a)]
     if not choices:  # inputs by port: "hdmi 1", "hdmi1"
         port = re.match(r"^hdmi ?(\d)$", asked)
         if port:
@@ -1902,10 +1911,11 @@ def do_phrase(target, phrase):
         app = min(choices, key=lambda a: len(a["name"]))
         launch(target, app["id"])
         return f"Opening {app['name']}."
-    if match:
+    if opening and not strict:
         raise ValueError(f"There's no app or scene called {asked} on this TV.")
-    search(target, phrase.strip()[:100])
-    return f"Searching the TV for {phrase.strip()[:100]}."
+    text = (opening.group(1) if opening else phrase.strip())[:100]
+    search(target, text)
+    return f"Searching the TV for {text}."
 
 
 def default_tv():
@@ -3105,7 +3115,8 @@ class Handler(BaseHTTPRequestHandler):
             "/api/sleep": lambda: self.send(200, set_sleep(target(), body.get("minutes"))),
             "/api/wake": lambda: self.send(200, wake_tv(target())),
             "/api/do": lambda: self.send(200, {"done": do_phrase(
-                parse_target(body["tv"]) if body.get("tv") else default_tv(), str(body.get("do", "")))}),
+                parse_target(body["tv"]) if body.get("tv") else default_tv(), str(body.get("do", "")),
+                strict=body.get("strict") is True)}),
             "/api/phone/key": lambda: self.mac_only(lambda: self.send(200, {
                 "key": self.server.phone.new_key(), "url": f"{self.server.phone.url}/api/do"})),
             "/api/rules": lambda: self.save_rules(body),

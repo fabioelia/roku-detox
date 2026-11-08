@@ -1,11 +1,11 @@
 // A quick check of the page in a real browser: starts a pretend TV and a throwaway copy of the
 // program, opens every menu in headless Chrome, clicks the things that broke before, and fails on
-// any page error. Nothing touches your settings or your real TV.
+// any page error. Nothing touches your settings, your real TV or your network (finding TVs is faked).
 //
 //   node tools/ui-smoke.mjs            (Chrome from /Applications, or set CHROME=/path/to/chrome)
 
 import { spawn } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -21,6 +21,7 @@ const children = [];
 
 function start(cmd, args) {
   const child = spawn(cmd, args, { cwd: ROOT, stdio: "ignore" });
+  child.on("error", (err) => console.error(`Couldn't start ${cmd}: ${err.message}`));
   children.push(child);
   return child;
 }
@@ -35,6 +36,7 @@ async function until(check, ms, what) {
 }
 
 async function main() {
+  if (!existsSync(CHROME)) throw new Error(`Chrome isn't at ${CHROME}. Set CHROME=/path/to/chrome.`);
   start("python3", ["mock_roku.py", "--port", String(TV_PORT)]);
   start("python3", ["roku_detox.py", "--no-browser", "--port", String(PAGE_PORT), "--data", data]);
   start(CHROME, ["--headless=new", `--user-data-dir=${join(data, "chrome")}`, `--remote-debugging-port=${DEBUG_PORT}`,
@@ -65,6 +67,13 @@ async function main() {
   };
   await send("Runtime.enable");
   await send("Page.enable");
+  // Finding TVs would ask the real network; the page gets an empty answer instead.
+  await send("Page.addScriptToEvaluateOnNewDocument", { source: `{
+    const real = window.fetch.bind(window);
+    window.fetch = (url, init) => String(url).includes("/api/discover")
+      ? Promise.resolve(new Response(JSON.stringify({ tvs: [] }), { headers: { "Content-Type": "application/json" } }))
+      : real(url, init);
+  }` });
   const url = `http://localhost:${PAGE_PORT}/`;
   await send("Page.navigate", { url });
   await wait(800);
