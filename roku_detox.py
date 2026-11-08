@@ -38,6 +38,16 @@ from xml.etree import ElementTree as ET
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 INDEX_PATH = os.path.join(HERE, "index.html")
+ICON_PATH = os.path.join(HERE, "extension", "icons", "128.png")
+
+
+def web_manifest():
+    """Lets phones add the page to the home screen like an app."""
+    return {
+        "name": "Roku Detox", "short_name": "Roku Detox", "start_url": "./", "scope": "./",
+        "display": "standalone", "background_color": "#10161F", "theme_color": "#10161F",
+        "icons": [{"src": "icon.png", "sizes": "128x128", "type": "image/png"}],
+    }
 LOG_PATH = os.path.join(HERE, "undo-list.json")
 SETTINGS_PATH = os.path.join(HERE, "remote-settings.json")
 ACTIVITY_PATH = os.path.join(HERE, "activity-log.json")
@@ -2747,6 +2757,14 @@ class Handler(BaseHTTPRequestHandler):
         if url.path in ("/", "/index.html"):
             with open(INDEX_PATH, "rb") as f:
                 return self.send(200, f.read(), "text/html; charset=utf-8")
+        if url.path == "/manifest.webmanifest":
+            return self.send(200, json.dumps(web_manifest()).encode(), "application/manifest+json")
+        if url.path == "/icon.png":
+            try:
+                with open(ICON_PATH, "rb") as f:
+                    return self.send(200, f.read(), "image/png")
+            except OSError:
+                return self.fail(404, "No icon.")
         if url.path.startswith("/api/tv/"):  # requests from Detox Home on the TV
             return self.run(lambda: self.from_tv_app(url.path, query, None))
         if not self.paired():

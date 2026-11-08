@@ -1,0 +1,16 @@
+{
+  "name": "Roku Detox",
+  "short_name": "Roku Detox",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#10161F",
+  "theme_color": "#10161F",
+  "icons": [
+    {
+      "src": "icon.png",
+      "sizes": "128x128",
+      "type": "image/png"
+    }
+  ]
+}

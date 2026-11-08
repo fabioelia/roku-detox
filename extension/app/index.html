@@ -4,6 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="roku-detox-extension" content="">
+<meta name="theme-color" content="#10161F">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Roku Detox">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon.png">
 <title>Roku Detox</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -445,10 +450,31 @@
   .dpad .ok { left: 50px; top: 50px; width: 78px; height: 78px; background: var(--remote); font-weight: 700; font-size: 17px; }
   .dpad .ok:hover:not(:disabled) { background: #1A212D; }
   .r-label { margin-top: -10px; font-size: 12px; opacity: .7; }
+  /* Swipe pad: drag to send arrows (one per short stretch), tap for OK */
+  .touchpad {
+    width: 178px; height: 178px; border-radius: 30px; background: var(--remote-key);
+    display: grid; place-items: center; text-align: center; font-size: 13px; line-height: 1.5; opacity: .9;
+    touch-action: none; user-select: none; -webkit-user-select: none; cursor: grab; transition: box-shadow .2s;
+  }
+  .touchpad:active { cursor: grabbing; }
+  .touchpad span { opacity: .6; pointer-events: none; }
+  .touchpad:focus-visible { outline: 3px solid var(--remote-glow); outline-offset: 2px; }
+  .touchpad.sent { box-shadow: 0 0 0 3px var(--remote-glow); }
+  .pad-toggle { margin-top: -6px; font-size: 14px; color: var(--muted); }
   .remote-note { max-width: 280px; text-align: center; font-size: 14px; color: var(--muted); }
   .remote-error { max-width: 280px; text-align: center; font-size: 15px; font-weight: 600; color: var(--remove); }
   .smart { width: 100%; max-width: 300px; display: grid; gap: 8px; }
   .smart label { font-size: 14px; color: var(--muted); }
+  .smart-field { position: relative; }
+  .smart-field input { width: 100%; }
+  .smart-field:has(.mic:not([hidden])) input { padding-right: 46px; }
+  .mic {
+    position: absolute; right: 4px; top: 50%; transform: translateY(-50%); width: 36px; height: 36px;
+    display: grid; place-items: center; border: 0; border-radius: 50%; background: transparent; color: var(--muted); cursor: pointer;
+  }
+  .mic svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+  .mic:hover:not(:disabled) { color: var(--ink); }
+  .mic.on { background: var(--remove); color: var(--on-remove); animation: pulse 1.2s infinite; }
   .smart-actions { display: flex; gap: 8px; }
   .smart-actions .btn { flex: 1; padding-inline: 10px; }
 
@@ -823,6 +849,9 @@
           <button class="rk right" data-key="Right" type="button" aria-label="Right"><svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg></button>
           <button class="rk down" data-key="Down" type="button" aria-label="Down"><svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></button>
         </div>
+        <div class="touchpad" id="touchpad" hidden tabindex="0" role="application" aria-label="Swipe pad. Swipe to move, tap for OK. Arrow keys and Enter work too.">
+          <span aria-hidden="true">Swipe to move<br>Tap for OK</span>
+        </div>
         <div class="r-row">
           <button class="rk" data-key="InstantReplay" type="button" aria-label="Replay"><svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.4-5.7"/><path d="M4 4v4.5h4.5"/></svg></button>
           <button class="rk" data-key="Info" type="button" aria-label="Options (star button)"><svg viewBox="0 0 24 24"><path d="M12 4.5v15M5.5 8.25l13 7.5M18.5 8.25l-13 7.5"/></svg></button>
@@ -839,11 +868,15 @@
         </div>
       </div>
 
+      <button class="btn quiet pad-toggle" id="pad-toggle" type="button">Use the swipe pad</button>
       <p class="remote-error" id="remote-error" aria-live="assertive" hidden></p>
       <p class="remote-note">Your keyboard works too: arrow keys to move, Enter for OK, Backspace for Back, H for Home.</p>
       <form class="smart" id="smart-form">
         <label for="smart-input">Search, paste a link, or type on the TV</label>
-        <input type="text" id="smart-input" placeholder="Show name or a video link" autocomplete="off" maxlength="2000">
+        <div class="smart-field">
+          <input type="text" id="smart-input" placeholder="Show name or a video link" autocomplete="off" maxlength="2000">
+          <button class="mic" id="smart-mic" type="button" aria-label="Say it" aria-pressed="false" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg></button>
+        </div>
         <div class="smart-actions">
           <button class="btn primary" type="submit" id="smart-go">Search on TV</button>
           <button class="btn" type="button" id="smart-type">Type it</button>

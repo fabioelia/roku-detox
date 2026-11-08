@@ -4,6 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="roku-detox-extension" content="">
+<meta name="theme-color" content="#10161F">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Roku Detox">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon.png">
 <title>Roku Detox</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -445,10 +450,31 @@
   .dpad .ok { left: 50px; top: 50px; width: 78px; height: 78px; background: var(--remote); font-weight: 700; font-size: 17px; }
   .dpad .ok:hover:not(:disabled) { background: #1A212D; }
   .r-label { margin-top: -10px; font-size: 12px; opacity: .7; }
+  /* Swipe pad: drag to send arrows (one per short stretch), tap for OK */
+  .touchpad {
+    width: 178px; height: 178px; border-radius: 30px; background: var(--remote-key);
+    display: grid; place-items: center; text-align: center; font-size: 13px; line-height: 1.5; opacity: .9;
+    touch-action: none; user-select: none; -webkit-user-select: none; cursor: grab; transition: box-shadow .2s;
+  }
+  .touchpad:active { cursor: grabbing; }
+  .touchpad span { opacity: .6; pointer-events: none; }
+  .touchpad:focus-visible { outline: 3px solid var(--remote-glow); outline-offset: 2px; }
+  .touchpad.sent { box-shadow: 0 0 0 3px var(--remote-glow); }
+  .pad-toggle { margin-top: -6px; font-size: 14px; color: var(--muted); }
   .remote-note { max-width: 280px; text-align: center; font-size: 14px; color: var(--muted); }
   .remote-error { max-width: 280px; text-align: center; font-size: 15px; font-weight: 600; color: var(--remove); }
   .smart { width: 100%; max-width: 300px; display: grid; gap: 8px; }
   .smart label { font-size: 14px; color: var(--muted); }
+  .smart-field { position: relative; }
+  .smart-field input { width: 100%; }
+  .smart-field:has(.mic:not([hidden])) input { padding-right: 46px; }
+  .mic {
+    position: absolute; right: 4px; top: 50%; transform: translateY(-50%); width: 36px; height: 36px;
+    display: grid; place-items: center; border: 0; border-radius: 50%; background: transparent; color: var(--muted); cursor: pointer;
+  }
+  .mic svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+  .mic:hover:not(:disabled) { color: var(--ink); }
+  .mic.on { background: var(--remove); color: var(--on-remove); animation: pulse 1.2s infinite; }
   .smart-actions { display: flex; gap: 8px; }
   .smart-actions .btn { flex: 1; padding-inline: 10px; }
 
@@ -823,6 +849,9 @@
           <button class="rk right" data-key="Right" type="button" aria-label="Right"><svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg></button>
           <button class="rk down" data-key="Down" type="button" aria-label="Down"><svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></button>
         </div>
+        <div class="touchpad" id="touchpad" hidden tabindex="0" role="application" aria-label="Swipe pad. Swipe to move, tap for OK. Arrow keys and Enter work too.">
+          <span aria-hidden="true">Swipe to move<br>Tap for OK</span>
+        </div>
         <div class="r-row">
           <button class="rk" data-key="InstantReplay" type="button" aria-label="Replay"><svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.4-5.7"/><path d="M4 4v4.5h4.5"/></svg></button>
           <button class="rk" data-key="Info" type="button" aria-label="Options (star button)"><svg viewBox="0 0 24 24"><path d="M12 4.5v15M5.5 8.25l13 7.5M18.5 8.25l-13 7.5"/></svg></button>
@@ -839,11 +868,15 @@
         </div>
       </div>
 
+      <button class="btn quiet pad-toggle" id="pad-toggle" type="button">Use the swipe pad</button>
       <p class="remote-error" id="remote-error" aria-live="assertive" hidden></p>
       <p class="remote-note">Your keyboard works too: arrow keys to move, Enter for OK, Backspace for Back, H for Home.</p>
       <form class="smart" id="smart-form">
         <label for="smart-input">Search, paste a link, or type on the TV</label>
-        <input type="text" id="smart-input" placeholder="Show name or a video link" autocomplete="off" maxlength="2000">
+        <div class="smart-field">
+          <input type="text" id="smart-input" placeholder="Show name or a video link" autocomplete="off" maxlength="2000">
+          <button class="mic" id="smart-mic" type="button" aria-label="Say it" aria-pressed="false" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg></button>
+        </div>
         <div class="smart-actions">
           <button class="btn primary" type="submit" id="smart-go">Search on TV</button>
           <button class="btn" type="button" id="smart-type">Type it</button>
@@ -2103,17 +2136,106 @@ function markStep(step, value) {
 /* ---------- Remote ---------- */
 
 let keyChain = Promise.resolve();
+const COARSE = matchMedia("(pointer: coarse)");
 function pressKey(key) {
   if (!state.tv || !state.control) return;
-  const btn = $(`#remote [data-key="${key}"]`);
+  const pad = state.padMode === "swipe" && ["Up", "Down", "Left", "Right", "Select"].includes(key) ? $("#touchpad") : null;
+  const btn = pad || $(`#remote [data-key="${key}"]`);
   if (btn) {
     btn.classList.add("sent");
     setTimeout(() => btn.classList.remove("sent"), 220);
   }
+  if (COARSE.matches && navigator.vibrate) navigator.vibrate(8);   // a small buzz, like a real remote's click
   // One at a time, so fast presses reach the TV in order.
   keyChain = keyChain.then(() => api("/api/key", { tv: state.tv, key }))
     .then(() => setRemoteError(""))
     .catch((err) => setRemoteError(err.blocked ? "The TV is blocking remote buttons. See the note at the top." : err.message));
+}
+
+/* Swipe pad: each stretch of a drag sends one arrow, so a long swipe moves several tiles. */
+const SWIPE_STEP = 46;
+state.padMode = store.get("detox.padMode", "buttons");
+function renderPad() {
+  const swipe = state.padMode === "swipe";
+  $("#remote .dpad").hidden = swipe;
+  $("#touchpad").hidden = !swipe;
+  $("#pad-toggle").textContent = swipe ? "Use the arrow buttons" : "Use the swipe pad";
+}
+$("#pad-toggle").addEventListener("click", () => {
+  state.padMode = state.padMode === "swipe" ? "buttons" : "swipe";
+  store.set("detox.padMode", state.padMode);
+  renderPad();
+});
+{
+  const pad = $("#touchpad");
+  let drag = null;
+  pad.addEventListener("pointerdown", (e) => {
+    if (!state.control) return;
+    drag = { x: e.clientX, y: e.clientY, at: Date.now(), moved: false };
+    try { pad.setPointerCapture(e.pointerId); } catch { /* fine */ }
+    e.preventDefault();
+  });
+  pad.addEventListener("pointermove", (e) => {
+    if (!drag) return;
+    const dx = e.clientX - drag.x;
+    const dy = e.clientY - drag.y;
+    if (Math.max(Math.abs(dx), Math.abs(dy)) < SWIPE_STEP) return;
+    pressKey(Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "Right" : "Left") : (dy > 0 ? "Down" : "Up"));
+    drag.x = e.clientX;
+    drag.y = e.clientY;
+    drag.moved = true;
+  });
+  const end = () => {
+    if (drag && !drag.moved && Date.now() - drag.at < 600) pressKey("Select");
+    drag = null;
+  };
+  pad.addEventListener("pointerup", end);
+  pad.addEventListener("pointercancel", () => { drag = null; });
+}
+renderPad();
+
+/* Voice: say a show or an app. Browsers only allow the microphone on secure pages (the extension, this Mac). */
+{
+  const Speech = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const mic = $("#smart-mic");
+  let listening = null;
+  if (Speech && window.isSecureContext) {
+    mic.hidden = false;
+    mic.addEventListener("click", () => {
+      if (listening) { listening.stop(); return; }
+      const rec = new Speech();
+      rec.lang = navigator.language || "en-US";
+      rec.interimResults = true;
+      let heard = "";
+      rec.onresult = (e) => {
+        let text = "";
+        for (const result of e.results) text += result[0].transcript;
+        heard = text.trim();
+        $("#smart-input").value = heard;
+        renderSmart();
+      };
+      rec.onerror = (e) => {
+        if (e.error === "not-allowed" || e.error === "service-not-allowed") toast("Allow the microphone for this page to search by voice.");
+        else if (e.error !== "aborted" && e.error !== "no-speech") toast("Didn't catch that. Try again.");
+      };
+      rec.onend = () => {
+        listening = null;
+        mic.classList.remove("on");
+        mic.setAttribute("aria-pressed", "false");
+        mic.setAttribute("aria-label", "Say it");
+        if (heard) $("#smart-form").requestSubmit();
+      };
+      try {
+        rec.start();
+        listening = rec;
+        mic.classList.add("on");
+        mic.setAttribute("aria-pressed", "true");
+        mic.setAttribute("aria-label", "Listening. Tap to stop.");
+      } catch {
+        toast("The microphone isn't available right now.");
+      }
+    });
+  }
 }
 
 const KEYBOARD = { ArrowUp: "Up", ArrowDown: "Down", ArrowLeft: "Left", ArrowRight: "Right", Backspace: "Back", Escape: "Back", h: "Home", H: "Home", "*": "Info" };

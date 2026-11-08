@@ -19,6 +19,7 @@ index.html itself is never changed. Run this again whenever index.html changes.
 import argparse
 import html
 import importlib.util
+import json
 import os
 import re
 import shutil
@@ -98,6 +99,11 @@ def build(extension_id=None):
     with open(os.path.join(APP_DIR, "detox-home.zip"), "wb") as f:
         f.write(roku_detox.build_package())
     print("Wrote extension/app/detox-home.zip.")
+    # The page links a home-screen icon and manifest next to itself (served by the program at home).
+    shutil.copyfile(os.path.join(ROOT, "extension", "icons", "128.png"), os.path.join(APP_DIR, "icon.png"))
+    with open(os.path.join(APP_DIR, "manifest.webmanifest"), "w", encoding="utf-8") as f:
+        json.dump(roku_detox.web_manifest(), f, indent=2)
+        f.write("\n")
     for src in dropped:
         print(f"  Left out remote script: {src}")
     if handlers:

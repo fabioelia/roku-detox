@@ -1224,17 +1224,106 @@ function markStep(step, value) {
 /* ---------- Remote ---------- */
 
 let keyChain = Promise.resolve();
+const COARSE = matchMedia("(pointer: coarse)");
 function pressKey(key) {
   if (!state.tv || !state.control) return;
-  const btn = $(`#remote [data-key="${key}"]`);
+  const pad = state.padMode === "swipe" && ["Up", "Down", "Left", "Right", "Select"].includes(key) ? $("#touchpad") : null;
+  const btn = pad || $(`#remote [data-key="${key}"]`);
   if (btn) {
     btn.classList.add("sent");
     setTimeout(() => btn.classList.remove("sent"), 220);
   }
+  if (COARSE.matches && navigator.vibrate) navigator.vibrate(8);   // a small buzz, like a real remote's click
   // One at a time, so fast presses reach the TV in order.
   keyChain = keyChain.then(() => api("/api/key", { tv: state.tv, key }))
     .then(() => setRemoteError(""))
     .catch((err) => setRemoteError(err.blocked ? "The TV is blocking remote buttons. See the note at the top." : err.message));
+}
+
+/* Swipe pad: each stretch of a drag sends one arrow, so a long swipe moves several tiles. */
+const SWIPE_STEP = 46;
+state.padMode = store.get("detox.padMode", "buttons");
+function renderPad() {
+  const swipe = state.padMode === "swipe";
+  $("#remote .dpad").hidden = swipe;
+  $("#touchpad").hidden = !swipe;
+  $("#pad-toggle").textContent = swipe ? "Use the arrow buttons" : "Use the swipe pad";
+}
+$("#pad-toggle").addEventListener("click", () => {
+  state.padMode = state.padMode === "swipe" ? "buttons" : "swipe";
+  store.set("detox.padMode", state.padMode);
+  renderPad();
+});
+{
+  const pad = $("#touchpad");
+  let drag = null;
+  pad.addEventListener("pointerdown", (e) => {
+    if (!state.control) return;
+    drag = { x: e.clientX, y: e.clientY, at: Date.now(), moved: false };
+    try { pad.setPointerCapture(e.pointerId); } catch { /* fine */ }
+    e.preventDefault();
+  });
+  pad.addEventListener("pointermove", (e) => {
+    if (!drag) return;
+    const dx = e.clientX - drag.x;
+    const dy = e.clientY - drag.y;
+    if (Math.max(Math.abs(dx), Math.abs(dy)) < SWIPE_STEP) return;
+    pressKey(Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "Right" : "Left") : (dy > 0 ? "Down" : "Up"));
+    drag.x = e.clientX;
+    drag.y = e.clientY;
+    drag.moved = true;
+  });
+  const end = () => {
+    if (drag && !drag.moved && Date.now() - drag.at < 600) pressKey("Select");
+    drag = null;
+  };
+  pad.addEventListener("pointerup", end);
+  pad.addEventListener("pointercancel", () => { drag = null; });
+}
+renderPad();
+
+/* Voice: say a show or an app. Browsers only allow the microphone on secure pages (the extension, this Mac). */
+{
+  const Speech = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const mic = $("#smart-mic");
+  let listening = null;
+  if (Speech && window.isSecureContext) {
+    mic.hidden = false;
+    mic.addEventListener("click", () => {
+      if (listening) { listening.stop(); return; }
+      const rec = new Speech();
+      rec.lang = navigator.language || "en-US";
+      rec.interimResults = true;
+      let heard = "";
+      rec.onresult = (e) => {
+        let text = "";
+        for (const result of e.results) text += result[0].transcript;
+        heard = text.trim();
+        $("#smart-input").value = heard;
+        renderSmart();
+      };
+      rec.onerror = (e) => {
+        if (e.error === "not-allowed" || e.error === "service-not-allowed") toast("Allow the microphone for this page to search by voice.");
+        else if (e.error !== "aborted" && e.error !== "no-speech") toast("Didn't catch that. Try again.");
+      };
+      rec.onend = () => {
+        listening = null;
+        mic.classList.remove("on");
+        mic.setAttribute("aria-pressed", "false");
+        mic.setAttribute("aria-label", "Say it");
+        if (heard) $("#smart-form").requestSubmit();
+      };
+      try {
+        rec.start();
+        listening = rec;
+        mic.classList.add("on");
+        mic.setAttribute("aria-pressed", "true");
+        mic.setAttribute("aria-label", "Listening. Tap to stop.");
+      } catch {
+        toast("The microphone isn't available right now.");
+      }
+    });
+  }
 }
 
 const KEYBOARD = { ArrowUp: "Up", ArrowDown: "Down", ArrowLeft: "Left", ArrowRight: "Right", Backspace: "Back", Escape: "Back", h: "Home", H: "Home", "*": "Info" };
