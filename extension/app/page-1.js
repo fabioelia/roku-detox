@@ -765,6 +765,7 @@ async function connect(address) {
   await refreshDevice();
   await loadSettings();
   loadSleep();
+  loadLimits();
   if (["cleanup", "rules"].includes(state.view)) loadUsage();
   loadHistory();
   pollNow();
@@ -2166,6 +2167,27 @@ $("#sleep-chips").addEventListener("click", async (e) => {
 });
 setInterval(() => { if (state.sleep) { if (state.sleep.until * 1000 <= Date.now()) loadSleep(); else renderSleep(); } }, 20000);
 
+/* ---------- Daily time limits on the "what's on" card ---------- */
+
+state.limitStatus = null;   // {tv, limits: {appId: minutes}, usage: {appId: seconds today}}
+function noteLimits(status) {
+  state.limitStatus = status ? { tv: state.tv, limits: status.rules?.limits || {}, usage: status.usage || {} } : null;
+}
+async function loadLimits() {
+  if (!state.tv || !state.control || isLite()) return;
+  try { noteLimits(await api(`/api/rules?tv=${enc(state.tv)}`)); } catch { /* the card just goes without */ }
+  renderNow();
+}
+function limitNote(appId) {
+  const l = state.limitStatus;
+  if (!appId || !l || l.tv !== state.tv || !l.limits[appId]) return "";
+  const left = Math.round(l.limits[appId] - (l.usage[appId] || 0) / 60);
+  return left > 0 ? `${minutesText(left * 60)} left today` : "time's up for today";
+}
+setInterval(() => {
+  if (!document.hidden && state.limitStatus && Object.keys(state.limitStatus.limits).length) loadLimits();
+}, 60000);
+
 async function pollNow() {
   if (!state.tv || !state.control || document.hidden || isLite()) return;
   if (state.engine?.kind === "relay") {   // every 15 s through the relay, to stay well under its limit
@@ -2211,7 +2233,8 @@ function renderNow() {
       <div><p class="now-app"></p><p class="now-state"></p><div class="now-bar" hidden><span></span></div></div>`;
   }
   box.querySelector(".now-app").textContent = name;
-  box.querySelector(".now-state").textContent = detail;
+  const left = off ? "" : limitNote(appId);
+  box.querySelector(".now-state").textContent = left ? `${detail} · ${left}` : detail;
   // Channel buttons only make sense while the TV shows its antenna input.
   $("#ch-row").hidden = screen.id !== "tvinput.dtv";
   const bar = box.querySelector(".now-bar");
@@ -3040,6 +3063,7 @@ async function loadRules() {
   if (!state.tv || !state.reachable || isLite()) return;
   try {
     const status = await api(`/api/rules?tv=${enc(state.tv)}`);
+    noteLimits(status);
     const changedElsewhere = JSON.stringify(status.rules) !== JSON.stringify(state.rulesStatus?.rules);
     state.rulesStatus = status;
     if (!state.rules || (changedElsewhere && !rulesSaveTimer)) {
