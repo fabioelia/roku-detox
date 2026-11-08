@@ -3506,7 +3506,7 @@ function renderRules() {
   renderRuleList();
   renderRulesPause(status);
 
-  const usage = Object.entries(status.usage).filter(([, s]) => s >= 30).sort((a, b) => b[1] - a[1]);
+  const usage = Object.entries(status.usage).filter(([id, s]) => id !== "home" && s >= 30).sort((a, b) => b[1] - a[1]);   // apps and inputs only
   $("#usage-list").innerHTML = usage.map(([id, seconds]) => `<li><span>${esc(usageLabel(id))}</span><span>${minutesText(seconds)}</span></li>`).join("");
   renderScreenTime();
   $("#usage-intro").textContent = usage.length
