@@ -546,7 +546,7 @@
   /* "Just the remote": everything but the remote, what's on and the search box steps aside (handy on a phone). */
   .remote-only-bar { display: none; }
   html[data-remote-only="true"] .top, html[data-remote-only="true"] #tv, html[data-remote-only="true"] .views,
-  html[data-remote-only="true"] main, html[data-remote-only="true"] #remote-only, html[data-remote-only="true"] .tips { display: none !important; }
+  html[data-remote-only="true"] main, html[data-remote-only="true"] #remote-only, html[data-remote-only="true"] .tips, html[data-remote-only="true"] #footer { display: none !important; }
   html[data-remote-only="true"] .layout { grid-template-columns: minmax(0, 1fr); }
   html[data-remote-only="true"] .side { position: static; max-height: none; overflow: visible; order: 0; margin: 0 auto; width: 100%; max-width: 340px; }
   html[data-remote-only="true"] .remote-only-bar {
@@ -699,7 +699,7 @@
     max-width: calc(100vw - 32px); padding: 10px 20px; border-radius: 999px;
     background: var(--ink); color: var(--bg); font-weight: 600; box-shadow: 0 12px 30px -12px rgba(0, 0, 0, .5);
   }
-  footer { margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--line); color: var(--muted); font-size: 14px; }
+  footer { margin-top: 36px; padding-top: 18px; border-top: 1px solid var(--line); color: var(--muted); font-size: 14px; }
 
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { transition: none !important; animation: none !important; }
@@ -1015,7 +1015,6 @@
       </section>
       </div>
 
-      <footer id="footer">Not made by Roku. The undo list is also saved in undo-list.json next to this program.</footer>
     </main>
 
     <aside class="side" aria-label="Remote control">
@@ -1093,6 +1092,7 @@
       </form>
     </aside>
   </div>
+  <footer id="footer">Not made by Roku. The undo list is also saved in undo-list.json next to this program.</footer>
 </div>
 
 <div class="pair" id="pair" hidden>
