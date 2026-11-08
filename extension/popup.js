@@ -379,6 +379,11 @@ function setUpQuickRemote() {
 
 async function main() {
   $("#version").textContent = `v${chrome.runtime.getManifest().version}`;
+  $("#version").addEventListener("click", (e) => {   // a link in a popup needs a tab of its own
+    e.preventDefault();
+    chrome.tabs.create({ url: e.currentTarget.href });
+    window.close();
+  });
   $("#send").addEventListener("click", sendToTv);
   $("#open").addEventListener("click", openApp);
   [tab] = await chrome.tabs.query({ active: true, currentWindow: true });

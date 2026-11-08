@@ -16,6 +16,8 @@
   .actions { display: grid; gap: 8px; margin-top: 12px; }
   select { width: 100%; margin-top: 8px; font-size: 12.5px; }
   footer { display: flex; justify-content: space-between; gap: 10px; margin-top: 12px; font-size: 12.5px; }
+  footer #version { color: var(--muted); text-decoration: none; }
+  footer #version:hover { text-decoration: underline; }
   footer .links { display: flex; gap: 12px; }
   .quick { margin-top: 10px; }
   /* Nothing to send from this tab: one quiet line instead of a big disabled button. */
@@ -100,7 +102,7 @@
 
   <footer>
     <span class="links"><a href="options.html" id="options" target="_blank">Settings</a><a href="#" id="shortcuts">Keyboard shortcuts</a></span>
-    <span class="muted" id="version"></span>
+    <a class="muted" id="version" href="https://github.com/fabioelia/roku-detox/blob/main/CHANGELOG.md" target="_blank" rel="noopener" title="What's new"></a>
   </footer>
 <script src="popup.js" type="module"></script>
 </body>
