@@ -172,6 +172,7 @@ async function loadNow() {
 }
 
 // Favorites and scenes from the page, one tap each.
+let refreshSleep = async () => {};   // set once the sleep button exists
 async function loadLaunchers() {
   if (!tv) return;
   try {
@@ -199,7 +200,10 @@ async function loadLaunchers() {
         ? `Sleep: off at ${new Date(until * 1000).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })} (tap to cancel)`
         : "Sleep in 30 min";
     };
-    try { showSleep((await api("GET", "/api/sleep", { query: { tv } })).until); } catch { showSleep(null); }
+    refreshSleep = async () => {
+      try { showSleep((await api("GET", "/api/sleep", { query: { tv } })).until); } catch { showSleep(null); }
+    };
+    await refreshSleep();
     sleep.addEventListener("click", () => run(sleep, async () => {
       const { until } = await api("POST", "/api/sleep", { body: { tv, minutes: sleep.dataset.on ? 0 : 30 } });
       showSleep(until);
@@ -210,7 +214,10 @@ async function loadLaunchers() {
       b.className = "scene";
       b.textContent = scene.name;
       b.title = `Run the scene "${scene.name}"`;
-      b.addEventListener("click", () => run(b, () => api("POST", "/api/scene", { body: { tv, id: scene.id } }), `Ran ${scene.name}.`));
+      b.addEventListener("click", () => run(b, async () => {
+        await api("POST", "/api/scene", { body: { tv, id: scene.id } });
+        setTimeout(refreshSleep, 1500);   // a scene can set the sleep timer
+      }, `Ran ${scene.name}.`));
       buttons.push(b);
     }
     buttons.push(sleep);
@@ -245,6 +252,7 @@ function setUpQuickRemote() {
       setStatus(done, "ok");
       input.value = "";
       loadNow();
+      if (/sleep|off in/i.test(text) || done.startsWith("Running")) setTimeout(refreshSleep, 1500);
     } catch (err) {
       setStatus(err.message, "problem");
     } finally {
