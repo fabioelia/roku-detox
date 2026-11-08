@@ -139,7 +139,9 @@ export async function doPhrase(target, phrase, { strict = false } = {}) {
     return "Sleep timer off.";
   }
   if (["pause rules", "pause the rules", "rules off"].includes(words)) {
-    if (!rulesEnforcing(await tvRules(displayAddress(target)))) return "No rules are on, so there's nothing to pause.";
+    const rules = await tvRules(displayAddress(target));
+    if (!rulesEnforcing(rules)) return "No rules are on, so there's nothing to pause.";
+    if (rules.pausedUntil > Date.now() / 1000 + 3600) return "Rules are already paused for longer than an hour.";
     await pauseRules(displayAddress(target), 60);
     return "Rules are paused for an hour.";
   }

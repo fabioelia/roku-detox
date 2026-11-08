@@ -4,7 +4,7 @@
 
 import { handleMessage } from "./router.js";
 import { preferredTv } from "./store.js";
-import { STATUS_LEFT_RE, STATUS_ON_RE, STATUS_TIME_RE } from "./phrases.js";
+import { STATUS_LEFT_RE, STATUS_ON_RE, STATUS_TIME_RE, foldWords } from "./phrases.js";
 
 const NO_TV = "Pick your TV first: open Roku Detox from the toolbar button.";
 
@@ -196,8 +196,9 @@ export async function omniboxSuggestions(text) {
     if (names.some((n) => n === folded)) out.push({ content: `key:${key}`, description: `${xml(label)} <dim>on the TV</dim>` });
   }
   // Phrases with a number or an input ("sleep 30", "volume up 5", "hdmi 2", "cancel sleep").
-  const said = phraseLabel(folded);
-  if (said) out.push({ content: `do:${words}`, description: `${xml(said)} <dim>on the TV</dim>` });
+  const said = phraseLabel(foldWords(words)); // the same folding as doPhrase, which runs it
+  const asking = said.startsWith("Tell me");
+  if (said) out.push({ content: `do:${words}`, description: `${xml(said)} <dim>${asking ? "(the answer shows as a notification)" : "on the TV"}</dim>` });
   for (const scene of (await scenesForOmnibox()).filter((sc) => sc && typeof sc.name === "string" && fold(sc.name).includes(folded)).slice(0, 3)) {
     out.push({ content: `scene:${scene.id}`, description: `Run <match>${xml(scene.name)}</match> <dim>(your scene)</dim>` });
   }

@@ -336,8 +336,9 @@ async function check(address, rules) {
 
   await tickUsage(address, state, app, t);
   if (t < (rules.pausedUntil || 0)) { // paused: keep counting viewing time, enforce nothing,
-    // and start fresh afterwards: a new bedtime warning, a new idle count, no late skip-home
-    state.bedtimeWarned = state.idleSince = state.autopilot = null;
+    // and start fresh afterwards: a full bedtime warning and a new idle count
+    state.bedtimeWarned = state.idleSince = null;
+    delete state.said["bedtime-off"];
     return;
   }
 
@@ -356,7 +357,7 @@ async function tickUsage(address, state, app, t) {
     state.lastTick = null;
   }
   if (app !== null && state.lastTick !== null) {
-    const key = app.id || "home";
+    const key = isHome(app) ? "home" : app.id; // newer TVs give the home screen an id
     state.usage[key] = (state.usage[key] || 0) + Math.min(t - state.lastTick, USAGE_GAP_MAX);
   }
   state.lastTick = app !== null ? t : null;

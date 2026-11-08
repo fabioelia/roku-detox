@@ -58,11 +58,55 @@ function apiError(status, data) {
   return err;
 }
 
+// The household PIN (roku_detox.py --household --pin): asked for the first time a change needs it, then
+// sent with each request until this tab closes.
+const PIN_KEY = "detox.pin";
+const pinGet = () => { try { return sessionStorage.getItem(PIN_KEY) || ""; } catch { return ""; } };
+const pinSet = (pin) => { try { if (pin) sessionStorage.setItem(PIN_KEY, pin); else sessionStorage.removeItem(PIN_KEY); } catch { /* asked again next time */ } };
+let pinAsking = null;
+function askPin(message) {
+  if (pinAsking) return pinAsking;
+  const dialog = $("#pin-dialog");
+  $("#pin-error").textContent = message;
+  $("#pin-input").value = "";
+  pinAsking = new Promise((resolve) => {
+    const finish = (pin) => {
+      $("#pin-form").onsubmit = null;
+      $("#pin-cancel").onclick = null;
+      dialog.onclose = null;
+      if (dialog.open) dialog.close();
+      pinAsking = null;
+      resolve(pin);
+    };
+    $("#pin-form").onsubmit = (e) => { e.preventDefault(); finish($("#pin-input").value.trim()); };
+    $("#pin-cancel").onclick = () => finish("");
+    dialog.onclose = () => finish("");   // Esc
+  });
+  dialog.showModal();
+  $("#pin-input").focus();
+  return pinAsking;
+}
+
 // server: the page is served by roku_detox.py, which does the talking.
 const ServerEngine = {
   kind: "server",
   async api(path, body) {
+    for (let tries = 0; ; tries++) {
+      const hadPin = Boolean(pinGet());
+      try {
+        return await ServerEngine.request(path, body);
+      } catch (err) {
+        if (!err.pin || tries >= 3) throw err;
+        const pin = await askPin(hadPin ? "That PIN didn't work. Try again." : "");
+        if (!pin) throw err;
+        pinSet(pin);
+      }
+    }
+  },
+  async request(path, body) {
     const options = { headers: { "X-Detox": "1" } };
+    const pin = pinGet();
+    if (pin) options.headers["X-Detox-Pin"] = pin;
     if (body !== undefined) {
       options.method = "POST";
       options.headers["Content-Type"] = "application/json";
@@ -80,7 +124,9 @@ const ServerEngine = {
       const err = new Error(data.error || `Something went wrong (${res.status}).`);
       err.blocked = Boolean(data.blocked);
       err.status = res.status;
+      err.pin = res.status === 403 && data.pin === true;
       err.needs = ["engine", "home"].includes(data.needs) ? data.needs : "";
+      if (err.pin && pin) pinSet("");   // the saved one is wrong (or was changed on the computer)
       throw err;
     }
     return data;
@@ -1537,7 +1583,7 @@ $("#remote").addEventListener("click", (e) => {
   pressKey(btn.dataset.key);
 });
 document.addEventListener("keydown", (e) => {
-  if (e.metaKey || e.ctrlKey || e.altKey || $("#keys-help").open) return;
+  if (e.metaKey || e.ctrlKey || e.altKey || $("#keys-help").open || $("#pin-dialog").open) return;
   const target = e.target;
   if (target.closest("input, select, textarea, [contenteditable]")) return;
   if (e.key === "?") {
@@ -3344,7 +3390,7 @@ $("#rules-pause").addEventListener("click", async (e) => {
   try {
     const status = await api("/api/rules/pause", { tv: state.tv, minutes });
     state.rulesStatus = status;
-    state.rules.pausedUntil = status.rules.pausedUntil;   // keep edits that are still waiting to save
+    if (state.rules) state.rules.pausedUntil = status.rules.pausedUntil;   // keep edits that are still waiting to save
     noteLimits(status, state.tv);
     renderRules();
     renderNow();
@@ -3407,7 +3453,7 @@ function renderRuleList() {
       el.textContent = `used ${minutesText(seconds)} today`;
     }
     const extend = $("#bedtime-extend");
-    if (extend) extend.hidden = !state.rulesStatus.bedtimeNow;
+    if (extend) extend.hidden = !state.rulesStatus.bedtimeNow || (state.rulesStatus.rules?.pausedUntil || 0) * 1000 > Date.now();
     return;
   }
   box.dataset.v = String(state.rulesVersion);
@@ -3481,7 +3527,17 @@ function saveRulesSoon(delay = 400) {
     try {
       const rules = JSON.parse(JSON.stringify(state.rules));
       rules.autopilot.enabled = rules.autopilot.enabled && Boolean(rules.autopilot.target);
-      state.rulesStatus = await api("/api/rules", { tv: state.tv, rules });
+      const status = await api("/api/rules", { tv: state.tv, rules });
+      state.rulesStatus = status;
+      // The server keeps these (a pause, "15 more minutes", "skip next time"): take its values.
+      if (state.rules && status.rules) {
+        const skipChanged = state.rules.autopilot.skipNext !== status.rules.autopilot.skipNext;
+        state.rules.pausedUntil = status.rules.pausedUntil;
+        state.rules.bedtime.extendUntil = status.rules.bedtime.extendUntil;
+        state.rules.autopilot.skipNext = status.rules.autopilot.skipNext;
+        if (skipChanged) state.rulesVersion += 1;
+      }
+      noteLimits(status, state.tv);
       renderRules();
     } catch (err) {
       toast(err.message);

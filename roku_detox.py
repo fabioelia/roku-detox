@@ -1582,8 +1582,9 @@ class Watcher:
 
         self.tick_usage(address, state, app, now)
         if now < rules.get("pausedUntil", 0):  # paused: keep counting viewing time, enforce nothing
-            # and start fresh afterwards: a new bedtime warning, a new idle count, no late skip-home
-            state.bedtime_warned = state.idle_since = state.autopilot = None
+            # and start fresh afterwards: a full bedtime warning and a new idle count
+            state.bedtime_warned = state.idle_since = None
+            state.said.pop("bedtime-off", None)
             return
 
         if self.bedtime(address, rules, state, target, local, now):
@@ -1604,7 +1605,7 @@ class Watcher:
             state.usage = self.load_usage(address, day)
             state.last_tick = None
         if app is not None and state.last_tick is not None:
-            key = app.get("id") or "home"
+            key = "home" if is_home(app) else app["id"]  # newer TVs give the home screen an id
             state.usage[key] = state.usage.get(key, 0) + min(now - state.last_tick, POLL_SECONDS * 3)
         state.last_tick = now if app is not None else None
         if now - state.last_saved > 60:
@@ -2012,8 +2013,11 @@ def do_phrase(target, phrase, strict=False):
         set_sleep(target, 0)
         return "Sleep timer off."
     if words in PAUSE_RULE_PHRASES:
-        if not rules_enforcing(tv_rules(display_address(target))):
+        rules = tv_rules(display_address(target))
+        if not rules_enforcing(rules):
             return "No rules are on, so there's nothing to pause."
+        if rules["pausedUntil"] > time.time() + 3600:
+            return "Rules are already paused for longer than an hour."
         pause_rules(display_address(target), 60)
         return "Rules are paused for an hour."
     if words in RESUME_RULE_PHRASES:

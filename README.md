@@ -130,7 +130,8 @@ The same page works three ways (see `ENGINE.md` for the details):
   - This Mac at login: `sh deploy/install-mac.sh` (undo with `sh deploy/install-mac.sh remove`)
 
   With `--household`, anyone on your Wi-Fi can open `http://<computer name>.local:8642` with no pairing.
-  Add `--pin 1234` so changing rules, the TV app or sites from other devices needs that PIN. Use `--data FOLDER`
+  Add `--pin 1234` so changing rules, the TV app or sites from other devices needs that PIN (the page asks for it
+  once per tab; a shortcut sends it in an `X-Detox-Pin` header). Use `--data FOLDER`
   to keep settings and logs somewhere else.
 
 To install Detox Home from a browser without this program: `python3 roku_detox.py --export-tv-app detox-home.zip`,

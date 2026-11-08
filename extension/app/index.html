@@ -272,6 +272,9 @@
     border-bottom-width: 2px; border-radius: 5px; background: var(--surface); font: inherit; font-size: 14px; }
   .keys-help .actions { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 16px; }
   .keys-help .actions .primary { margin-left: auto; }
+  .pin-dialog input { width: 100%; min-height: 46px; margin-top: 6px; padding: 8px 12px; border: 1px solid var(--line);
+    border-radius: var(--radius-s); background: var(--surface); color: var(--ink); font: inherit; font-size: 20px; letter-spacing: .2em; }
+  .pin-dialog .error { min-height: 1.3em; margin: 8px 0 0; color: var(--remove); font-size: 14px; }
 
   /* My sites */
   .find-source { margin: 0 0 16px; }
@@ -1111,6 +1114,18 @@
   </div>
 </div>
 
+<dialog class="keys-help pin-dialog" id="pin-dialog" aria-labelledby="pin-title">
+  <form id="pin-form">
+    <h2 id="pin-title">Household PIN</h2>
+    <p class="muted">Changing rules, the TV app or sites from this device needs the PIN that was set on the computer running Roku Detox.</p>
+    <input type="password" id="pin-input" inputmode="numeric" autocomplete="off" maxlength="12" aria-label="Household PIN">
+    <p class="error" id="pin-error" role="alert"></p>
+    <div class="actions">
+      <button class="btn quiet" type="button" id="pin-cancel">Cancel</button>
+      <button class="btn primary" type="submit">OK</button>
+    </div>
+  </form>
+</dialog>
 <dialog class="keys-help" id="keys-help" aria-labelledby="keys-help-title">
   <h2 id="keys-help-title">Keyboard shortcuts</h2>
   <p class="muted">On this page, when you're not typing in a box:</p>
@@ -1133,7 +1148,7 @@
   </div>
   <form method="dialog" class="actions">
     <button class="btn quiet" type="button" id="keys-help-edit" hidden>Change Chrome's shortcuts</button>
-    <button class="btn primary" value="done">Done</button>
+    <button class="btn primary" value="done" autofocus>Done</button>
   </form>
 </dialog>
 <div class="cast-banner" id="cast-banner" hidden role="dialog" aria-label="Send a video to the TV">

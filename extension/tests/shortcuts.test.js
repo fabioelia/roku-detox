@@ -72,7 +72,8 @@ test("numbered phrases in the address bar do what they say", async () => {
 test("questions in the address bar answer in a notification", async () => {
   await chrome.storage.local.set({ lastTv: TV });
   const [first] = await shortcuts.omniboxSuggestions("what's on?");
-  assert.deepEqual(first, { content: "do:what's on?", description: "Tell me what's on the TV <dim>on the TV</dim>" });
+  assert.deepEqual(first, { content: "do:what's on?", description: "Tell me what's on the TV <dim>(the answer shows as a notification)</dim>" });
+  assert.equal((await shortcuts.omniboxSuggestions("screen-time"))[0].content, "do:screen-time");
   assert.equal((await shortcuts.omniboxSuggestions("Screen time"))[0].content, "do:Screen time");
   assert.equal((await shortcuts.omniboxSuggestions("time left today"))[0].content, "do:time left today");
   assert.equal((await shortcuts.omniboxSuggestions("pause rules"))[0].content, "do:pause rules");
