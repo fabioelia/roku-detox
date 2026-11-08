@@ -1532,8 +1532,17 @@ $("#smart-form").addEventListener("submit", async (e) => {
       const { app } = await api("/api/link", { tv: state.tv, url: text });
       toast(app === "Detox Home" ? "Found the video. Playing it on the TV." : `Opening it in ${app} on the TV.`);
     } else {
-      await api("/api/search", { tv: state.tv, text });
-      toast("Search results are on the TV.");
+      // Phrases work here too ("open Netflix", "HDMI 2", "sleep 30", a scene's name); anything
+      // else is a search on the TV. The lite page can't run phrases, so it just searches.
+      let said = "";
+      try {
+        ({ done: said } = await api("/api/do", { tv: state.tv, do: text }));
+      } catch (err) {
+        if (!err.needs) throw err;
+        await api("/api/search", { tv: state.tv, text });
+      }
+      toast(said && !said.startsWith("Searching the TV") ? said : "Search results are on the TV.");
+      if (/sleep|off in/i.test(text)) loadSleep();
     }
     input.value = "";
     renderSmart();

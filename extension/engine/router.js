@@ -18,6 +18,7 @@ import {
 } from "./catalog.js";
 import { cast, lookCloser, searchSites, sniffedForTab, tvMessage } from "./video.js";
 import { setSleep, sleepStatus } from "./sleep.js";
+import { doPhrase } from "./phrases.js";
 import { discoverReport } from "./discover.js";
 import { cleanRules, doctor, extendBedtime, rulesStatus, saveRules, skipAutopilot, usageSummary } from "./rules.js";
 
@@ -235,6 +236,10 @@ const POST_ROUTES = {
   },
   "/api/sites": async (c) => ({ sites: await saveSites(c.body.sites) }),
   "/api/sleep": async (c) => setSleep(c.target(), c.body.minutes),
+  "/api/do": async (c) => {
+    const target = c.body.tv ? c.target() : parseTarget(await preferredTv() || "");
+    return { done: await doPhrase(target, pyStr(c.body.do ?? "")) };
+  },
   "/api/sites/look": async (c) => ({ group: await lookCloser(String(c.body.siteId ?? ""), words(c.body.q, "Type something to search for.")) }),
   "/api/phone": async () => { throw new NotSupported(PHONE); },
   "/api/pair": async () => { throw new NotSupported(PHONE); },

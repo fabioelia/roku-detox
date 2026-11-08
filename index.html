@@ -943,9 +943,9 @@
       <p class="remote-error" id="remote-error" aria-live="assertive" hidden></p>
       <p class="remote-note">Your keyboard works too: arrow keys to move, Enter for OK, Backspace for Back, H for Home, + and − for volume, M to mute, / to search.</p>
       <form class="smart" id="smart-form">
-        <label for="smart-input">Search, paste a link, or type on the TV</label>
+        <label for="smart-input">Search, say what to do, or paste a link</label>
         <div class="smart-field">
-          <input type="text" id="smart-input" placeholder="Show name or a video link" autocomplete="off" maxlength="2000">
+          <input type="text" id="smart-input" placeholder="A show, “open Netflix”, a link" autocomplete="off" maxlength="2000">
           <button class="mic" id="smart-mic" type="button" aria-label="Say it" aria-pressed="false" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg></button>
         </div>
         <div class="smart-actions">
@@ -2515,8 +2515,17 @@ $("#smart-form").addEventListener("submit", async (e) => {
       const { app } = await api("/api/link", { tv: state.tv, url: text });
       toast(app === "Detox Home" ? "Found the video. Playing it on the TV." : `Opening it in ${app} on the TV.`);
     } else {
-      await api("/api/search", { tv: state.tv, text });
-      toast("Search results are on the TV.");
+      // Phrases work here too ("open Netflix", "HDMI 2", "sleep 30", a scene's name); anything
+      // else is a search on the TV. The lite page can't run phrases, so it just searches.
+      let said = "";
+      try {
+        ({ done: said } = await api("/api/do", { tv: state.tv, do: text }));
+      } catch (err) {
+        if (!err.needs) throw err;
+        await api("/api/search", { tv: state.tv, text });
+      }
+      toast(said && !said.startsWith("Searching the TV") ? said : "Search results are on the TV.");
+      if (/sleep|off in/i.test(text)) loadSleep();
     }
     input.value = "";
     renderSmart();
