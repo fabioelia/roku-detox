@@ -77,4 +77,5 @@ test("questions in the address bar answer in a notification", async () => {
   assert.equal((await shortcuts.omniboxSuggestions("Screen time"))[0].content, "do:Screen time");
   assert.equal((await shortcuts.omniboxSuggestions("time left today"))[0].content, "do:time left today");
   assert.equal((await shortcuts.omniboxSuggestions("pause rules"))[0].content, "do:pause rules");
+  assert.deepEqual((await shortcuts.omniboxSuggestions("15 more minutes"))[0], { content: "do:15 more minutes", description: "Give 15 more minutes today <dim>on the TV</dim>" });
 });
