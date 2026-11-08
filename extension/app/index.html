@@ -508,6 +508,7 @@
   .sleep-chip[aria-pressed="true"] { border-color: var(--keep); background: var(--keep-soft); }
   .sleep-chip:disabled { opacity: .55; cursor: not-allowed; }
   .remote-note { max-width: 280px; text-align: center; font-size: 14px; color: var(--muted); }
+  @media (pointer: coarse) and (hover: none) { .remote-note { display: none; } }   /* keyboard tips: not on a phone */
   .remote-error { max-width: 280px; text-align: center; font-size: 15px; font-weight: 600; color: var(--remove); }
   .smart { width: 100%; max-width: 300px; display: grid; gap: 8px; }
   .smart label { font-size: 14px; color: var(--muted); }
