@@ -251,6 +251,11 @@
   }
   .chip img { width: 36px; height: 27px; border-radius: 5px; object-fit: cover; }
   .fav-suggest { display: grid; gap: 10px; align-content: center; }
+  .shortcuts-box { margin-top: 28px; padding-top: 22px; border-top: 1px solid var(--line); max-width: 74ch; }
+  .shortcuts-box .note { margin-top: 8px; }
+  .recipe { margin: 12px 0 0; padding-left: 22px; display: grid; gap: 8px; }
+  .recipe code, .shortcuts-box code { padding: 1px 6px; border-radius: 6px; background: var(--surface); font-size: 14px; overflow-wrap: anywhere; }
+  .recipe .btn.quiet { min-height: 30px; padding: 2px 6px; font-size: 14px; }
   .shortcuts .fav-suggest:not(:first-child) { padding-left: 6px; }
   .chip[aria-pressed="true"] { border-color: var(--keep); background: var(--keep-soft); font-weight: 600; }
   .chip[aria-pressed="false"] { color: var(--muted); text-decoration: line-through; }
@@ -4340,9 +4345,32 @@ function renderPhone() {
     <div class="row-gap">
       <button class="btn" type="button" id="phone-off">Turn off phone remote</button>
       <button class="btn quiet" type="button" id="phone-forget">Turn off and forget paired phones</button>
-    </div>`;
+    </div>
+    ${shortcutsHTML()}`;
   if (window.QRCode) new QRCode($("#phone-qr"), { text: phone.url, width: 152, height: 152, correctLevel: QRCode.CorrectLevel.M });
   else $("#phone-qr").hidden = true;
+}
+
+// Siri and the Shortcuts app: "Get Contents of URL" with a key, sending a phrase like "pause".
+state.phoneKey = null;
+function shortcutsHTML() {
+  const k = state.phoneKey;
+  const recipe = k ? `
+    <ol class="recipe">
+      <li>In the Shortcuts app on your iPhone, make a new shortcut and add <strong>Get Contents of URL</strong>.</li>
+      <li>URL: <code>${esc(k.url)}</code> <button class="btn quiet" type="button" data-copy="${esc(k.url)}">Copy</button></li>
+      <li>Method <strong>POST</strong>. Add a header <code>X-Detox-Key</code> with this key: <code>${esc(k.key)}</code> <button class="btn quiet" type="button" data-copy="${esc(k.key)}">Copy</button></li>
+      <li>Request Body <strong>JSON</strong>, with a text field <code>do</code>: what to do, like <em>pause</em>, <em>open Netflix</em>, <em>HDMI 2</em>, <em>game time</em> (one of your scenes), <em>sleep 30</em> or <em>search The Bear</em>.</li>
+      <li>Add <strong>Speak Text</strong> after it to hear what happened. Name the shortcut, and "Hey Siri, <em>name</em>" runs it.</li>
+    </ol>
+    <p class="note">Tip: put <strong>Dictate Text</strong> first and use its text as <code>do</code>, and one shortcut does whatever you say. From a computer: <code>curl -X POST -H "X-Detox-Key: ${esc(k.key)}" -d '{"do":"pause"}' ${esc(k.url)}</code></p>
+    <p class="note">This key is shown once. "Forget paired phones" also turns it off. If your router gives this Mac a new address, make a new key.</p>` : "";
+  return `
+    <div class="shortcuts-box">
+      <h3 class="subhead">Siri and Shortcuts</h3>
+      <p class="note">Say "pause the TV" or "open Netflix" to Siri, or make Home Screen buttons, with Apple's Shortcuts app. Works while the phone remote is on.</p>
+      ${k ? recipe : `<button class="btn" type="button" id="phone-key">Set up a shortcut</button>`}
+    </div>`;
 }
 
 async function switchPhone(change) {
@@ -4354,10 +4382,24 @@ async function switchPhone(change) {
   renderPhone();
 }
 
-$("#phone-body").addEventListener("click", (e) => {
+$("#phone-body").addEventListener("click", async (e) => {
+  const copy = e.target.closest("[data-copy]");
+  if (copy) {
+    try { await navigator.clipboard.writeText(copy.dataset.copy); toast("Copied."); } catch { toast("Couldn't copy. Select it and copy instead."); }
+    return;
+  }
+  if (e.target.id === "phone-key") {
+    try {
+      state.phoneKey = await api("/api/phone/key", {});
+      renderPhone();
+    } catch (err) {
+      toast(err.message);
+    }
+    return;
+  }
   if (e.target.id === "phone-on") switchPhone({ enabled: true });
   if (e.target.id === "phone-off") switchPhone({ enabled: false });
-  if (e.target.id === "phone-forget") switchPhone({ enabled: false, forget: true });
+  if (e.target.id === "phone-forget") { state.phoneKey = null; switchPhone({ enabled: false, forget: true }); }
 });
 
 function showPair() {

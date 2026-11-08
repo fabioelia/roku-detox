@@ -30,7 +30,11 @@ The page has five menus:
   itself and opens them through the TV's own remote-control service, so it never connects to the Mac.
   Press * on the remote on a tile to add or remove a favorite; favorites and options chosen on the page
   are sent to it while it's open.
-- **Phone**: use your phone as the remote.
+- **Phone**: use your phone as the remote. With the phone remote on, "Set up a shortcut" makes a key
+  for Apple's Shortcuts app (or anything that can send a web request): POST `{"do": "pause"}` to
+  `http://<this Mac>:8642/api/do` with the header `X-Detox-Key`. Phrases: pause, home, back, louder,
+  quieter, mute, on, off, volume up 5, open Netflix, HDMI 2, one of your scene names, sleep 30,
+  cancel sleep, search The Bear; anything else searches the TV. The answer is a sentence Siri can read out.
 
 **Send a video link to the TV**: paste a link into the box under the remote, or use the "Send to TV"
 bookmark from the TV app menu. YouTube and Netflix links open in their own apps. For other pages the Mac

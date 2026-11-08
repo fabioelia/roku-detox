@@ -27,6 +27,7 @@ import subprocess
 import threading
 import time
 import urllib.error
+import unicodedata
 import urllib.parse
 import urllib.request
 import webbrowser
@@ -1787,6 +1788,92 @@ def wake_tv(target):
     return {"sent": True, "wlan": bool(wake.get("wlan"))}
 
 
+# --- Plain phrases ("pause", "open Netflix", "game time", "sleep 30"), for Siri Shortcuts -------
+
+PHRASE_KEYS = [
+    (("pause", "play", "resume", "play pause", "playpause"), "Play", "Play or pause sent."),
+    (("home", "go home", "home screen"), "Home", "Went to the home screen."),
+    (("back", "go back"), "Back", "Went back."),
+    (("ok", "select", "enter"), "Select", "Pressed OK."),
+    (("mute", "unmute"), "VolumeMute", "Mute pressed."),
+    (("louder", "volume up", "turn it up"), "VolumeUp", "Turned it up."),
+    (("quieter", "softer", "volume down", "turn it down"), "VolumeDown", "Turned it down."),
+    (("off", "turn off", "tv off", "power off", "turn off the tv", "turn the tv off"), "PowerOff", "Turned the TV off."),
+    (("on", "turn on", "tv on", "power on", "turn on the tv", "turn the tv on"), "PowerOn", "Turned the TV on."),
+    (("replay", "rewind a bit", "instant replay"), "InstantReplay", "Replayed the last few seconds."),
+    (("rewind",), "Rev", "Rewinding."),
+    (("fast forward", "forward"), "Fwd", "Fast forwarding."),
+]
+
+
+def fold_words(text):
+    return " ".join(re.sub(r"[^\w\s+]", " ", unicodedata.normalize("NFKD", str(text)).lower()).split())
+
+
+def do_phrase(target, phrase):
+    """Do what a short phrase says on the TV. Returns a sentence saying what happened."""
+    words = fold_words(phrase)[:120]
+    if not words:
+        raise ValueError("Say what to do, like pause, open Netflix or sleep 30.")
+    for names, key, said in PHRASE_KEYS:
+        if words in names:
+            press(target, key)
+            return said
+    match = re.match(r"^(?:volume |turn it )?(up|down) (\d{1,2})$", words)
+    if match:
+        press_sequence(target, [("VolumeUp" if match.group(1) == "up" else "VolumeDown")] * min(int(match.group(2)), 30), delay=0.15)
+        return f"Volume {match.group(1)} {match.group(2)}."
+    match = re.match(r"^(?:sleep|sleep timer|turn off in|off in|sleep in)(?: for)? (\d{1,3})(?: ?(?:m|min|mins|minute|minutes))?$", words)
+    if match:
+        minutes = int(match.group(1))
+        set_sleep(target, minutes)
+        return f"The TV turns off in {minutes} minutes." if minutes else "Sleep timer off."
+    if words in ("cancel sleep", "sleep off", "stop sleep timer", "cancel sleep timer"):
+        set_sleep(target, 0)
+        return "Sleep timer off."
+    match = re.match(r"^(?:search|search for|find|look for|look up) (.+)$", words)
+    if match:
+        search(target, match.group(1))
+        return f"Searching the TV for {match.group(1)}."
+    match = re.match(r"^(?:open|launch|start|go to|switch to|put on|watch|run) (.+)$", words)
+    asked = match.group(1) if match else words
+    asked = re.sub(r"^the ", "", asked)
+
+    scenes = tv_settings(display_address(target))["scenes"]
+    for scene in scenes:
+        if fold_words(scene.get("name", "")) in (asked, words):
+            threading.Thread(target=run_scheduled, args=(display_address(target), scene), daemon=True).start()
+            return f"Running {scene['name']}."
+    apps = list_apps(target)
+
+    def name_of(app):
+        return fold_words(app["name"])
+    choices = [a for a in apps if name_of(a) == asked] or [a for a in apps if name_of(a).startswith(asked)] \
+        or [a for a in apps if asked in name_of(a).split()] or [a for a in apps if asked in name_of(a)]
+    if not choices:  # inputs by port: "hdmi 1", "hdmi1"
+        port = re.match(r"^hdmi ?(\d)$", asked)
+        if port:
+            choices = [a for a in apps if a["id"] == f"tvinput.hdmi{port.group(1)}"]
+    if choices:
+        app = min(choices, key=lambda a: len(a["name"]))
+        launch(target, app["id"])
+        return f"Opening {app['name']}."
+    if match:
+        raise ValueError(f"There's no app or scene called {asked} on this TV.")
+    search(target, phrase.strip()[:100])
+    return f"Searching the TV for {phrase.strip()[:100]}."
+
+
+def default_tv():
+    """The TV the page used last, for requests that don't say (Siri Shortcuts)."""
+    with SETTINGS_LOCK:
+        data = read_settings()
+    address = data.get("lastTv") or (next(iter(data.get("tvs", {})), None) if len(data.get("tvs", {})) == 1 else None)
+    if not address:
+        raise ValueError("Open Roku Detox and pick your TV first.")
+    return parse_target(address)
+
+
 def token_hash(token):
     return hashlib.sha256(token.encode()).hexdigest()
 
@@ -1911,6 +1998,14 @@ class PhoneAccess:
             self.failures = 0
             self.new_code()  # each code works once
         token = secrets.token_urlsafe(32)
+        update_settings(lambda data: data.setdefault("phoneTokens", []).append(token_hash(token)))
+        return token
+
+    def new_key(self):
+        """A key for Siri Shortcuts and other apps, kept like a paired phone (forgetting phones removes it)."""
+        if not self.phone_on:
+            raise ValueError("Turn on the phone remote first, so other devices can reach this Mac.")
+        token = secrets.token_urlsafe(24)
         update_settings(lambda data: data.setdefault("phoneTokens", []).append(token_hash(token)))
         return token
 
@@ -2829,7 +2924,7 @@ class Handler(BaseHTTPRequestHandler):
             for part in self.headers.get("Cookie", "").split(";")
             if "=" in part
         )
-        return self.server.phone.is_paired(cookies.get("detox_token"))
+        return self.server.phone.is_paired(cookies.get("detox_token") or self.headers.get("X-Detox-Key"))
 
     def run(self, fn):
         try:
@@ -2903,7 +2998,8 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         path = urllib.parse.urlparse(self.path).path
         tv_app = path.startswith("/api/tv/") and self.headers.get("X-Detox-Device")
-        if not self.host_ok() or not (self.from_our_page() or tv_app):
+        shortcut = path == "/api/do" and self.headers.get("X-Detox-Key")   # Siri Shortcuts and other apps
+        if not self.host_ok() or not (self.from_our_page() or tv_app or shortcut):
             return self.fail(403, "Forbidden.")
         try:
             length = int(self.headers.get("Content-Length") or 0)
@@ -2922,6 +3018,8 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/pair":
             return self.run(lambda: self.pair(body))
         if not self.paired():
+            if shortcut:
+                return self.fail(401, "That Shortcuts key doesn't work anymore. Make a new one in Roku Detox on your Mac (Phone menu).")
             return self.fail(401, "Enter the code from your Mac first.", pair=True)
 
         def target():
@@ -2948,6 +3046,10 @@ class Handler(BaseHTTPRequestHandler):
             "/api/scene": lambda: self.scene(body),
             "/api/sleep": lambda: self.send(200, set_sleep(target(), body.get("minutes"))),
             "/api/wake": lambda: self.send(200, wake_tv(target())),
+            "/api/do": lambda: self.send(200, {"done": do_phrase(
+                parse_target(body["tv"]) if body.get("tv") else default_tv(), str(body.get("do", "")))}),
+            "/api/phone/key": lambda: self.mac_only(lambda: self.send(200, {
+                "key": self.server.phone.new_key(), "url": f"{self.server.phone.url}/api/do"})),
             "/api/rules": lambda: self.save_rules(body),
             "/api/rules/extend": lambda: self.rules_extend(body),
             "/api/rules/skip": lambda: self.rules_skip(body),
@@ -2976,6 +3078,11 @@ class Handler(BaseHTTPRequestHandler):
         target = parse_target(query.get("tv"))
         raw = device_info(target)
         remember_wake_info(target, raw)
+        address = display_address(target)
+        with SETTINGS_LOCK:
+            last = read_settings().get("lastTv")
+        if last != address:
+            update_settings(lambda data: data.update(lastTv=address))
         info = summarize(target, raw)
         self.send(200, {"device": info, "control": can_control(target)})
 
