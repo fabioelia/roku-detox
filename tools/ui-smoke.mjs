@@ -119,6 +119,14 @@ async function main() {
     for (const v of ["h", "hi", "h", "ha"]) { input.value = v; input.dispatchEvent(new Event("input", { bubbles: true })); }
     await new Promise((r) => setTimeout(r, 800)); api = real; document.querySelector("#smart-live").click(); return sent.join(","); })()`);
   check("live typing sends letters and Backspace", typed === "Lit_h,Lit_i,Backspace,Lit_a", typed);
+  const quoted = await page(`(async () => {
+    const sent = []; const real = api;
+    api = (path, body) => { if (path === "/api/key") sent.push(body.key); return Promise.resolve({ ok: true }); };
+    document.querySelector("#smart-live").click();
+    const input = document.querySelector("#smart-input");
+    for (const v of ['a', 'a"', 'a"b']) { input.value = v; input.dispatchEvent(new Event("input", { bubbles: true })); }
+    await new Promise((r) => setTimeout(r, 400)); api = real; document.querySelector("#smart-live").click(); return sent.join(" "); })()`);
+  check("live typing sends quotes too", quoted === 'Lit_a Lit_" Lit_b', quoted);
 
   // Phrases in the search box, the sleep timer, favorites suggestions.
   const phrase = await page(`(async () => { const r = await api("/api/do", { tv: state.tv, do: "open netflix" }); return r.done; })()`);

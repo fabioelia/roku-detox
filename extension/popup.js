@@ -86,8 +86,14 @@ async function loadTvName() {
     $("#tv").textContent = device.name;
     $("#tv").title = tv;
   } catch {
+    tvOff = false;   // unknown: let "what's on" try
     if (!$("#tv-pick")) $("#tv").title = "The TV didn't answer just now.";
   }
+}
+
+// After anything that may have turned the TV on or off.
+function refreshPower() {
+  setTimeout(() => { loadTvName().then(() => { if (!tvOff) loadNow(); }); }, 2500);
 }
 
 function render() {
@@ -148,7 +154,7 @@ async function openApp() {
 let keyChain = Promise.resolve();
 function pressKey(key) {
   if (!tv) return;
-  if (key === "Power" || key === "PowerOn") setTimeout(() => { loadTvName().then(() => { if (!tvOff) loadNow(); }); }, 3000);
+  if (key.startsWith("Power")) refreshPower();
   const btn = $(`#keys [data-key="${key}"]`);
   if (btn) {
     btn.classList.add("sent");
@@ -174,7 +180,7 @@ async function loadNow() {
     const name = now?.app || (home ? "Home screen" : screen.name);
     $("#now").textContent = name ? `On the TV: ${name}${state && now?.app ? `, ${state}` : ""}` : "";
   } catch {
-    $("#now").textContent = "";
+    if (!tvOff) $("#now").textContent = "";
   }
 }
 
@@ -186,7 +192,9 @@ async function loadResume() {
   if (!tv) return;
   let items;
   try { ({ items = [] } = await api("GET", "/api/find/history", { query: { tv } })); } catch { return; }
-  const item = items.find((i) => i && i.type === "Show" && i.season?.id != null && i.episode?.number != null && i.appId != null);
+  // The show watched last (pinned ones come first in the list, so go by when each was watched).
+  const item = items.filter((i) => i && i.type === "Show" && i.season?.id != null && i.episode?.number != null && i.appId != null)
+    .sort((a, b) => String(b.at || "").localeCompare(String(a.at || "")))[0];
   if (!item) return;
   const btn = $("#resume-btn");
   btn.textContent = `Next episode of ${item.title}`;
@@ -200,12 +208,13 @@ async function loadResume() {
     const offer = (episode.offers || []).find((o) => String(o.appId) === String(item.appId));
     if (!offer) throw new Error(`${code(season.number, episode.number)} isn't in ${item.appName || "that app"}. Open Roku Detox to pick another way.`);
     await api("POST", "/api/watch", { body: { tv, appId: offer.appId, contentId: offer.contentId, mediaType: offer.mediaType } });
+    // It's playing; if remembering it fails, still move on so the next click plays the next one.
     await api("POST", "/api/find/history", { body: { tv, item: {
       id: item.id, title: item.title, type: "Show", year: item.year ?? null, poster: item.poster || null,
       season: { id: season.id ?? null, number: season.number ?? null },
       episode: { id: episode.id ?? null, number: episode.number, title: episode.title || "" },
       appId: offer.appId, appName: item.appName || null,
-    } } });
+    } } }).catch(() => {});
     // The next click goes on from here.
     item.season = { id: season.id ?? null, number: season.number ?? null };
     item.episode = { id: episode.id ?? null, number: episode.number, title: episode.title || "" };
@@ -262,6 +271,7 @@ async function loadLaunchers() {
       b.addEventListener("click", () => run(b, async () => {
         await api("POST", "/api/scene", { body: { tv, id: scene.id } });
         setTimeout(refreshSleep, 1500);   // a scene can set the sleep timer
+        refreshPower();                   // or turn the TV on or off
       }, `Ran ${scene.name}.`));
       buttons.push(b);
     }
@@ -296,7 +306,7 @@ function setUpQuickRemote() {
       const { done } = await api("POST", "/api/do", { body: { tv, do: text } });
       setStatus(done, "ok");
       input.value = "";
-      loadNow();
+      refreshPower();
       if (/sleep|off in/i.test(text) || done.startsWith("Running")) setTimeout(refreshSleep, 1500);
     } catch (err) {
       setStatus(err.message, "problem");

@@ -1893,9 +1893,12 @@ $("#picker-toggle").addEventListener("click", () => {
 // "Just the remote" (remembered per browser).
 state.remoteOnly = store.get("detox.remoteOnly", false);
 function renderRemoteOnly() {
-  document.documentElement.dataset.remoteOnly = String(Boolean(state.remoteOnly));
+  // With no TV, or one that isn't answering, the picker and Wake are needed: show everything.
+  const usable = Boolean(state.tv && state.reachable !== false);
+  document.documentElement.dataset.remoteOnly = String(Boolean(state.remoteOnly && usable));
   const name = state.device?.name || state.tv || "No TV yet";
-  $("#remote-only-tv").textContent = state.tv && state.reachable === false ? `${name}: not answering` : name;
+  const off = Boolean(state.device?.powerMode) && state.device.powerMode !== "PowerOn";
+  $("#remote-only-tv").textContent = off ? `${name}: off (Power turns it on)` : name;
 }
 for (const id of ["#remote-only", "#remote-only-exit"]) {
   $(id).addEventListener("click", () => {
@@ -2325,7 +2328,7 @@ const COARSE = matchMedia("(pointer: coarse)");
 function pressKey(key) {
   if (!state.tv || !state.control) return;
   const pad = state.padMode === "swipe" && ["Up", "Down", "Left", "Right", "Select"].includes(key) ? $("#touchpad") : null;
-  const btn = pad || $(`#remote [data-key="${key}"]`);
+  const btn = pad || (key.startsWith("Lit_") ? null : $(`#remote [data-key="${key}"]`));   // letters have no button
   if (btn) {
     btn.classList.add("sent");
     setTimeout(() => btn.classList.remove("sent"), 220);
@@ -2388,6 +2391,7 @@ function attachMic(mic, input, form, onText = () => {}) {
   if (!Speech || !window.isSecureContext) return;
   let listening = null;
   mic.hidden = false;
+  mic.dataset.available = "1";
   const idle = () => {
     mic.classList.remove("on");
     mic.setAttribute("aria-pressed", "false");
@@ -2580,6 +2584,8 @@ function setLive(on) {
   input.value = "";
   liveText = "";
   input.placeholder = on ? "Type here: it goes straight to the TV" : "A show, “open Netflix”, a link";
+  const mic = $("#smart-mic");
+  mic.hidden = on || !mic.dataset.available;   // speech would arrive all at once; live typing is letter by letter
   if (on) input.focus();
   renderSmart();
 }
@@ -2591,13 +2597,22 @@ $("#smart-input").addEventListener("input", (e) => {
   let same = 0;
   while (same < prev.length && same < next.length && prev[same] === next[same]) same++;
   for (let i = same; i < prev.length; i++) pressKey("Backspace");
-  for (const ch of next.slice(same).slice(0, 200)) pressKey(`Lit_${ch}`);
-  liveText = e.target.value;
+  // At most 200 letters at a time (30 through the relay, which allows about 2 a second); the box
+  // keeps only what was sent, so it always matches the TV.
+  const room = state.engine?.kind === "relay" ? 30 : 200;
+  const sent = next.slice(same, same + room);
+  for (const ch of sent) pressKey(`Lit_${ch}`);
+  liveText = next.slice(0, same).concat(sent).join("");
+  if (liveText !== e.target.value) e.target.value = liveText;
 });
 $("#smart-input").addEventListener("keydown", (e) => {
-  if ($("#smart-form").dataset.live !== "true" || e.key !== "Enter") return;
-  e.preventDefault();
-  pressKey("Enter");
+  if ($("#smart-form").dataset.live !== "true") return;
+  if (e.key === "Enter") {
+    e.preventDefault();
+    pressKey("Enter");
+  } else if (e.key === "Backspace" && e.target.value === "") {
+    pressKey("Backspace");   // clears what was already in the TV's box (no input event when ours is empty)
+  }
 });
 $("#smart-form").addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -3055,6 +3070,14 @@ $("#wake-btn").addEventListener("click", async (e) => {
 
 /* ---------- Moving settings between the program and the extension (a file) ---------- */
 
+// Rules as saved, minus what only matters right now ("skip the next one", "15 more minutes tonight").
+function exportableRules(rules) {
+  const copy = JSON.parse(JSON.stringify(rules || {}));
+  if (copy.autopilot) delete copy.autopilot.skipNext;
+  if (copy.bedtime) delete copy.bedtime.extendUntil;
+  return copy;
+}
+
 async function exportSettings() {
   if (!state.tv) { toast("Connect to your TV first."); return; }
   const tv = state.tv;
@@ -3066,7 +3089,7 @@ async function exportSettings() {
   const data = {
     app: "roku-detox", version: 1, saved: new Date().toISOString(), tvName: state.device?.name || tv,
     favorites: settings.favorites || [], scenes: settings.scenes || [], services: settings.services || {},
-    rules: rules?.rules ?? null, sites: sites?.sites ?? [],
+    rules: rules?.active ? exportableRules(rules.rules) : null, sites: sites?.sites ?? [],
   };
   const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }));
   const a = Object.assign(document.createElement("a"), { href: url, download: "roku-detox-settings.json" });
@@ -3090,8 +3113,15 @@ async function importSettings(file) {
   if (!data || data.app !== "roku-detox") { toast("That file isn't a Roku Detox settings file."); return; }
   const done = [];
   try {
-    await saveSettings({ favorites: data.favorites || [], scenes: data.scenes || [], services: data.services || {} });
-    done.push("favorites and scenes");
+    // Only what the file has: empty lists in it don't wipe what's here.
+    const change = {};
+    if (Array.isArray(data.favorites) && data.favorites.length) change.favorites = data.favorites;
+    if (Array.isArray(data.scenes) && data.scenes.length) change.scenes = data.scenes;
+    if (data.services && Object.keys(data.services).length) change.services = data.services;
+    if (Object.keys(change).length) {
+      await saveSettings(change);
+      done.push([change.favorites && "favorites", change.scenes && "scenes", change.services && "services"].filter(Boolean).join(", "));
+    }
     if (data.rules && !isLite()) {
       await api("/api/rules", { tv: state.tv, rules: data.rules });
       done.push("rules");
@@ -3180,10 +3210,11 @@ function renderNow() {
   if (box.hidden) { $("#ch-row").hidden = true; return; }
   const playing = ["play", "pause", "buffer"].includes(now.state) && now.appId;
   const screen = now.screen || {};
-  const home = !playing && isHomeScreen(screen);
+  const off = !playing && Boolean(state.device?.powerMode) && state.device.powerMode !== "PowerOn";
+  const home = !playing && (off || isHomeScreen(screen));
   const appId = playing ? now.appId : home ? "" : screen.id;
-  const name = playing ? plain(now.app) : home ? "Home screen" : plain(screen.name);
-  let detail = !playing && portLabel(screen.id) ? `${portLabel(screen.id)} input` : "Nothing playing";
+  const name = playing ? plain(now.app) : off ? "The TV is off" : home ? "Home screen" : plain(screen.name);
+  let detail = off ? "Power turns it on" : !playing && portLabel(screen.id) ? `${portLabel(screen.id)} input` : "Nothing playing";
   let percent = null;
   if (playing) {
     const label = { play: "Playing", pause: "Paused", buffer: "Loading" }[now.state];
