@@ -1405,9 +1405,35 @@ $("#restart-actions").addEventListener("click", (e) => {
   if (e.target.id === "restart-yes") restartTV();
 });
 
+// Holding an arrow, volume or skip button repeats it, like a real remote. A pointer press sends
+// the first press itself, so the click that follows is ignored; keyboard clicks still work.
+const REPEATS = new Set(["Up", "Down", "Left", "Right", "VolumeUp", "VolumeDown", "Rev", "Fwd"]);
+let holding = null;
+function stopHold() {
+  if (!holding) return;
+  clearTimeout(holding.timer);
+  clearInterval(holding.repeat);
+  const btn = holding.btn;
+  setTimeout(() => { delete btn.dataset.pressed; }, 80);   // after the click that follows a release
+  holding = null;
+}
+$("#remote").addEventListener("pointerdown", (e) => {
+  const btn = e.target.closest("[data-key]");
+  if (!btn || btn.disabled || !REPEATS.has(btn.dataset.key) || e.button !== 0) return;
+  stopHold();
+  const key = btn.dataset.key;
+  pressKey(key);
+  btn.dataset.pressed = "1";
+  holding = { btn, timer: setTimeout(() => { if (holding) holding.repeat = setInterval(() => pressKey(key), 160); }, 450) };
+});
+for (const type of ["pointerup", "pointercancel", "pointerleave"]) $("#remote").addEventListener(type, stopHold);
+window.addEventListener("pointerup", stopHold);
+window.addEventListener("blur", stopHold);
 $("#remote").addEventListener("click", (e) => {
   const btn = e.target.closest("[data-key]");
-  if (btn && !btn.disabled) pressKey(btn.dataset.key);
+  if (!btn || btn.disabled) return;
+  if (btn.dataset.pressed) { delete btn.dataset.pressed; return; }   // already sent on pointerdown
+  pressKey(btn.dataset.key);
 });
 document.addEventListener("keydown", (e) => {
   if (e.metaKey || e.ctrlKey || e.altKey || !state.control) return;
