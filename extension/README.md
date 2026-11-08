@@ -120,3 +120,10 @@ The tests compare the ported functions with `roku_detox.py` (through `tests/py_o
 the pretend TV through the same messages the page sends, play out each rule with a fake clock,
 and check Find a show against JustWatch and the video finder against a public page (both need the
 internet). A fake `chrome` object (`tests/fake-chrome.js`) stands in for the browser.
+
+To check the extension in a real Chrome (a fresh headless profile with the extension loaded, a
+pretend TV, the page, popup and options page, failing on any page error):
+
+```bash
+node tools/extension-smoke.mjs     # from the roku-detox folder
+```
