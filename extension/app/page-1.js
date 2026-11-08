@@ -2170,9 +2170,10 @@ setInterval(() => { if (state.sleep) { if (state.sleep.until * 1000 <= Date.now(
 /* ---------- Daily time limits on the "what's on" card ---------- */
 
 state.limitStatus = null;   // {tv, limits: {appId: minutes}, usage: {appId: seconds today}}
-function noteLimits(status) {
+function noteLimits(status, tv = state.tv) {
+  if (tv !== state.tv) return;   // switched TVs while this was loading
   state.limitStatus = status ? {
-    tv: state.tv, limits: status.rules?.limits || {}, usage: status.usage || {},
+    tv, limits: status.rules?.limits || {}, usage: status.usage || {},
     bedtime: status.rules?.bedtime?.enabled ? status.rules.bedtime : null,
   } : null;
 }
@@ -2190,7 +2191,8 @@ function bedtimeNote() {
 }
 async function loadLimits() {
   if (!state.tv || !state.control || isLite()) return;
-  try { noteLimits(await api(`/api/rules?tv=${enc(state.tv)}`)); } catch { /* the card just goes without */ }
+  const tv = state.tv;
+  try { noteLimits(await api(`/api/rules?tv=${enc(tv)}`), tv); } catch { /* the card just goes without */ }
   renderNow();
 }
 function limitNote(appId) {
@@ -3077,8 +3079,9 @@ function renderScreenTime() {
 async function loadRules() {
   if (!state.tv || !state.reachable || isLite()) return;
   try {
-    const status = await api(`/api/rules?tv=${enc(state.tv)}`);
-    noteLimits(status);
+    const tv = state.tv;
+    const status = await api(`/api/rules?tv=${enc(tv)}`);
+    noteLimits(status, tv);
     const changedElsewhere = JSON.stringify(status.rules) !== JSON.stringify(state.rulesStatus?.rules);
     state.rulesStatus = status;
     if (!state.rules || (changedElsewhere && !rulesSaveTimer)) {
