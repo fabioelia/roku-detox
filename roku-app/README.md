@@ -1,9 +1,13 @@
 # Detox Home (Roku dev channel)
 
-A calm home screen for the TV. BrightScript + SceneGraph, FHD. It needs no computer: it gets the
-TV's apps, their icons and opens them through the TV's own remote-control service (Roku's ECP on
-port 8060, the same one Roku Detox uses). Roku apps can't open other apps directly, but they can ask
-their own TV to. Favorites and options are kept on the TV.
+A calm home screen for the TV. BrightScript + SceneGraph, FHD. It gets the TV's apps and their icons
+and opens them through the TV's own remote-control service (Roku's ECP on port 8060, the same one Roku
+Detox uses). Favorites and options are kept on the TV.
+
+Roku OS 12 and later refuse those requests from apps on the TV itself, whatever "Control by mobile apps"
+says (Roku's ECP docs: "Support for sending ECP commands from within a Roku app has been discontinued").
+There the tiles stay empty and Detox Home explains that; its clock, screensaver, messages and videos
+still work, since those are sent in from outside.
 
 Roku Detox only ever sends things in (deep links, below). Nothing on the TV connects out to a computer.
 
@@ -21,7 +25,7 @@ Without it (installed from a browser) the TV starts with no favorites, which can
 
 | File | What it does |
 | --- | --- |
-| `manifest` | Title, version (2.0.0: the first that runs on its own), icons, splash, `ui_resolutions=fhd`, `supports_input_launch=1`, `screensaver_title=Detox Clock`. |
+| `manifest` | Title, version (2.0.1; 2.0.0 was the first that asks the TV itself for its apps), icons, splash, `ui_resolutions=fhd`, `supports_input_launch=1`, `screensaver_title=Detox Clock`. |
 | `source/main.brs` | `Main(args)`: reads `pkg:/config.json`, shows `HomeScene`, forwards the launch deep link and `roInputEvent`s (ECP `input`) to the scene. `RunScreenSaver()`: shows `ClockSaverScene`. |
 | `components/HomeScene.xml/.brs` | Everything on screen: clock, the Favorites / All apps / Inputs rows, focus and remote keys, the * favorites button, "Opening…" overlay, message/notice/video switching. Keeps favorites and options in the registry. |
 | `components/EcpTask.xml/.brs` | Task node, one per request to the TV's own ECP (`query/apps`, `query/device-info`, `launch/<id>`). Tries the address that answered last, then each of `roDeviceInfo.GetIPAddrs()`, then 127.0.0.1. 4 s timeout per address. Parses the XML. |

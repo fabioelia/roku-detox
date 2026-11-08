@@ -73,8 +73,10 @@ The page has six menus:
   and your apps and favorites, rule notices ("Time's up"), messages you send from the Mac or phone, videos from
   web links, and an ad-free "Detox Clock" screensaver. Needs Roku developer mode (Home x3, Up x2,
   Right, Left, Right, Left, Right on the remote); you type the developer password on the page, and it's
-  sent only to the TV and never saved. Once installed it runs on its own: it reads the apps from the TV
-  itself and opens them through the TV's own remote-control service, so it never connects to the Mac.
+  sent only to the TV and never saved. The clock, messages and videos need nothing else running. Roku OS 12
+  and later don't let apps on the TV open other apps (Roku's ECP docs: "Support for sending ECP commands
+  from within a Roku app has been discontinued"), so on those TVs its app tiles stay empty; open apps from
+  the Roku home screen or with Roku Detox.
   Press * on the remote on a tile to add or remove a favorite; favorites and options chosen on the page
   are sent to it while it's open.
 - **Phone**: use your phone as the remote. With the phone remote on, "Set up a shortcut" makes a key

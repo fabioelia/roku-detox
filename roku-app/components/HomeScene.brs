@@ -304,8 +304,11 @@ sub hideOverlay()
     m.overlayTimer.control = "stop"
 end sub
 
+' Roku OS 12 and later refuse remote-control requests from apps on the TV itself, whatever the "Control by
+' mobile apps" setting says (Roku's ECP docs: support for sending ECP commands from within a Roku app has
+' been discontinued). So Detox Home can't list or open apps there; its clock, messages and videos still work.
 function blockedText() as String
-    return "Roku is blocking requests from apps. On this TV, open Settings, System, Advanced system settings, Control by mobile apps, Network access, and choose Default."
+    return "This Roku doesn't let apps on the TV open other apps (a Roku rule since Roku OS 12), so your apps can't show here. The clock, messages and videos still work. Open apps from the Roku home screen, or with Roku Detox on your phone or computer."
 end function
 
 ' ---------------------------------------------------------------- talking to this TV

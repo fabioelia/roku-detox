@@ -3,13 +3,21 @@
 Newest first. The extension's version is in `extension/manifest.json`; after pulling, reload it on
 `chrome://extensions`. The program has no version: restart `python3 roku_detox.py`.
 
+## Detox Home 2.0.1
+
+- On Roku OS 12 and later, Roku refuses remote-control requests from apps on the TV itself, even with
+  "Control by mobile apps" set to Permissive. Detox Home now says that plainly (instead of asking you to
+  change a setting that can't help), tries the TV's loopback address too, and keeps the clock, messages
+  and videos working.
+
 ## Extension 1.3.0 (November 2026)
 
 - **The extension installs and updates Detox Home itself**: type the developer-mode password on the TV app
   menu and press Install (or Update, for an older copy that needed a computer). It talks to the TV's own
   developer installer, like the program does; the password goes only to the TV and isn't kept. No more
   downloading the file and using the TV's installer page (still there, under "Or install it by hand").
-  Once updated, Detox Home runs on its own with no computer.
+  Note: Roku OS 12 and later don't let apps on the TV open other apps, so there Detox Home's tiles stay
+  empty (it says so); its clock, screensaver, messages and videos still work.
 - **Install Detox Home from a phone, no computer**: a GitHub Actions workflow builds `detox-home.zip` from
   `roku-app/` on every change and publishes it on the
   [detox-home release](https://github.com/fabioelia/roku-detox/releases/tag/detox-home). The lite page's TV

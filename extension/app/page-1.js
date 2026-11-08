@@ -3932,14 +3932,14 @@ function bookmarkletHref() {
 function renderLiteTvApp() {
   const tv = state.tv ? `http://${state.tv.split(":")[0]}` : "http://<your TV's address>";
   $("#app-status").dataset.state = "off";
-  $("#app-status").textContent = "Install or update Detox Home from this phone, no computer needed.";
+  $("#app-status").textContent = "Install or update Detox Home from this phone.";
   $("#app-body").innerHTML = `<ol class="app-steps">
       <li>On the TV remote, press Home 3 times, Up 2 times, then Right, Left, Right, Left, Right. Choose "Enable installer and restart," accept the terms, and pick a password. (Skip this if developer mode is already on.)</li>
       <li><a class="btn primary" href="${esc(DETOX_HOME_DOWNLOAD)}" target="_blank" rel="noopener">Download Detox Home</a> (from GitHub; it's the same app as on the computer).</li>
       <li>Open <a href="${esc(tv)}" target="_blank" rel="noopener">${esc(tv)}</a> and sign in as <strong>rokudev</strong> with that password.</li>
       <li>Choose the downloaded file (on an iPhone: Browse, then Downloads), press Install, and wait for the TV to open Detox Home.</li>
     </ol>
-    <p class="note">Installing again updates it. Roku allows one custom app at a time; Detox Home goes in that slot and changes nothing else on the TV. Once it's on, it runs on its own.</p>`;
+    <p class="note">Installing again updates it. Roku allows one custom app at a time; Detox Home goes in that slot and changes nothing else on the TV.</p>`;
 }
 
 function renderTvApp() {
@@ -3979,9 +3979,9 @@ function renderTvApp() {
       </ol></details>`;
     if (app.installed && app.linked) {
       status.dataset.state = app.outdated ? "off" : "on";
-      status.textContent = app.outdated ? "Detox Home is on the TV, but it's an older version that needs a computer running." : "Detox Home is on the TV. It runs on its own.";
+      status.textContent = app.outdated ? "Detox Home is on the TV, but it's an older version that needs a computer running." : "Detox Home is on the TV.";
       const update = app.outdated
-        ? `<p class="note" style="margin-top:0"><strong>Update it once and it runs on its own</strong>, with no computer needed: type the developer-mode password and press Update.</p>
+        ? `<p class="note" style="margin-top:0"><strong>Update it</strong> to the current version: type the developer-mode password and press Update.</p>
           ${canInstall ? passwordForm("Update Detox Home", "install-form") : ""}${byHand}`
         : "";
       body.innerHTML = `${update}
@@ -4019,7 +4019,7 @@ function renderTvApp() {
   }
   if (app.installed && app.linked) {
     status.dataset.state = app.outdated ? "off" : "on";
-    status.textContent = app.outdated ? "Detox Home is on the TV, but it's an older version." : "Detox Home is on the TV. It runs on its own, without this Mac.";
+    status.textContent = app.outdated ? "Detox Home is on the TV, but it's an older version." : "Detox Home is on the TV.";
     body.innerHTML = `${outdated}
       <div class="row-gap" style="margin-top:0">
         <button class="btn primary" type="button" data-app="open">Open it on the TV</button>

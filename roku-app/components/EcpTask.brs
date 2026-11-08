@@ -43,13 +43,18 @@ sub runRequest()
                 result.ok = true
                 if result.tag = "apps" then result.apps = parseApps(answer.text)
                 if result.tag = "device" then result.name = parseDeviceName(answer.text)
-            else
-                result.error = "HTTP " + answer.code.ToStr()
+                m.top.response = result
+                return
             end if
-            m.top.response = result
-            return
+            result.error = "HTTP " + answer.code.ToStr()
+            ' Refused (401/403): another of the TV's addresses (the loopback last) may be treated differently.
+            if answer.code <> 401 and answer.code <> 403
+                m.top.response = result
+                return
+            end if
+        else
+            if result.code = 0 then result.error = answer.error
         end if
-        result.error = answer.error
     end for
     m.top.response = result
 end sub
