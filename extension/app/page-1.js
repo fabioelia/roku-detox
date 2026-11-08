@@ -1304,7 +1304,7 @@ function pressKey(key) {
     btn.classList.add("sent");
     setTimeout(() => btn.classList.remove("sent"), 220);
   }
-  if (COARSE.matches && navigator.vibrate) navigator.vibrate(8);   // a small buzz, like a real remote's click
+  if (COARSE.matches && navigator.vibrate && !key.startsWith("Lit_")) navigator.vibrate(8);   // a small buzz, like a real remote's click
   // One at a time, so fast presses reach the TV in order.
   keysPending += 1;
   keyChain = keyChain.then(() => api("/api/key", { tv: state.tv, key }))
@@ -1541,8 +1541,40 @@ function renderSmart() {
   $("#smart-go").textContent = looksLikeLink($("#smart-input").value) ? "Play on TV" : "Search on TV";
 }
 $("#smart-input").addEventListener("input", renderSmart);
+
+// Live typing: what changes in the box is sent as it happens (letters, Backspace, Enter), like the
+// keyboard in Roku's phone app. Works out the change from the box's text, so phone keyboards that
+// compose words work too.
+let liveText = "";
+function setLive(on) {
+  $("#smart-form").dataset.live = String(on);
+  $("#smart-live").checked = on;
+  const input = $("#smart-input");
+  input.value = "";
+  liveText = "";
+  input.placeholder = on ? "Type here: it goes straight to the TV" : "A show, “open Netflix”, a link";
+  if (on) input.focus();
+  renderSmart();
+}
+$("#smart-live").addEventListener("change", (e) => setLive(e.target.checked));
+$("#smart-input").addEventListener("input", (e) => {
+  if ($("#smart-form").dataset.live !== "true") return;
+  const next = Array.from(e.target.value);
+  const prev = Array.from(liveText);
+  let same = 0;
+  while (same < prev.length && same < next.length && prev[same] === next[same]) same++;
+  for (let i = same; i < prev.length; i++) pressKey("Backspace");
+  for (const ch of next.slice(same).slice(0, 200)) pressKey(`Lit_${ch}`);
+  liveText = e.target.value;
+});
+$("#smart-input").addEventListener("keydown", (e) => {
+  if ($("#smart-form").dataset.live !== "true" || e.key !== "Enter") return;
+  e.preventDefault();
+  pressKey("Enter");
+});
 $("#smart-form").addEventListener("submit", async (e) => {
   e.preventDefault();
+  if ($("#smart-form").dataset.live === "true") { pressKey("Enter"); return; }   // a phone keyboard's Go key
   const input = $("#smart-input");
   let text = input.value.trim();
   if (!text || !state.control) return;
