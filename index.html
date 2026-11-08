@@ -1574,13 +1574,20 @@ async function findTVs({ autoConnect = true } = {}) {
   const btn = $("#find-btn");
   btn.disabled = true;
   btn.textContent = "Looking…";
-  setPickerNote("Looking for Roku TVs on your Wi-Fi. This takes a few seconds.");
+  // The extension can't ask the whole network at once like the home program does, so it checks
+  // addresses one by one; that can take a while the first time. A typed address is instant.
+  const sweeping = ["extension", "relay"].includes(state.engine?.kind);
+  setPickerNote(sweeping
+    ? "Looking for your TV. The first search can take up to 30 seconds. Faster: type the TV's address (on the TV: Settings, Network, About)."
+    : "Looking for Roku TVs on your Wi-Fi. This takes a few seconds.");
   try {
     const { tvs } = await api("/api/discover");
     state.tvs = tvs;
     renderPicker();
     if (!tvs.length) {
-      setPickerNote("No Roku found. Check the TV is on and on the same Wi-Fi as this computer, or type its IP address.");
+      setPickerNote(sweeping
+        ? "No Roku found. Type the TV's address above. It's on the TV under Settings, Network, About, and it's remembered after that."
+        : "No Roku found. Check the TV is on and on the same Wi-Fi as this computer, or type its IP address.");
       if (!state.tv) renderTV();
       return;
     }

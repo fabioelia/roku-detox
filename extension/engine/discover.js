@@ -17,8 +17,10 @@ export const COMMON_RANGES = [
 const CONCURRENCY = 16;
 // On this computer's own network, empty addresses fail fast (nothing answers the "who has this
 // address?" question), so more can run at once without starving the connection limit.
-const LOCAL_CONCURRENCY = 32;
-const PROBE_TIMEOUT = 700;
+const LOCAL_CONCURRENCY = 16;
+// The TV answers in well under 0.2 s on its own, but a sweep floods the Wi-Fi with "who has this
+// address?" broadcasts and its answer can then take a second or two.
+const PROBE_TIMEOUT = 1500;
 const ROUTER_HOSTS = [1, 254];
 const QUIET = { cache: "no-store", credentials: "omit", redirect: "manual", referrerPolicy: "no-referrer" };
 
@@ -106,24 +108,45 @@ export async function discover({ ranges = null, hosts = null, port = ECP_PORT, t
     }
   };
 
-  if (includeKnown) await run(targetsFor(await knownAddresses(), port));
+  const started = Date.now();
+  const note = (text) => console.info(`Roku Detox search (${((Date.now() - started) / 1000).toFixed(1)} s): ${text}`);
+  if (includeKnown) {
+    const known = targetsFor(await knownAddresses(), port);
+    if (known.length) {
+      await run(known);
+      note(`tried ${known.length} TV address(es) seen before: ${found.size ? "found" : "no answer"}.`);
+    }
+  }
   if (hosts) {
     await run(targetsFor(hosts, port));
   } else if (!found.size) {
-    const candidates = ranges || COMMON_RANGES;
-    const local = [];
-    const flags = await Promise.all(candidates.map((range) => looksLocal(range)));
-    candidates.forEach((range, i) => { if (flags[i]) local.push(range); });
-    const rest = (ranges || HOME_RANGES).filter((range) => !local.includes(range));
-    for (const group of [local, rest]) {
-      for (const range of group) {
-        const addresses = [];
-        for (let i = 1; i < 255; i++) addresses.push(`${range}.${i}`);
-        await run(targetsFor(addresses, port), group === local ? LOCAL_CONCURRENCY : CONCURRENCY);
+    // Ranges passed in come from a TV we knew (rules re-finding a TV that moved), so they're swept
+    // as given. Otherwise only ranges that look like this computer's own network are swept:
+    // sweeping a range that isn't (its addresses just hang) uses up Chrome's connection limit.
+    let sweep = ranges;
+    if (!sweep) {
+      const flags = await Promise.all(COMMON_RANGES.map((range) => looksLocal(range)));
+      sweep = COMMON_RANGES.filter((range, i) => flags[i]);
+      note(sweep.length ? `this computer looks to be on ${sweep.map((r) => `${r}.x`).join(", ")}.`
+        : "couldn't tell which network this computer is on, so nothing was swept. Type the TV's address instead.");
+    }
+    for (const range of sweep) {
+      const addresses = [];
+      for (let i = 1; i < 255; i++) addresses.push(`${range}.${i}`);
+      const targets = targetsFor(addresses, port);
+      await run(targets, ranges ? CONCURRENCY : LOCAL_CONCURRENCY);
+      note(`swept ${range}.1 to ${range}.254: ${found.size ? [...found.keys()].join(", ") : "no TV"}.`);
+      if (!found.size) {
+        // One more pass: the computer now remembers which addresses are empty, so they fail at
+        // once and the TV's answer isn't crowded out.
+        for (const t of targets) seen.delete(`${t.host}:${t.port}`);
+        await run(targets, ranges ? CONCURRENCY : LOCAL_CONCURRENCY);
+        note(`second pass over ${range}.x: ${found.size ? [...found.keys()].join(", ") : "no TV"}.`);
       }
-      if (found.size) break; // found on this computer's network: don't sweep the others
+      if (found.size) break;
     }
   }
+  note(found.size ? `done, found ${[...found.keys()].join(", ")}.` : "done, no TV found.");
 
   const tvs = [...found.values()].sort((a, b) => {
     const x = a.name.toLowerCase();
