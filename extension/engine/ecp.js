@@ -6,6 +6,8 @@ import {
   APP_ID_RE, Blocked, ParseError, TVError, ValueError, displayAddress, fetchWithTimeout,
   keepAlive, quote, sleep, targetKey, unescapeHtml, urlencode,
 } from "./util.js";
+import { md5 } from "./installer.js";
+import { siteList } from "./store.js";
 import { setSleep } from "./sleep.js";   // (sleep.js imports press from here: fine, both are only used later)
 import { explainFailure, lastNetError } from "./neterrors.js";
 
@@ -258,7 +260,10 @@ export async function activeApp(target, { deliver = true } = {}) {
   const { status, text } = await ecp(target, "query/active-app");
   check(status, text);
   const app = parseActiveApp(text);
-  if (deliver && app.id === "dev" && TV_APP_PENDING.has(targetKey(target))) await deliverPending(target, app);
+  if (deliver && app.id === "dev") {   // favorites, options or sites changed while it wasn't open: hand them over
+    await queueSites(target);
+    if (TV_APP_PENDING.has(targetKey(target))) await deliverPending(target, app);
+  }
   return app;
 }
 
@@ -414,9 +419,61 @@ export async function runScene(target, scene) {
 
 const TV_APP_SEEN = new Map(); // target key -> {at, present}
 
-/** Forget whether Detox Home is installed (after installing or removing it). */
+/** Forget what's known about Detox Home on this TV (after installing or removing it). */
 export function forgetTvApp(target) {
   TV_APP_SEEN.delete(targetKey(target));
+  TV_APP_SITES_SENT.delete(targetKey(target));
+}
+
+const SITES_PIECE = 900;   // characters of the list in one link, so no link gets long
+const SITES_MAX = 12000;   // what fits in the TV's small settings store
+const TV_APP_SITES_SENT = new Map(); // target key -> the version of the list already on its way
+
+/** The sites to search, as Detox Home keeps them: [[id, name, search address, 1 if added from a phone]]. */
+export function siteRows(sites) {
+  const rows = sites.map((s) => [s.id, s.name, s.search, ...(s.fromPhone === true ? [1] : [])]);
+  while (rows.length && Array.from(JSON.stringify(rows)).length > SITES_MAX) rows.pop();
+  return rows;
+}
+
+/** The list of sites as deep links for Detox Home, in pieces. */
+export function sitesLinks(rows) {
+  const data = JSON.stringify(rows);
+  const rev = md5(data).slice(0, 8);
+  const chars = Array.from(data);
+  const links = [];
+  const of = Math.ceil(chars.length / SITES_PIECE);
+  for (let n = 0; n < of; n++) {
+    links.push({ contentId: "sites", rev, part: String(n + 1), of: String(of), data: chars.slice(n * SITES_PIECE, (n + 1) * SITES_PIECE).join("") });
+  }
+  return links;
+}
+
+/**
+ * Line up the current list of sites for Detox Home, once per version of the list. An empty list only goes
+ * when it's news (force, or a list was sent before): most TVs never have any sites.
+ */
+async function queueSites(target, force = false) {
+  const rows = siteRows(await siteList());
+  const links = sitesLinks(rows);
+  const key = targetKey(target);
+  if (TV_APP_SITES_SENT.get(key) === links[0].rev || (!rows.length && !force && !TV_APP_SITES_SENT.has(key))) return;
+  TV_APP_SITES_SENT.set(key, links[0].rev);
+  const waiting = {};
+  for (const [kind, params] of Object.entries(TV_APP_PENDING.get(key) || {})) if (!kind.startsWith("sites")) waiting[kind] = params;
+  links.forEach((link, n) => { waiting[`sites${n}`] = link; });
+  TV_APP_PENDING.set(key, waiting);
+}
+
+/** Give Detox Home the list of sites: now if it's open, otherwise the next time it's seen open. */
+export async function pushSitesToTvApp(target, force = true) {
+  await queueSites(target, force);
+  try {
+    return (await tvAppPresent(target, 300)) && (await deliverPending(target));
+  } catch (err) {
+    if (err instanceof TVError || err instanceof ParseError) return false;
+    throw err;
+  }
 }
 
 /** Is Detox Home installed on this TV? */

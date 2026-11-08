@@ -87,8 +87,8 @@ function DeepLinkFrom(args as Dynamic) as Dynamic
     mediaType = ""
     if IsStringValue(args.mediaType) then mediaType = args.mediaType
     link = { contentId: cid, mediaType: mediaType }
-    ' Everything travels inside the link itself: items (contentId=inline), favorites, settings.
-    for each field in ["url", "title", "text", "from", "streamFormat", "referer", "ids", "clock24", "simpleMode"]
+    ' Everything travels inside the link itself: items (contentId=inline), favorites, settings, sites.
+    for each field in ["url", "title", "text", "from", "streamFormat", "referer", "ids", "clock24", "simpleMode", "rev", "part", "of", "data"]
         if IsStringValue(args[field]) then link[field] = args[field]
     end for
     return link

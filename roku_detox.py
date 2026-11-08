@@ -236,9 +236,11 @@ def active_app(target, deliver=True):
     if node is None:
         return {"id": "", "name": ""}
     app = {"id": node.get("id", ""), "name": (node.text or "").strip()}
-    # Detox Home is open and favorites or options changed while it wasn't: hand them over now.
-    if deliver and app["id"] == "dev" and TV_APP_PENDING.get(target):
-        deliver_pending(target, app)
+    # Detox Home is open and favorites, options or sites changed while it wasn't: hand them over now.
+    if deliver and app["id"] == "dev":
+        queue_sites(target)
+        if TV_APP_PENDING.get(target):
+            deliver_pending(target, app)
     return app
 
 
@@ -2574,6 +2576,53 @@ def settings_link(options):
             "simpleMode": "1" if options.get("simpleMode") else "0"}
 
 
+SITES_PIECE = 900      # characters of the list in one link, so no link gets long
+SITES_MAX = 12000      # what fits in the TV's small settings store
+TV_APP_SITES_SENT = {}  # target -> the version of the list already on its way
+
+
+def site_rows():
+    """The sites to search, as Detox Home keeps them: [[id, name, search address, 1 if added from a phone]]."""
+    rows = [[s["id"], s["name"], s["search"]] + ([1] if s.get("fromPhone") is True else []) for s in site_list()]
+    while rows and len(json.dumps(rows, separators=(",", ":"), ensure_ascii=False)) > SITES_MAX:
+        rows.pop()
+    return rows
+
+
+def sites_links(rows):
+    """The list of sites as deep links for Detox Home, in pieces."""
+    data = json.dumps(rows, separators=(",", ":"), ensure_ascii=False)
+    rev = hashlib.md5(data.encode("utf-8")).hexdigest()[:8]
+    pieces = [data[i:i + SITES_PIECE] for i in range(0, len(data), SITES_PIECE)]
+    return [{"contentId": "sites", "rev": rev, "part": str(n + 1), "of": str(len(pieces)), "data": piece}
+            for n, piece in enumerate(pieces)]
+
+
+def queue_sites(target, force=False):
+    """Line up the current list of sites for Detox Home, once per version of the list. An empty list only goes
+    when it's news (force, or a list was sent before): most TVs never have any sites."""
+    rows = site_rows()
+    links = sites_links(rows)
+    with TV_APP_PENDING_LOCK:
+        if TV_APP_SITES_SENT.get(target) == links[0]["rev"] or (not rows and not force and target not in TV_APP_SITES_SENT):
+            return
+        TV_APP_SITES_SENT[target] = links[0]["rev"]
+        waiting = TV_APP_PENDING.setdefault(target, {})
+        for kind in [k for k in waiting if k.startswith("sites")]:
+            waiting.pop(kind)
+        for n, link in enumerate(links):
+            waiting[f"sites{n}"] = link
+
+
+def push_sites_to_tv_app(target):
+    """Give Detox Home the list of sites: now if it's open, otherwise the next time it's seen open."""
+    queue_sites(target, force=True)
+    try:
+        return tv_app_present(target, max_age=300) and deliver_pending(target)
+    except (TVError, ET.ParseError):
+        return False
+
+
 def push_to_tv_app(target, kind, params):
     """Give Detox Home new favorites or options without interrupting the TV: now if it's open,
     otherwise the next time it's seen open. Returns True if it's on the TV now."""
@@ -2693,7 +2742,7 @@ def tv_seed(target):
         name = ""
     return {"seed": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "favorites": [f for f in tv_settings(address)["favorites"] if f != "dev"],
-            **tv_app_options(address), "tvName": name}
+            **tv_app_options(address), "tvName": name, "sites": site_rows()}
 
 
 def install_tv_app(phone, target, password):
@@ -2710,6 +2759,7 @@ def install_tv_app(phone, target, password):
     TV_APP_SEEN.pop(target, None)
     with TV_APP_PENDING_LOCK:
         TV_APP_PENDING.pop(target, None)   # the new copy starts with them
+        TV_APP_SITES_SENT.pop(target, None)
     phone.stop_listening_if_unused()       # older copies reached this Mac over Wi-Fi; this one doesn't
 
 
@@ -2720,6 +2770,8 @@ def remove_tv_app(phone, target, password):
     address = display_address(target)
     update_settings(lambda data: (data.get("tvApps") or {}).pop(address, None))
     TV_APP_SEEN.pop(target, None)
+    with TV_APP_PENDING_LOCK:
+        TV_APP_SITES_SENT.pop(target, None)
     phone.stop_listening_if_unused()
 
 
@@ -3809,6 +3861,11 @@ class Handler(BaseHTTPRequestHandler):
         keep = (remembered + [u for u in sorted(from_phone) if u not in set(remembered)])[-200:]  # oldest drop off
         update_settings(lambda data: data.update(phoneSites=keep))
         update_settings(lambda data: data.update(sites=sites))
+        if body.get("tv"):
+            try:
+                push_sites_to_tv_app(parse_target(str(body["tv"])))
+            except ValueError:
+                pass  # the list is saved; it goes the next time Detox Home is seen open
         self.send(200, {"sites": sites})
 
     def port_ok(self, tv):

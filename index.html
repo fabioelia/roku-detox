@@ -887,6 +887,7 @@
           <details class="services" id="sites-box">
             <summary>Your sites <span id="sites-summary"></span></summary>
             <p class="note">To add one, search the site in your browser and paste the address of its results page here. Roku Detox finds your search words in it and swaps in {q} (or put {q} there yourself). For example: https://www.youtube.com/results?search_query={q}</p>
+            <p class="note">Detox Home on the TV can search these too, under Search my sites. It plays videos the site offers as plain files; YouTube and locked (DRM) videos stay on their own apps.</p>
             <ul class="undo" id="sites-list"></ul>
             <form class="install-form" id="site-form" style="margin-top:10px">
               <input type="text" id="site-name" placeholder="Name" aria-label="Site name" maxlength="40" style="flex:0 1 160px;min-width:120px">
@@ -3867,7 +3868,7 @@ function renderSites() {
 }
 
 async function saveSites(sites) {
-  state.sites = (await api("/api/sites", { sites })).sites;
+  state.sites = (await api("/api/sites", { sites, tv: state.tv })).sites;
   renderSites();
 }
 

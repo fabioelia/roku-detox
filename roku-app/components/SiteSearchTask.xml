@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Searches one of the user's sites.
+    request  = {site: {id, name, search, p}, query, slot}
+    response = {order, site, results: [{title, url, image, app}], error}
+-->
+<component name="SiteSearchTask" extends="Task">
+  <interface>
+    <field id="request" type="assocarray"/>
+    <field id="response" type="assocarray" alwaysNotify="true"/>
+  </interface>
+  <script type="text/brightscript" uri="pkg:/components/SiteSearchTask.brs"/>
+  <script type="text/brightscript" uri="pkg:/components/SiteFetch.brs"/>
+  <script type="text/brightscript" uri="pkg:/components/SiteSearch.brs"/>
+  <script type="text/brightscript" uri="pkg:/components/DetoxUtils.brs"/>
+</component>

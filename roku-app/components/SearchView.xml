@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Search my sites: type or pick a search, see the results one row per site, and play them here.
+    begin     = {sites: [{id, name, search, p}], query}   (no query: asks for one)
+    takeFocus = true when coming back to this screen
+    closed    -> the viewer left
+    playItem  -> {url, title, streamFormat, referer}
+    searched  -> the words just searched for
+-->
+<component name="SearchView" extends="Group">
+  <interface>
+    <field id="begin" type="assocarray" alwaysNotify="true" onChange="onBegin"/>
+    <field id="takeFocus" type="boolean" alwaysNotify="true" onChange="onTakeFocus"/>
+    <field id="closed" type="boolean" alwaysNotify="true"/>
+    <field id="playItem" type="assocarray" alwaysNotify="true"/>
+    <field id="searched" type="string" alwaysNotify="true"/>
+  </interface>
+  <script type="text/brightscript" uri="pkg:/components/SearchView.brs"/>
+  <script type="text/brightscript" uri="pkg:/components/SiteSearch.brs"/>
+  <script type="text/brightscript" uri="pkg:/components/DetoxUtils.brs"/>
+  <children>
+    <Rectangle width="1920" height="1080" color="0x10161FFF"/>
+    <Label id="heading" translation="[120,60]" width="1680" color="0xEEF2F6FF" font="font:LargeBoldSystemFont"/>
+    <Label id="statusLabel" translation="[120,150]" width="1680" maxLines="2" wrap="true" color="0x8D9AA8FF" font="font:MediumSystemFont"/>
+    <Label id="hintLabel" translation="[120,1010]" width="1680" color="0x5F6D7CFF" font="font:SmallSystemFont" text="OK plays it. Press * to search again. Back to leave."/>
+    <RowList id="list" translation="[120,240]" itemComponentName="SearchResultTile" numRows="2" itemSize="[1680,380]" itemSpacing="[0,20]" rowItemSize="[[400,312]]" rowItemSpacing="[[30,0]]" showRowLabel="[true]" rowLabelOffset="[[0,12]]" rowLabelColor="0xC9D3DDFF" rowFocusAnimationStyle="floatingFocus" vertFocusAnimationStyle="floatingFocus"/>
+    <Group id="noteGroup" visible="false">
+      <Rectangle width="1920" height="1080" color="0x0A0E14F2"/>
+      <Label id="noteTitle" translation="[160,360]" width="1600" horizAlign="center" color="0xFFFFFFFF" font="font:LargeBoldSystemFont"/>
+      <Label id="noteText" translation="[160,480]" width="1600" horizAlign="center" wrap="true" color="0xC9D3DDFF" font="font:MediumSystemFont"/>
+      <Label id="noteLink" translation="[160,680]" width="1600" horizAlign="center" maxLines="2" wrap="true" color="0x8D9AA8FF" font="font:SmallSystemFont"/>
+      <Label translation="[160,800]" width="1600" horizAlign="center" color="0x5F6D7CFF" font="font:SmallSystemFont" text="Press OK to go back"/>
+    </Group>
+  </children>
+</component>

@@ -7,7 +7,7 @@ import {
 } from "./util.js";
 import {
   activeApp, canControl, deviceInfo, favoritesLink, fetchIcon, launch, listApps, nowPlaying, openStorePage, press,
-  forgetTvApp, pushToTvApp, restart, runScene, search, settingsLink, summarize, tvAppPresent, typeText,
+  forgetTvApp, pushSitesToTvApp, pushToTvApp, restart, runScene, search, settingsLink, summarize, tvAppPresent, typeText,
 } from "./ecp.js";
 import {
   appendLog, cleanFavorites, cleanScenes, cleanServices, getLocal, preferredTv, readLog, rememberTv, saveSites,
@@ -259,6 +259,7 @@ const POST_ROUTES = {
     const { favorites } = await tvSettings(address);
     await pushToTvApp(target, "settings", settingsLink(await tvAppOptions(address)));
     await pushToTvApp(target, "favorites", favoritesLink(favorites));
+    await pushSitesToTvApp(target, false);
     return tvAppStatus(target);
   },
   "/api/tvapp/remove": async (c) => {
@@ -281,7 +282,17 @@ const POST_ROUTES = {
     await tvMessage(c.target(), text);
     return ok();
   },
-  "/api/sites": async (c) => ({ sites: await saveSites(c.body.sites) }),
+  "/api/sites": async (c) => {
+    const sites = await saveSites(c.body.sites);
+    if (c.body.tv) {
+      try {
+        await pushSitesToTvApp(c.target());
+      } catch (err) {
+        if (!(err instanceof ValueError)) throw err; // saved; it goes the next time Detox Home is seen open
+      }
+    }
+    return { sites };
+  },
   "/api/sleep": async (c) => setSleep(c.target(), c.body.minutes),
   "/api/do": async (c) => {
     const target = c.body.tv ? c.target() : parseTarget(await preferredTv() || "");

@@ -176,6 +176,16 @@ test("clean_rules", () => {
   ]);
 });
 
+test("sites_links: the list of sites for Detox Home, in pieces", () => {
+  const long = "https://example.com/search?q={q}&padding=" + "é".repeat(400);
+  same("sites_links", ecp.sitesLinks, [
+    [[]],
+    [[["s1", "Archive", "https://archive.org/search?query={q}"]]],
+    [[["s1", 'A "quoted" name 😀', "https://example.com/{q}", 1], ["s2", "Two", "https://example.org/s?q={q}"]]],
+    [Array.from({ length: 6 }, (_, i) => [`s${i}`, `Site ${i} 😀`, long])],
+  ]);
+});
+
 test("clean_scenes, clean_sites, clean_favorites, clean_services", () => {
   same("clean_scenes", store.cleanScenes, [
     [[{ id: "abc123", name: "  Movie night  ", steps: [{ do: "power_on" }, { do: "open", target: "tvinput.hdmi1" }, { do: "volume_up", n: "7" },

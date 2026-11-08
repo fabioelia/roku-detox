@@ -60,6 +60,7 @@ class Fake:
         self.dev_version = "1.0.1"       # from the installed zip's manifest
         self.dev_config = None           # its config.json, if any
         self.last_dev_params = None
+        self.dev_inputs = []   # every link Detox Home was given, oldest first
         self.lock = threading.Lock()
 
     def press(self, key):
@@ -200,6 +201,7 @@ class Handler(BaseHTTPRequestHandler):
                     return self.reply(404, "")
                 fake.active = ("dev", "Detox Home")
                 fake.last_dev_params = dict(urllib.parse.parse_qsl(url.query))
+                fake.dev_inputs.append(fake.last_dev_params)
                 # A video plays; a notice, message or the launcher doesn't.
                 fake.playing_since = time.time() if fake.last_dev_params.get("mediaType") == "video" else None
                 print(f"  Detox Home got {url.path} {fake.last_dev_params}")
@@ -213,6 +215,8 @@ class Handler(BaseHTTPRequestHandler):
                 fake.playing_since = time.time() if url.query else None
                 print(f"  launched {name} {url.query}")
                 return self.reply(200, "")
+            if url.path == "/test/dev-inputs":
+                return self.reply(200, json.dumps(fake.dev_inputs), "application/json")
             if url.path == "/test/last-dev":
                 return self.reply(200, json.dumps(fake.last_dev_params or {}), "application/json")
             if url.path == "/test/dev-config":  # the installed Detox Home's config.json

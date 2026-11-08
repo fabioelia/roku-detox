@@ -2656,7 +2656,7 @@ function renderSites() {
 }
 
 async function saveSites(sites) {
-  state.sites = (await api("/api/sites", { sites })).sites;
+  state.sites = (await api("/api/sites", { sites, tv: state.tv })).sites;
   renderSites();
 }
 

@@ -57,6 +57,7 @@ CALLS = {
     "video_candidates": rd.video_candidates,
     "pick_video": rd.pick_video,
     "typed_sources": rd.typed_sources,
+    "sites_links": rd.sites_links,
     "video_frames": rd.video_frames,
     "page_title": rd.page_title,
     "page_meta": lambda page, *names: rd.page_meta(page, *names),

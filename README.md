@@ -56,6 +56,7 @@ The page has six menus:
   For sites that only show results after their scripts run, the extension's **Look closer** opens the
   page in a hidden, muted tab for a few seconds, reads it and closes it, and remembers to do that for the site.
   YouTube results open in the YouTube app; other videos play in Detox Home.
+  Detox Home can search them on the TV too, with no computer on (it plays sites' plain video files; not YouTube or DRM).
 - **Rules**: things that run in the background while the program is open on your Mac:
   skip the home screen when the TV turns on, bedtime (every night, school nights, or the nights you pick), daily time limits
   (per app, or for all TV together, with a different amount on weekends if you like), blocked apps, swap apps,

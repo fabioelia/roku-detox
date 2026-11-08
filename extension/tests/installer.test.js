@@ -59,6 +59,18 @@ test("the extension installs, updates and removes Detox Home itself (no installe
   // ...but a scene that turns it on first can show one.
   await runSteps([{ do: "power_on" }, { do: "message", text: "Good morning" }]);
   assert.equal(await lastShown(), "Good morning");
+  // The list of sites reaches Detox Home in pieces, once per version of the list.
+  const inputs = async () => (await (await fetch(`http://${TV}/test/dev-inputs`, { method: "POST" })).json()).filter((l) => l.contentId === "sites");
+  const before = (await inputs()).length;
+  const sites = Array.from({ length: 5 }, (_, i) => ({ id: `s${i}`, name: `Site ${i}`, search: `https://example${i}.com/search?q={q}&pad=${"x".repeat(300)}` }));
+  assert.equal((await call("/api/sites", { tv: TV, sites })).status, 200);
+  const sent = (await inputs()).slice(before);
+  assert.ok(sent.length >= 2, `${sent.length} pieces`);
+  assert.deepEqual(sent.map((l) => l.part), sent.map((_, i) => String(i + 1)));
+  assert.ok(sent.every((l) => l.of === String(sent.length) && l.rev === sent[0].rev));
+  assert.deepEqual(JSON.parse(sent.map((l) => l.data).join("")).map((row) => row[0]), ["s0", "s1", "s2", "s3", "s4"]);
+  await handleMessage({ type: "api", method: "GET", path: "/api/active", query: { tv: TV } }, { internal: true });
+  assert.equal((await inputs()).length - before, sent.length, "the same list isn't sent again");
   // Phones (the relay) and web pages can't install, and their TV app menu says so (no password form).
   assert.equal((await call("/api/tvapp/install", { tv: "127.0.0.1", password: "testpass" }, false)).status, 501);
   const fromPhone = await handleMessage({ type: "api", method: "GET", path: "/api/tvapp", query: { tv: "127.0.0.1" } }, { internal: false });

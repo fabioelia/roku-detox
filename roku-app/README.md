@@ -70,3 +70,20 @@ video, or the video ending all go back to Home. Back on Home exits the app.
 - **Message / Notice**: very large text; OK or Back closes.
 - **Video**: stock player UI; playback errors show "Couldn't play this video" with the error text.
 - **Screensaver**: pick "Detox Clock" in Settings > Theme > Screensaver.
+
+## Search my sites
+
+A row on the home screen. The sites come from Roku Detox (`contentId=sites` links with `rev`, `part`, `of`, `data`,
+or `sites` in `config.json`) and stay on the TV. `SiteSearchTask` opens each site's search page, three at a time;
+`FindVideoTask` finds the video on the page you pick. Both use `SiteSearch.brs`, which follows the same rules as
+`read_results()` and `find_video()` in `roku_detox.py`.
+
+Check it on a computer, with nothing to install:
+
+```bash
+python3 tools/brs_lite.py roku-app
+python3 tools/test_site_search.py
+```
+
+`brs_lite` catches syntax errors, reserved words, and missing functions or callbacks in every component.
+`test_site_search` runs `SiteSearch.brs` and compares it with the program on saved pages. Neither draws the screens.

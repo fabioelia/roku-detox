@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Finds the video on a result's page.
+    request  = {url, title, slot}
+    response = {url, title, streamFormat, referer} | {error}
+-->
+<component name="FindVideoTask" extends="Task">
+  <interface>
+    <field id="request" type="assocarray"/>
+    <field id="response" type="assocarray" alwaysNotify="true"/>
+  </interface>
+  <script type="text/brightscript" uri="pkg:/components/FindVideoTask.brs"/>
+  <script type="text/brightscript" uri="pkg:/components/SiteFetch.brs"/>
+  <script type="text/brightscript" uri="pkg:/components/SiteSearch.brs"/>
+  <script type="text/brightscript" uri="pkg:/components/DetoxUtils.brs"/>
+</component>

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- One search result in SearchView's RowList: picture, title, and a note for results that can't play here. -->
+<component name="SearchResultTile" extends="Group">
+  <interface>
+    <field id="itemContent" type="node" onChange="onContent"/>
+  </interface>
+  <script type="text/brightscript" uri="pkg:/components/SearchResultTile.brs"/>
+  <script type="text/brightscript" uri="pkg:/components/DetoxUtils.brs"/>
+  <children>
+    <Rectangle id="box" width="400" height="225" color="0x1B2430FF"/>
+    <Poster id="poster" width="400" height="225" loadDisplayMode="scaleToFit"/>
+    <Label id="titleLabel" translation="[0,236]" width="400" height="76" maxLines="2" wrap="true" color="0xEEF2F6FF" font="font:SmallSystemFont"/>
+    <Label id="noteLabel" translation="[12,180]" width="376" color="0xFFD58AFF" font="font:SmallBoldSystemFont"/>
+  </children>
+</component>

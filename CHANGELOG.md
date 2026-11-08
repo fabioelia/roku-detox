@@ -3,6 +3,19 @@
 Newest first. The extension's version is in `extension/manifest.json`; after pulling, reload it on
 `chrome://extensions`. The program has no version: restart `python3 roku_detox.py`.
 
+## Detox Home 2.1.0: search your sites on the TV (Extension 1.4.0)
+
+- **Search my sites** is now a row on Detox Home. Type with the remote (or pick a recent search) and the TV
+  searches your sites itself, with no computer on, one row of results per site. OK plays a result right there;
+  Back returns to the results.
+- It plays videos a site offers as plain files (MP4, HLS, DASH). YouTube isn't searched (its videos only open in
+  the YouTube app, which apps on the TV can't start), DRM sites can't play, and sites that need "Look closer" on
+  the computer won't show results. Results that can't play say why.
+- Your sites reach the TV by themselves: when you save them, when Detox Home is installed, and the next time it's
+  seen open. Update it from the TV app menu to get this.
+- New for developers: `tools/brs_lite.py` checks the TV code on a computer (syntax, reserved words, missing
+  functions and callbacks), and `tools/test_site_search.py` runs the TV's page reading against the program's.
+
 ## Finding a page's video: more players understood
 
 - Players set up with a path on the site itself (like `file: "/media/clip.m3u8"`) are found, not only

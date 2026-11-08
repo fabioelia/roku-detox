@@ -37,6 +37,7 @@
     </Rectangle>
 
     <MessageView id="messageView" visible="false"/>
+    <SearchView id="searchView" visible="false"/>
     <VideoView id="videoView" visible="false"/>
 
     <!-- "Opening Netflix…" and problems opening an app -->

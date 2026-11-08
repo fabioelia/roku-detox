@@ -5,7 +5,7 @@
 ' "DetoxHome"). Roku Detox on a computer or phone only ever sends things in: deep links and
 ' ECP input events (see onDeepLink).
 '
-' Modes: "home" | "message" (also notices) | "video"
+' Modes: "home" | "message" (also notices) | "video" | "search"
 
 sub init()
     ' Text sizes (see setFont in DetoxUtils.brs).
@@ -26,6 +26,7 @@ sub init()
     m.bannerLabel = m.top.findNode("bannerLabel")
     m.messageView = m.top.findNode("messageView")
     m.videoView = m.top.findNode("videoView")
+    m.searchView = m.top.findNode("searchView")
     m.overlay = m.top.findNode("overlay")
     m.overlayTitle = m.top.findNode("overlayTitle")
     m.overlayText = m.top.findNode("overlayText")
@@ -40,6 +41,10 @@ sub init()
     m.clock24 = (m.reg.Read("clock24") = "1")
     m.simple = (m.reg.Read("simpleMode") = "1")
     m.tvName = m.reg.Read("tvName")
+    m.sites = loadSites()      ' [{id, name, search, p}]: the sites to search, sent by Roku Detox
+    m.recent = loadRecent()    ' the last searches, newest first
+    m.sitesParts = invalid     ' a list of sites arriving in pieces: {rev, parts}
+    m.fromSearch = false       ' a video or note opened from the search screen goes back there
 
     m.ecpHost = ""             ' the TV's own address that answered last
     m.apps = invalid           ' [{id, name, kind: "app"|"input", port}] from query/apps
@@ -61,6 +66,9 @@ sub init()
     m.bannerTimer.observeField("fire", "hideBanner")
     m.videoView.observeField("finished", "onVideoFinished")
     m.videoView.observeField("playbackError", "onVideoError")
+    m.searchView.observeField("closed", "onSearchClosed")
+    m.searchView.observeField("playItem", "onSearchPlay")
+    m.searchView.observeField("searched", "onSearched")
 
     m.tvNameLabel.text = m.tvName
     setClockLayout(m.simple)
@@ -69,10 +77,51 @@ sub init()
     m.refreshTimer.control = "start"
     fetchApps()
     startEcp("device", "GET", "query/device-info", {})
+    buildHome()
     m.top.setFocus(true)
 end sub
 
 ' ---------------------------------------------------------------- what's kept on the TV
+
+function loadSites() as Object
+    return cleanSites(ParseJson(m.reg.Read("sites")))
+end function
+
+function loadRecent() as Object
+    out = []
+    list = ParseJson(m.reg.Read("recentSearches"))
+    if type(list) = "roArray"
+        for each v in list
+            if asStr(v) <> "" and out.Count() < 8 then out.Push(asStr(v))
+        end for
+    end if
+    return out
+end function
+
+' Sites as sent: [[id, name, search address, 1 if added from a phone], ...] (or already cleaned).
+function cleanSites(list as Dynamic) as Object
+    out = []
+    if type(list) <> "roArray" then return out
+    for each v in list
+        site = invalid
+        if type(v) = "roArray"
+            if v.Count() >= 3 then site = { id: asStr(v[0]), name: asStr(v[1]), search: asStr(v[2]), p: (v.Count() > 3) }
+        else if type(v) = "roAssociativeArray"
+            site = { id: asStr(v.id), name: asStr(v.name), search: asStr(v.search), p: asBool(v.p) }
+        end if
+        if site <> invalid
+            if site.name <> "" and Left(LCase(site.search), 4) = "http" and out.Count() < 20 then out.Push(site)
+        end if
+    end for
+    return out
+end function
+
+sub saveSites(list as Object, rev as String)
+    m.sites = list
+    m.reg.Write("sites", FormatJson(list))
+    m.reg.Write("sitesRev", rev)
+    m.reg.Flush()
+end sub
 
 function loadFavorites() as Object
     return cleanIds(ParseJson(m.reg.Read("favorites")))
@@ -125,6 +174,7 @@ sub onSeed()
     seedId = asStr(seed.seed)
     if seedId = "" or seedId = m.reg.Read("seedId") then return
     if type(seed.favorites) = "roArray" then saveFavorites(cleanIds(seed.favorites))
+    if type(seed.sites) = "roArray" then saveSites(cleanSites(seed.sites), "")
     saveFlag("clock24", asBool(seed.clock24))
     saveFlag("simpleMode", asBool(seed.simpleMode))
     if asStr(seed.tvName) <> "" and m.tvName = ""
@@ -143,6 +193,7 @@ end sub
 '   contentId=inline     mediaType=video|message|notice, with url, title, text, from, streamFormat, referer
 '   contentId=favorites  ids=12,837,tvinput.hdmi1 (empty clears them)
 '   contentId=settings   clock24=0|1, simpleMode=0|1 (either one)
+'   contentId=sites      rev, part, of, data: the sites to search, as JSON, in one or more pieces
 ' Anything else (like an item id from an older Roku Detox) shows the home screen.
 sub onDeepLink()
     link = m.top.deepLink
@@ -166,13 +217,40 @@ sub onDeepLink()
             saveFlag("simpleMode", simple)
         end if
         applyLook()
+    else if contentId = "sites"
+        receiveSites(link)
     else
         if m.mode <> "home" then goHome()   ' anything else (like an older Roku Detox's item id): the home screen
     end if
 end sub
 
+' One piece of the list of sites. The list is used when all its pieces are here; a newer list replaces it.
+sub receiveSites(link as Object)
+    rev = asStr(link.rev)
+    part = Int(Val(asStr(link.part)))
+    total = Int(Val(asStr(link.of)))
+    if rev = "" or part < 1 or total < 1 or part > total or total > 40 then return
+    if rev = m.reg.Read("sitesRev") then return    ' already have this list
+    if m.sitesParts = invalid then m.sitesParts = { rev: "", parts: {} }
+    if m.sitesParts.rev <> rev then m.sitesParts = { rev: rev, parts: {} }
+    m.sitesParts.parts[part.ToStr()] = asStr(link.data)
+    if m.sitesParts.parts.Count() < total then return
+    text = ""
+    for i = 1 to total
+        piece = m.sitesParts.parts[i.ToStr()]
+        if piece = invalid then return
+        text = text + piece
+    end for
+    m.sitesParts = invalid
+    list = ParseJson(text)
+    if type(list) <> "roArray" then return
+    saveSites(cleanSites(list), rev)
+    if m.mode = "home" then buildHome()
+end sub
+
 ' An item carried in the deep link itself: {mediaType, url, title, text, from, ...}.
 sub showInline(link as Object)
+    m.fromSearch = false
     kind = LCase(asStr(link.mediaType))
     if kind = "video"
         showVideo(link)
@@ -221,19 +299,74 @@ sub setMode(mode as String)
     m.homeGroup.visible = (mode = "home")
     m.messageView.visible = (mode = "message")
     m.videoView.visible = (mode = "video")
+    m.searchView.visible = (mode = "search")
     if mode <> "home"
         hideOverlay()
         hideBanner()
     end if
     ' The Video node takes focus itself (for trickplay); everything else is handled here.
-    if mode <> "video" then m.top.setFocus(true)
+    if mode = "search"
+        m.searchView.takeFocus = true
+    else if mode <> "video"
+        m.top.setFocus(true)
+    end if
 end sub
 
 sub goHome()
+    m.fromSearch = false
     stopVideo()
     setMode("home")
     applyHighlight()
 end sub
+
+' Done with a video or a note: back to the search it came from, or home.
+sub leaveItem()
+    if m.fromSearch
+        stopVideo()
+        setMode("search")
+    else
+        goHome()
+    end if
+end sub
+
+' ---------------------------------------------------------------- searching my sites
+
+sub openSearch(query as String)
+    m.fromSearch = true
+    setMode("search")
+    m.searchView.begin = { sites: m.sites, query: query }
+end sub
+
+sub onSearchClosed()
+    if m.mode = "search" then goHome()
+end sub
+
+sub onSearchPlay()
+    m.fromSearch = true
+    showVideo(m.searchView.playItem)
+end sub
+
+' Newest first, no repeats, the last 8.
+sub onSearched()
+    words = asStr(m.searchView.searched)
+    if words = "" then return
+    list = [words]
+    for each v in m.recent
+        if LCase(v) <> LCase(words) and list.Count() < 8 then list.Push(v)
+    end for
+    m.recent = list
+    m.reg.Write("recentSearches", FormatJson(list))
+    m.reg.Flush()
+    buildHome()
+end sub
+
+function searchTiles() as Object
+    tiles = [{ id: "search", kind: "input", action: "search", name: "Search", port: "Type what to find" }]
+    for each words in m.recent
+        tiles.Push({ id: "recent", kind: "input", action: "recent", name: words, port: "Search again" })
+    end for
+    return tiles
+end function
 
 sub stopVideo()
     m.videoView.stopNow = true
@@ -266,7 +399,7 @@ sub showVideo(data as Object)
 end sub
 
 sub onVideoFinished()
-    if m.mode = "video" then goHome()
+    if m.mode = "video" then leaveItem()
 end sub
 
 sub onVideoError()
@@ -416,28 +549,30 @@ sub buildHome()
     clearChildren(m.rowsArea)
     m.rows = []
     m.scrollY = 0
-    if m.apps = invalid then return    ' still loading: the status line says so
-    m.statusLabel.visible = false
 
-    byId = {}
-    for each a in m.apps
-        byId[a.id] = a
-    end for
+    ' Apps are missing while loading, and always on Roku OS 12 and later (the status line says why).
     favs = []
-    for each id in m.favorites
-        if byId.DoesExist(id) then favs.Push(byId[id])
-    end for
     others = []
     inputs = []
-    for each a in m.apps
-        if not hasValue(m.favorites, a.id)
-            if a.kind = "input"
-                inputs.Push(a)
-            else
-                others.Push(a)
+    if m.apps <> invalid
+        m.statusLabel.visible = false
+        byId = {}
+        for each a in m.apps
+            byId[a.id] = a
+        end for
+        for each id in m.favorites
+            if byId.DoesExist(id) then favs.Push(byId[id])
+        end for
+        for each a in m.apps
+            if not hasValue(m.favorites, a.id)
+                if a.kind = "input"
+                    inputs.Push(a)
+                else
+                    others.Push(a)
+                end if
             end if
-        end if
-    end for
+        end for
+    end if
 
     if m.simple and favs.Count() > 0
         layoutSimple(favs)
@@ -445,6 +580,7 @@ sub buildHome()
     else
         m.rowsBaseY = 330
         y = 0
+        if m.sites.Count() > 0 then y = addRow("search", "Search my sites", searchTiles(), y)
         if favs.Count() > 0 then y = addRow("favorites", "Favorites", favs, y)
         if others.Count() > 0
             title = "All apps"
@@ -453,10 +589,14 @@ sub buildHome()
         end if
         if inputs.Count() > 0 then y = addRow("inputs", "Inputs", inputs, y)
         m.hintLabel.text = "Press * on a tile to add or remove a favorite"
+        ' The note about apps sits under the search row when there is one.
+        statusY = 410
+        if y > 0 then statusY = m.rowsBaseY + y + 10
+        m.statusLabel.translation = [120, statusY]
     end if
     m.rowsArea.translation = [0, m.rowsBaseY]
-    m.emptyLabel.visible = (m.rows.Count() = 0)
-    m.hintLabel.visible = (m.rows.Count() > 0)
+    m.emptyLabel.visible = (m.apps <> invalid and m.rows.Count() = 0)
+    m.hintLabel.visible = (m.apps <> invalid and m.rows.Count() > 0)
 
     ' Back to the same row (or the first one) and roughly the same spot in it.
     m.focusRow = 0
@@ -482,7 +622,7 @@ function addRow(kind as String, title as String, items as Object, y as Integer) 
     h = 218
     nameSize = 30
     height = 65 + h + 60       ' title, tiles, names under them
-    if kind = "inputs"
+    if kind = "inputs" or kind = "search"
         h = 140
         height = 65 + h + 30
     end if
@@ -587,6 +727,13 @@ end sub
 ' ---------------------------------------------------------------- actions
 
 sub launchItem(item as Object)
+    if asStr(item.action) = "search"
+        openSearch("")
+        return
+    else if asStr(item.action) = "recent"
+        openSearch(item.name)
+        return
+    end if
     showOverlay("Opening " + item.name + Chr(8230), "", 15)
     startEcp("launch", "POST", "launch/" + item.id, { name: item.name })
 end sub
@@ -608,6 +755,7 @@ end sub
 
 ' The * button: add the tile to favorites, or take it off.
 sub toggleFavorite(item as Object)
+    if asStr(item.action) <> "" then return    ' search tiles aren't apps
     list = []
     wasFavorite = false
     for each id in m.favorites
@@ -645,15 +793,17 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
     if m.mode = "home"
         return handleHomeKey(key)
     else if m.mode = "message"
-        if key = "OK" or key = "back" then goHome()
+        if key = "OK" or key = "back" then leaveItem()
         return true
     else if m.mode = "video"
         ' Reaches here only when the Video node didn't use the key.
         if key = "back"
-            goHome()
+            leaveItem()
             return true
         end if
         return false
+    else if m.mode = "search"
+        return true    ' SearchView used what it wanted; Back must not leave the app from here
     end if
     return false
 end function
