@@ -227,7 +227,9 @@ const POST_ROUTES = {
     const address = c.address();
     const app = truthy(c.body.app) ? pyStr(c.body.app) : "";
     if (app && !APP_ID_RE.test(app)) throw new ValueError("Bad channel id.");
-    await giveMoreTime(address, app || "*", boundedInt(c.body.minutes, 5, 120));
+    if (!(await giveMoreTime(address, app || "*", boundedInt(c.body.minutes, 5, 120)))) {
+      throw new ValueError("That's already as much extra time as can be given today.");
+    }
     return rulesStatus(address);
   },
   "/api/rules/pause": async (c) => {

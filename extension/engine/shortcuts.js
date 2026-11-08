@@ -170,7 +170,7 @@ function phraseLabel(folded) {
   if (STATUS_LEFT_RE.test(folded)) return "Tell me the time left today";
   if (["pause rules", "pause the rules", "rules off"].includes(folded)) return "Pause all rules for an hour";
   if (["resume rules", "rules on", "unpause rules"].includes(folded)) return "Turn the rules back on";
-  m = /^(?:give (?:me |us |him |her |them )?)?(?:(\d{1,3}) more minutes?|more time)(?: please)?$/.exec(folded);
+  m = /^(?:give (?:me |us |him |her |them )?)?(?:(\d{1,3}) more (?:minutes?|mins?)|more time)(?: please)?$/.exec(folded);
   if (m) return `Give ${Math.min(120, Math.max(5, Number(m[1] || 15)))} more minutes today`;
   return "";
 }

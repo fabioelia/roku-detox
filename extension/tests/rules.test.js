@@ -300,3 +300,27 @@ test("15 more minutes goes where it's needed: the app's limit and the total, or 
   await setRules({});
   await tv("/keypress/Home");
 });
+
+test("15 more minutes: Detox Home's video, an extended bedtime, and the daily cap", async () => {
+  const { handleMessage } = await import("../engine/router.js");
+  const say = async (text) => (await handleMessage({ type: "api", method: "POST", path: "/api/do", query: {}, body: { tv: TV, do: text } }, { internal: true })).data;
+  // A video in Detox Home with its own limit: the time goes to Detox Home.
+  await setRules({ limits: { dev: 30 } });
+  await tv("/keypress/PowerOn");
+  await tv("/input?contentId=inline&mediaType=video&url=https%3A%2F%2Fcdn.example.com%2Fv.mp4");
+  for (const at of ["10:00:00", "10:00:30"]) await roundAt(`2026-11-24T${at}`);
+  assert.equal((await say("5 more mins")).done, "5 more minutes of Detox Home today.");
+  // Bedtime put off already, and a limit is what stopped the app: the time goes to the limit, not bedtime.
+  await tv("/keypress/Home");
+  await setRules({ limits: { "12": 1 }, bedtime: { enabled: true, start: "21:00", end: "06:30" } });
+  mock.timers.setTime(new Date("2026-11-24T21:00:30").getTime());
+  await ok("POST", "/api/rules/extend", { tv: TV, minutes: 30 });
+  await tv("/launch/12");
+  for (const at of ["21:01:00", "21:01:30", "21:02:00", "21:02:10"]) await roundAt(`2026-11-24T${at}`);
+  assert.equal((await say("15 more minutes")).done, "15 more minutes of Netflix today.");
+  // The cap: 720 extra minutes a day at most.
+  for (let i = 0; i < 6; i++) await ok("POST", "/api/rules/more", { tv: TV, app: "12", minutes: 120 });
+  assert.equal((await say("15 more minutes")).done, "That's already as much extra time as can be given today.");
+  await setRules({});
+  await tv("/keypress/Home");
+});

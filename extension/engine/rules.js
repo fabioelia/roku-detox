@@ -271,7 +271,7 @@ const APP_NAMES = new Map(); // target key -> {app id: name}
 export async function appLabel(target, appId) {
   const key = targetKey(target);
   let names = APP_NAMES.get(key);
-  if (!names || !(appId in names)) {
+  if (!names || !Object.hasOwn(names, appId)) {
     try {
       names = Object.fromEntries((await listApps(target)).map((a) => [a.id, a.name.replaceAll(" ", " ")]));
       APP_NAMES.set(key, names);
@@ -280,7 +280,7 @@ export async function appLabel(target, appId) {
       names = names || {};
     }
   }
-  return names[appId] ?? appId;
+  return Object.hasOwn(names, appId) ? names[appId] : appId === "dev" ? "Detox Home" : appId;
 }
 
 // --- What the watcher remembers ----------------------------------------------------------------
@@ -467,6 +467,7 @@ async function tickUsage(address, state, app, t, local = new Date()) {
     state.usageDay = day;
     state.usage = await loadUsage(address, day);
     state.lastTick = null;
+    state.timedOut = null; // a new day: nothing has been closed for time yet
   }
   if (app !== null && state.lastTick !== null) {
     // Newer TVs give the home screen an id; Detox Home counts as the home screen unless it plays a video.
@@ -726,6 +727,7 @@ export async function rulesStatus(address) {
     limitsToday: Object.fromEntries(Object.keys(rules.limits).map((id) => [id, limitToday(rules, id, new Date())])),
     totalToday: totalLimitToday(rules, new Date()),
     timedOut: state ? state.timedOut || null : null,
+    devPlaying: Boolean(state && state.devPlaying),
     events: mine.reverse(),
   };
 }
@@ -751,10 +753,11 @@ export async function giveMoreTime(address, key, minutes) {
   const rules = await tvRules(address);
   const today = localDay(new Date());
   const given = rules.bonus && rules.bonus.day === today ? { ...rules.bonus.minutes } : {};
-  given[key] = Math.min(720, (given[key] || 0) + minutes);
+  const before = given[key] || 0;
+  given[key] = Math.min(720, before + minutes);
   rules.bonus = { day: today, minutes: given };
   await saveRules(address, rules);
-  return rules;
+  return given[key] - before; // the minutes really added (720 a day at most)
 }
 
 export async function pauseRules(address, minutes) {

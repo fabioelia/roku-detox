@@ -6,7 +6,7 @@ import { setSleep } from "./sleep.js";
 import { parseLink } from "./video.js";
 import { appLabel, extendBedtime, giveMoreTime, isHome, limitToday, nextBedtimeOn, pauseRules, plainName, rulesEnforcing, rulesStatus, totalLimitToday, tvRules, watchedToday } from "./rules.js";
 import { tvSettings } from "./store.js";
-import { ValueError, boundedInt, cut, displayAddress, pyLen } from "./util.js";
+import { TVError, ValueError, boundedInt, cut, displayAddress, pyLen } from "./util.js";
 
 const PHRASE_KEYS = [
   [["pause", "play", "resume", "play pause", "playpause"], "Play", "Play or pause sent."],
@@ -81,23 +81,35 @@ async function sayMoreTime(target, minutes) {
   const address = displayAddress(target);
   const status = await rulesStatus(address);
   const now = new Date();
-  if (status.bedtimeNow) {
+  if (status.bedtimeNow && Date.now() / 1000 >= (status.rules.bedtime.extendUntil || 0)) { // bedtime is what's stopping it
     await extendBedtime(address, minutes);
     return `Bedtime is ${minutes} minutes later tonight.`;
   }
-  const app = status.app || (await activeApp(target, { deliver: false }));
-  const appId = app && !isHome(app) && app.id !== "dev" ? app.id : status.timedOut;
+  let app = status.app;
+  if (!app) {
+    try {
+      app = await activeApp(target, { deliver: false });
+    } catch (err) {
+      if (!(err instanceof TVError)) throw err;
+      app = null; // not answering right now: what was last closed for time, or the total
+    }
+  }
+  let appId;
+  if (app && app.id === "dev") appId = status.devPlaying ? "dev" : status.timedOut; // its videos count; its screens don't
+  else appId = app && !isHome(app) ? app.id : status.timedOut;
   const gave = [];
+  let added = 0;
   if (appId && limitToday(status.rules, appId, now) !== undefined) {
-    await giveMoreTime(address, appId, minutes);
+    added = Math.max(added, await giveMoreTime(address, appId, minutes));
     gave.push(await appLabel(target, appId));
   }
   if (totalLimitToday(status.rules, now)) {
-    await giveMoreTime(address, "*", minutes);
+    added = Math.max(added, await giveMoreTime(address, "*", minutes));
     gave.push("TV");
   }
   if (!gave.length) throw new ValueError("There's no time limit on what's on, so there's nothing to add to.");
-  return `${minutes} more minutes of ${gave[0]} today.`;
+  if (!added) return "That's already as much extra time as can be given today.";
+  return `${added} more minutes of ${gave[0]} today.`;
 }
 
 async function sayTimeLeft(target) {
@@ -179,7 +191,7 @@ export async function doPhrase(target, phrase, { strict = false, links = false, 
     await setSleep(target, 0);
     return "Sleep timer off.";
   }
-  const more = /^(?:give (?:me |us |him |her |them )?)?(?:(\d{1,3}) more minutes?|more time)(?: please)?$/.exec(words);
+  const more = /^(?:give (?:me |us |him |her |them )?)?(?:(\d{1,3}) more (?:minutes?|mins?)|more time)(?: please)?$/.exec(words);
   if (more) {
     if (fromLink) throw new ValueError("More time can't be given from a link. Use the Rules menu."); // any site could open a #do= link
     return sayMoreTime(target, boundedInt(more[1] ?? 15, 5, 120));
