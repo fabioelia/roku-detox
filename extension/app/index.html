@@ -631,6 +631,9 @@
   .mic.on { background: var(--remove); color: var(--on-remove); animation: pulse 1.2s infinite; }
   .smart-actions { display: flex; gap: 8px; }
   .smart-actions .btn { flex: 1; padding-inline: 10px; }
+  .find-recent { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: -4px 0 18px; font-size: 14px; }
+  .find-recent .label { color: var(--muted); margin-right: 2px; }
+  .find-recent .pause-chip { font-weight: 500; max-width: 16em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .recent-links { display: grid; gap: 4px; font-size: 13px; }
   .recent-links .label { color: var(--muted); }
   .recent-links button {
@@ -848,6 +851,7 @@
           </div>
           <button class="btn primary" type="submit" id="find-go">Search</button>
         </form>
+        <div class="find-recent" id="find-recent" hidden></div>
         <div class="continue" id="continue" hidden>
           <h3 class="subhead" id="continue-head" tabindex="-1">Continue watching</h3>
           <ul class="results" id="continue-list" aria-labelledby="continue-head"></ul>

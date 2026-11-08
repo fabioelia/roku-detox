@@ -33,7 +33,8 @@ The page has six menus:
   the program can try to wake it (Wake-on-LAN, using the network address it saw while the TV was on).
 - **Find a show**: search any show or movie, see which of your apps has it, and start it on the TV.
   Listings come from JustWatch's public catalog (unofficial, so it may change). Roku can see which apps
-  are installed but not which ones you pay for, so you can untick services under "My services".
+  are installed but not which ones you pay for, so you can untick services under "My services". Recent searches
+  stay under the box (in this browser only) to run again with one tap.
   **My sites** searches video sites you add (paste any results page address, like
   `https://www.youtube.com/results?search_query=cats`). Results are read from the page's links and from
   the data many sites tuck inside the page (YouTube, schema.org, Next.js), so no scripts or ads load.

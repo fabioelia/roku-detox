@@ -2528,7 +2528,39 @@ $("#find-form").addEventListener("submit", (e) => {
   e.preventDefault();
   const query = $("#find-input").value.trim();
   if (!query) return;
+  rememberFind(query, state.findSource);
   if (state.findSource === "sites") runSiteSearch(query); else runFind(query);
+});
+
+// Recent searches (kept in this browser only), newest first, to run again with one tap.
+function recentFinds() {
+  const list = store.get("detox.findRecent", []);
+  return (Array.isArray(list) ? list : []).filter((f) => f && typeof f.q === "string" && f.q.trim()).slice(0, 6);
+}
+function rememberFind(q, source) {
+  const rest = recentFinds().filter((f) => !(f.q.toLowerCase() === q.toLowerCase() && f.source === source));
+  store.set("detox.findRecent", [{ q: q.slice(0, 100), source }, ...rest].slice(0, 6));
+  renderFindRecent();
+}
+function renderFindRecent() {
+  const mine = recentFinds().filter((f) => f.source === state.findSource);
+  const box = $("#find-recent");
+  box.hidden = !mine.length;
+  box.innerHTML = mine.length ? `<span class="label">Recent:</span>${mine.map((f) =>
+    `<button class="pause-chip" type="button" data-find-again="${esc(f.q)}" title="Search again">${esc(f.q)}</button>`).join("")}
+    <button class="btn quiet" type="button" data-find-clear>Clear</button>` : "";
+}
+$("#find-recent").addEventListener("click", (e) => {
+  const again = e.target.closest("[data-find-again]");
+  if (again) {
+    $("#find-input").value = again.dataset.findAgain;
+    $("#find-form").requestSubmit();
+    return;
+  }
+  if (e.target.closest("[data-find-clear]")) {
+    store.set("detox.findRecent", recentFinds().filter((f) => f.source !== state.findSource));
+    renderFindRecent();
+  }
 });
 
 /* ---------- My sites ---------- */
@@ -2543,6 +2575,7 @@ function renderFindSource() {
   for (const id of ["#services-box", "#find-status", "#find-results", "#jw-note"]) $(id).hidden = sites;
   if (sites) $("#continue").hidden = true; else renderContinue();
   $("#sites-area").hidden = !sites;
+  renderFindRecent();
   $("#find-input").placeholder = sites ? "Search your sites" : "Show or movie name";
   $("#find-input").setAttribute("aria-label", sites ? "Search your sites" : "Show or movie name");
   $("#find-intro").textContent = sites
