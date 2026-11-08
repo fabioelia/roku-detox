@@ -5,21 +5,50 @@ import { ECP_PORT, fetchWithTimeout, isPlainObject, parseTarget } from "./util.j
 import { parseDeviceInfo, summarize } from "./ecp.js";
 import { getLocal, readSettings, setLocal } from "./store.js";
 
+// Ranges scanned when none of the common ones looks like this computer's own network.
 export const HOME_RANGES = ["192.168.0", "192.168.1", "10.0.0", "10.0.1"];
-const CONCURRENCY = 48;
-const PROBE_TIMEOUT = 800;
+// Common home ranges, checked cheaply (two requests each) to find which one this computer is on.
+export const COMMON_RANGES = [
+  "192.168.0", "192.168.1", "192.168.2", "192.168.4", "192.168.8", "192.168.10", "192.168.50",
+  "192.168.68", "192.168.86", "192.168.100", "10.0.0", "10.0.1", "10.1.1", "10.1.10", "172.16.0",
+];
+// Chrome only keeps so many connections open. Requests to empty addresses hang in the background
+// even after we give up on them, so a big burst starves later ones (the TV's included).
+const CONCURRENCY = 16;
+// On this computer's own network, empty addresses fail fast (nothing answers the "who has this
+// address?" question), so more can run at once without starving the connection limit.
+const LOCAL_CONCURRENCY = 32;
+const PROBE_TIMEOUT = 700;
+const ROUTER_HOSTS = [1, 254];
+const QUIET = { cache: "no-store", credentials: "omit", redirect: "manual", referrerPolicy: "no-referrer" };
 
 /** One quick look: the TV's summary, or null when nothing Roku-like answers. */
 export async function probe(target, timeout = PROBE_TIMEOUT) {
   try {
-    const resp = await fetchWithTimeout(`http://${target.host}:${target.port}/query/device-info`, {
-      cache: "no-store", credentials: "omit", redirect: "manual", referrerPolicy: "no-referrer",
-    }, timeout);
+    const resp = await fetchWithTimeout(`http://${target.host}:${target.port}/query/device-info`, QUIET, timeout);
     if (resp.status !== 200) return null;
     return summarize(target, parseDeviceInfo(await resp.text()));
   } catch {
     return null; // no answer, a timeout, or not a Roku
   }
+}
+
+/**
+ * Is this range probably the computer's own network? Its router answers its settings page (port 80)
+ * at once, or refuses at once, while addresses on other networks just hang. (Port 80, not the TV's
+ * port: many routers silently drop requests to ports they don't use.)
+ */
+export async function looksLocal(range) {
+  const checks = ROUTER_HOSTS.map(async (n) => {
+    const started = Date.now();
+    try {
+      await fetchWithTimeout(`http://${range}.${n}/`, QUIET, 600);
+      return true;
+    } catch {
+      return Date.now() - started < 450;
+    }
+  });
+  return (await Promise.all(checks)).some(Boolean);
 }
 
 /** Run fn over items with at most `limit` running at once. */
@@ -47,28 +76,56 @@ async function knownAddresses() {
   return [...known];
 }
 
-/**
- * Find Rokus. Options (mostly for tests): ranges (like "192.168.1"), hosts (exact
- * addresses to try instead of ranges), port, timeout, remember (save what's found).
- */
-export async function discover({ ranges = HOME_RANGES, hosts = null, port = ECP_PORT, timeout = PROBE_TIMEOUT, includeKnown = true, remember = true } = {}) {
-  const candidates = new Map(); // "host:port" -> target
-  const add = (address) => {
+function targetsFor(addresses, port) {
+  const targets = new Map(); // "host:port" -> target
+  for (const address of addresses) {
     try {
-      const target = parseTarget(address);
-      candidates.set(`${target.host}:${target.port}`, target);
+      const target = parseTarget(address.includes(":") ? address : `${address}:${port}`);
+      targets.set(`${target.host}:${target.port}`, target);
     } catch { /* not a home address */ }
-  };
-  if (includeKnown) for (const address of await knownAddresses()) add(address);
-  if (hosts) {
-    for (const host of hosts) add(host.includes(":") ? host : `${host}:${port}`);
-  } else {
-    for (const range of ranges) for (let i = 1; i < 255; i++) add(`${range}.${i}:${port}`);
   }
-  const found = (await pool([...candidates.values()], CONCURRENCY, (t) => probe(t, timeout))).filter(Boolean);
-  const unique = new Map();
-  for (const tv of found) if (!unique.has(tv.address)) unique.set(tv.address, tv);
-  const tvs = [...unique.values()].sort((a, b) => {
+  return [...targets.values()];
+}
+
+/**
+ * Find Rokus, quickly:
+ *   1. TVs seen before (usually the answer, in a fraction of a second);
+ *   2. otherwise the range this computer is on, found by asking the usual router addresses;
+ *   3. only if that finds nothing, the other likely ranges, one at a time.
+ * Options (mostly for tests): ranges (like "192.168.1"), hosts (exact addresses to try instead of
+ * ranges), port, timeout, includeKnown, remember (save what's found).
+ */
+export async function discover({ ranges = null, hosts = null, port = ECP_PORT, timeout = PROBE_TIMEOUT, includeKnown = true, remember = true } = {}) {
+  const found = new Map();
+  const seen = new Set();
+  const run = async (targets, limit = CONCURRENCY) => {
+    const fresh = targets.filter((t) => !seen.has(`${t.host}:${t.port}`));
+    for (const t of fresh) seen.add(`${t.host}:${t.port}`);
+    for (const tv of await pool(fresh, limit, (t) => probe(t, timeout))) {
+      if (tv && !found.has(tv.address)) found.set(tv.address, tv);
+    }
+  };
+
+  if (includeKnown) await run(targetsFor(await knownAddresses(), port));
+  if (hosts) {
+    await run(targetsFor(hosts, port));
+  } else if (!found.size) {
+    const candidates = ranges || COMMON_RANGES;
+    const local = [];
+    const flags = await Promise.all(candidates.map((range) => looksLocal(range)));
+    candidates.forEach((range, i) => { if (flags[i]) local.push(range); });
+    const rest = (ranges || HOME_RANGES).filter((range) => !local.includes(range));
+    for (const group of [local, rest]) {
+      for (const range of group) {
+        const addresses = [];
+        for (let i = 1; i < 255; i++) addresses.push(`${range}.${i}`);
+        await run(targetsFor(addresses, port), group === local ? LOCAL_CONCURRENCY : CONCURRENCY);
+      }
+      if (found.size) break; // found on this computer's network: don't sweep the others
+    }
+  }
+
+  const tvs = [...found.values()].sort((a, b) => {
     const x = a.name.toLowerCase();
     const y = b.name.toLowerCase();
     return x < y ? -1 : x > y ? 1 : 0;
