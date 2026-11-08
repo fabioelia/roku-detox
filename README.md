@@ -174,3 +174,5 @@ node tools/ui-smoke.mjs
 ```
 
 The extension has its own tests: see `extension/README.md`.
+
+What changed lately: `CHANGELOG.md`.
