@@ -30,6 +30,15 @@
   .key svg.solid { fill: currentColor; stroke: none; }
   .key.power { color: #C2334D; }
   .hint { margin: 8px 0 0; font-size: 12px; color: var(--muted); }
+  .launch { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  .launch:empty { display: none; }
+  .launch button {
+    max-width: 100%; min-height: 32px; padding: 4px 12px; border: 1px solid var(--line); border-radius: 999px;
+    background: var(--raised); color: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .launch button:hover:not(:disabled) { border-color: var(--muted); }
+  .launch button.scene::before { content: "\25B6\FE0E"; margin-right: 6px; font-size: 10px; opacity: .7; }
 </style>
 </head>
 <body>
@@ -63,6 +72,7 @@
       <button class="key" data-key="VolumeMute" type="button" aria-label="Mute" disabled><svg viewBox="0 0 24 24"><path d="M3 10v4h4l5 4V6L7 10z"/><path d="m16 9.5 5 5M21 9.5l-5 5"/></svg></button>
       <button class="key" data-key="VolumeUp" type="button" aria-label="Volume up" disabled><svg viewBox="0 0 24 24"><path d="M3 10v4h4l5 4V6L7 10z"/><path d="M16 12h5M18.5 9.5v5"/></svg></button>
     </div>
+    <div class="launch" id="launch" aria-label="Your favorites and scenes"></div>
     <p class="hint">While this is open, arrow keys move, Enter is OK, Backspace is Back.</p>
   </section>
 

@@ -127,6 +127,19 @@ const KEY_WORDS = [
 ];
 
 let appCache = { tv: null, at: 0, apps: [] };
+let sceneCache = { scenes: [] }; // the last list read, to name the scene once it's picked
+
+// Scenes are read fresh every time (they're kept on this computer), so a new one shows up at once.
+async function scenesForOmnibox() {
+  if (!(await preferredTv())) return [];
+  try {
+    const { scenes } = await tvCall("GET", "/api/settings");
+    sceneCache = { scenes: Array.isArray(scenes) ? scenes : [] };
+  } catch {
+    sceneCache = { scenes: [] };
+  }
+  return sceneCache.scenes;
+}
 
 async function appsForOmnibox() {
   const tv = await preferredTv();
@@ -158,6 +171,9 @@ export async function omniboxSuggestions(text) {
   for (const [names, key, label] of KEY_WORDS) {
     if (names.some((n) => n === folded)) out.push({ content: `key:${key}`, description: `${xml(label)} <dim>on the TV</dim>` });
   }
+  for (const scene of (await scenesForOmnibox()).filter((sc) => sc && typeof sc.name === "string" && fold(sc.name).includes(folded)).slice(0, 3)) {
+    out.push({ content: `scene:${scene.id}`, description: `Run <match>${xml(scene.name)}</match> <dim>(your scene)</dim>` });
+  }
   const apps = await appsForOmnibox();
   const matches = apps
     .filter((app) => app && typeof app.name === "string" && fold(app.name).includes(folded))
@@ -174,7 +190,7 @@ export async function omniboxSuggestions(text) {
 export function setUpOmnibox() {
   const omnibox = globalThis.chrome?.omnibox;
   if (!omnibox) return;
-  omnibox.setDefaultSuggestion({ description: "Type a show, an app (Netflix), pause, home, louder, or paste a link" });
+  omnibox.setDefaultSuggestion({ description: "Type a show, an app (Netflix), a scene, pause, home, louder, or paste a link" });
   omnibox.onInputChanged.addListener((text, suggest) => {
     omniboxSuggestions(text).then((list) => {
       // The first suggestion becomes the default action; the rest are listed below it.
@@ -184,7 +200,7 @@ export function setUpOmnibox() {
   });
   omnibox.onInputEntered.addListener(async (text, disposition) => {
     let choice = text.trim();
-    if (!/^(link|key|open|find|search):/.test(choice)) choice = (await omniboxSuggestions(choice))[0]?.content || "";
+    if (!/^(link|key|open|find|search|scene):/.test(choice)) choice = (await omniboxSuggestions(choice))[0]?.content || "";
     const at = choice.indexOf(":");
     const kind = choice.slice(0, at);
     const value = choice.slice(at + 1);
@@ -199,6 +215,9 @@ export function setUpOmnibox() {
     } else if (kind === "open") {
       const app = appCache.apps.find((a) => a.id === value);
       await attempt(() => tvCall("POST", "/api/launch", { id: value }), `Opening ${app ? app.name : "it"} on the TV.`);
+    } else if (kind === "scene") {
+      const scene = sceneCache.scenes.find((sc) => sc.id === value);
+      await attempt(() => tvCall("POST", "/api/scene", { id: value }), `Ran ${scene ? scene.name : "your scene"}.`);
     } else if (kind === "search") {
       await attempt(() => tvCall("POST", "/api/search", { text: value.slice(0, 100) }), `Searching the TV for “${value}”.`);
     }

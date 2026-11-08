@@ -45,3 +45,15 @@ test("right-click a link and keyboard shortcuts act on the last TV", async () =>
   await shortcuts.onCommand("volume-up");
   assert.equal(chrome.notifications.list.length, before, "buttons that work stay quiet");
 });
+
+test("scenes you made show up in the address bar", async () => {
+  const { handleMessage } = await import("../engine/router.js");
+  const saved = await handleMessage({ type: "api", method: "POST", path: "/api/settings", query: {}, body: {
+    tv: TV, scenes: [{ name: "Game time", steps: [{ do: "open", target: "tvinput.hdmi2" }] }],
+  } }, { internal: true });
+  assert.equal(saved.status, 200, JSON.stringify(saved.data));
+  const id = saved.data.scenes[0].id;
+  await new Promise((r) => setTimeout(r, 0));
+  const list = await shortcuts.omniboxSuggestions("game");
+  assert.ok(list.some((s) => s.content === `scene:${id}` && s.description.includes("<match>Game time</match>")), JSON.stringify(list));
+});

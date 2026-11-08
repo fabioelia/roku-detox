@@ -149,6 +149,50 @@ async function loadNow() {
   }
 }
 
+// Favorites and scenes from the page, one tap each.
+async function loadLaunchers() {
+  if (!tv) return;
+  try {
+    const [{ favorites = [], scenes = [] }, { apps = [] }] = await Promise.all([
+      api("GET", "/api/settings", { query: { tv } }),
+      api("GET", "/api/apps", { query: { tv } }),
+    ]);
+    const names = new Map(apps.map((a) => [a.id, a.name]));
+    const buttons = [];
+    for (const id of favorites.slice(0, 6)) {
+      if (!names.has(id)) continue;
+      const b = document.createElement("button");
+      b.type = "button";
+      b.textContent = names.get(id);
+      b.title = `Open ${names.get(id)} on the TV`;
+      b.addEventListener("click", () => run(b, () => api("POST", "/api/launch", { body: { tv, id } }), `Opening ${names.get(id)}.`));
+      buttons.push(b);
+    }
+    for (const scene of scenes.slice(0, 4)) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "scene";
+      b.textContent = scene.name;
+      b.title = `Run the scene "${scene.name}"`;
+      b.addEventListener("click", () => run(b, () => api("POST", "/api/scene", { body: { tv, id: scene.id } }), `Ran ${scene.name}.`));
+      buttons.push(b);
+    }
+    $("#launch").replaceChildren(...buttons);
+  } catch { /* the quick remote still works */ }
+}
+
+async function run(button, work, done) {
+  button.disabled = true;
+  try {
+    await work();
+    setStatus(done, "ok");
+  } catch (err) {
+    setStatus(err.message, "problem");
+  } finally {
+    button.disabled = false;
+  }
+}
+
 function setUpQuickRemote() {
   for (const btn of document.querySelectorAll("#keys [data-key]")) btn.disabled = !tv;
   $("#keys").addEventListener("click", (e) => {
@@ -190,6 +234,7 @@ async function main() {
   setUpQuickRemote();
   loadTvName();
   loadNow();
+  loadLaunchers();
 }
 
 main();
