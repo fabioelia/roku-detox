@@ -31,7 +31,7 @@ Newest first. The extension's version is in `extension/manifest.json`; after pul
 
 ### Security
 
-Six rounds of independent review; everything they confirmed is fixed:
+Seven rounds of independent review; everything they confirmed is fixed:
 
 - Pages on this computer (`http://localhost`, any port) can use the extension only after "Let pages on
   this computer use it" is turned on in its settings (off by default). Neither those pages nor phones on
@@ -47,7 +47,11 @@ Six rounds of independent review; everything they confirmed is fixed:
 - Household PIN: 0 to 9 only; pairing is checked first; five wrong tries lock that device out for 10
   minutes and 20 from all devices lock out the rest (the Mac never); sent only with changes that need
   it; forgotten after an hour without one.
-- Household mode: phones can open the `http://<name>.local:8642` address the program prints.
+- Household mode: phones can open the `http://<name>.local:8642` address the program prints (the Mac's
+  Bonjour name).
+- My sites: a search address must be plain `https://host/...` with `{q}` after the host (checked on the text
+  the same way in both engines), and sites added from a phone stay marked for good, so they're always
+  searched with the checks above. Links or addresses with spaces or control characters get a plain error.
 
 ### Fixes
 
