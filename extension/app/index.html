@@ -526,6 +526,12 @@
   .mic.on { background: var(--remove); color: var(--on-remove); animation: pulse 1.2s infinite; }
   .smart-actions { display: flex; gap: 8px; }
   .smart-actions .btn { flex: 1; padding-inline: 10px; }
+  .recent-links { display: grid; gap: 4px; font-size: 13px; }
+  .recent-links .label { color: var(--muted); }
+  .recent-links button {
+    text-align: left; border: 0; background: none; padding: 2px 0; color: var(--ink); cursor: pointer;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-decoration: underline; text-underline-offset: 3px;
+  }
   .live-toggle { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; color: var(--muted); cursor: pointer; }
   .live-toggle input { width: 18px; height: 18px; margin: 1px 0 0; flex: none; accent-color: var(--keep); }
   .smart[data-live="true"] .smart-actions { display: none; }
@@ -990,6 +996,7 @@
           <button class="btn primary" type="submit" id="smart-go">Search on TV</button>
           <button class="btn" type="button" id="smart-type">Type it</button>
         </div>
+        <div class="recent-links" id="recent-links" hidden></div>
         <label class="live-toggle"><input type="checkbox" id="smart-live"> Live typing: each letter goes to the TV as you type (for sign-in and search boxes on the TV)</label>
       </form>
     </aside>

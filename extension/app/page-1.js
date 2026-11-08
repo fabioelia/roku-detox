@@ -1548,6 +1548,37 @@ document.addEventListener("keydown", (e) => {
   pressKey(key);
 });
 const looksLikeLink = (text) => /^\s*(https?:\/\/|www\.|m\.|youtu\.be\/|(music\.)?youtube\.com\/|netflix\.com\/)/i.test(text) || /^\s*[a-z0-9-]+(\.[a-z0-9-]+)+\/\S*$/i.test(text);
+// Links sent from this box, newest first, to send again with one tap (kept in this browser).
+function recentLinks() {
+  const list = store.get("detox.recentLinks", []);
+  return Array.isArray(list) ? list.filter((u) => typeof u === "string").slice(0, 4) : [];
+}
+function rememberLink(url) {
+  store.set("detox.recentLinks", [url, ...recentLinks().filter((u) => u !== url)].slice(0, 4));
+  renderRecentLinks();
+}
+function renderRecentLinks() {
+  const list = recentLinks();
+  const box = $("#recent-links");
+  box.hidden = !list.length || $("#smart-form").dataset.live === "true";
+  box.innerHTML = list.length ? `<span class="label">Sent recently:</span>${list.map((u) => {
+    let label = u;
+    try { const x = new URL(u); label = x.hostname.replace(/^www\./, "") + x.pathname.replace(/\/$/, "") + x.search; } catch { /* as typed */ }
+    return `<button type="button" data-resend="${esc(u)}" title="Send ${esc(u)} to the TV again">${esc(label)}</button>`;
+  }).join("")}` : "";
+}
+$("#recent-links").addEventListener("click", async (e) => {
+  const url = e.target.closest("[data-resend]")?.dataset.resend;
+  if (!url || !state.control) return;
+  try {
+    const { app } = await api("/api/link", { tv: state.tv, url });
+    toast(app === "Detox Home" ? "Playing it on the TV again." : `Opening it in ${app} on the TV.`);
+    rememberLink(url);
+  } catch (err) {
+    setRemoteError(err.message);
+  }
+});
+
 function renderSmart() {
   $("#smart-go").textContent = looksLikeLink($("#smart-input").value) ? "Play on TV" : "Search on TV";
 }
@@ -1564,6 +1595,7 @@ function setLive(on) {
   input.value = "";
   liveText = "";
   input.placeholder = on ? "Type here: it goes straight to the TV" : "A show, “open Netflix”, a link";
+  renderRecentLinks();
   const mic = $("#smart-mic");
   mic.hidden = on || !mic.dataset.available;   // speech would arrive all at once; live typing is letter by letter
   if (on) input.focus();
@@ -1606,6 +1638,7 @@ $("#smart-form").addEventListener("submit", async (e) => {
     if (link) {
       const { app } = await api("/api/link", { tv: state.tv, url: text });
       toast(app === "Detox Home" ? "Found the video. Playing it on the TV." : `Opening it in ${app} on the TV.`);
+      rememberLink(text);
     } else {
       // Phrases work here too ("open Netflix", "HDMI 2", "sleep 30", a scene's name); anything
       // else is a search on the TV. The lite page can't run phrases, so it just searches.
@@ -3817,6 +3850,7 @@ function takeFindLink() {
   await engineReady;
   applyEngine();
   renderTips();
+  renderRecentLinks();
   const findLink = takeFindLink();
   if (usesIconLoader()) watchIcons();
   loadSites().then(renderFindSource);
