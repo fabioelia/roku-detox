@@ -3240,6 +3240,24 @@ function renderDayChart(perDay, today = "", liveToday = null) {
   document.addEventListener("pointerdown", (e) => { if (touched && !e.target.closest("#day-bars")) { touched = false; show(null); } });
 }
 
+// "Past week: about 1 h 10 min a day, 25% less than the week before." Today isn't over, so it's left
+// out; each week needs five or more days on record (the log keeps two weeks).
+function weekTrend(days, today) {
+  const full = days.filter((d) => d.day !== today);
+  const recent = full.slice(-7);
+  const earlier = full.slice(-14, -7);
+  if (recent.length < 5 || earlier.length < 5) return "";
+  const avg = (list) => list.reduce((n, d) => n + d.seconds, 0) / list.length;
+  const now = avg(recent);
+  const before = avg(earlier);
+  if (now < 60 && before < 60) return "";
+  const change = before >= 60 ? Math.round(((now - before) / before) * 100) : null;
+  const compared = change === null ? "up from almost nothing the week before"
+    : Math.abs(change) < 10 ? "about the same as the week before"
+      : change < 0 ? `${-change}% less than the week before` : `${change}% more than the week before`;
+  return `Past week: about ${now >= 60 ? minutesText(now) : "under a minute"} a day, ${compared}.`;
+}
+
 // Screen time over the days on record: total, a daily average, and the apps that took the most.
 function renderScreenTime() {
   const u = state.usage && state.usage.tv === state.tv ? state.usage : null;
@@ -3253,6 +3271,9 @@ function renderScreenTime() {
   // Today's bar follows the live count Rules refreshes (minus the home screen).
   const live = state.rulesStatus?.usage && u.today ? Object.entries(state.rulesStatus.usage).reduce((n, [id, sec]) => n + (id === "home" ? 0 : sec), 0) : null;
   renderDayChart(u.perDay || [], u.today || "", live);
+  const trend = weekTrend(chartDays(u.perDay || [], u.today || "", live), u.today || "");
+  $("#screen-time-trend").hidden = !trend;
+  $("#screen-time-trend").textContent = trend;
   $("#screen-time-list").innerHTML = watched.slice(0, 6).map(([id, seconds]) =>
     `<li><span>${esc(usageLabel(id))}</span><span>${minutesText(seconds)}</span></li>`).join("");
 }

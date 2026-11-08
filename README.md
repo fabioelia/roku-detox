@@ -46,7 +46,7 @@ The page has six menus:
   It checks the TV every 4 seconds and keeps the Mac from sleeping (`caffeinate`) while any rule is on.
   Alerts show as macOS notifications. "Pause all rules" turns them off for an hour, three hours or until
   morning (viewing time still counts), then they come back on by themselves. Includes a connection check with plain-language fixes, and
-  screen time for the past days (total, daily average, a bar for each day, top apps). Apps with a daily
+  screen time for the past days (total, daily average, a bar for each day, top apps, and how the past week compares with the one before). Apps with a daily
   limit show the time left today on the Remote menu and in the extension's popup, and an upcoming bedtime
   shows there within the hour.
 - **Clean up**: remove channels, finish-up checklist, undo list, and "Move your settings" (save

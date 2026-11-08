@@ -148,6 +148,18 @@ async function main() {
     return { shown, after: document.querySelector("#sleep-status").textContent }; })()`);
   check("sleep timer sets and cancels", /off at/.test(sleep.shown) && sleep.after === "", JSON.stringify(sleep));
   check("favorites are suggested", await page(`document.querySelectorAll("[data-fav-add]").length > 0`));
+  const trend = await page(`(() => {
+    const days = (secs) => secs.map((seconds, i) => ({ day: "2026-11-" + String(i + 1).padStart(2, "0"), seconds }));
+    const today = "2026-11-14";
+    return [
+      weekTrend(days([7200, 7200, 7200, 7200, 7200, 7200, 3600, 3600, 3600, 3600, 3600, 3600, 3600, 99999]), today),
+      weekTrend(days([3600, 3600, 3600, 3600, 3600, 3600, 3800, 3700, 3600, 3600, 3600, 3600, 3500, 0]), today),
+      weekTrend(days([0, 0, 0, 0, 0, 0, 0, 1800, 1800, 1800, 1800, 1800, 1800, 1800]), "2026-11-15"),
+      weekTrend(days([3600, 3600, 3600, 3600, 3600, 3600]), today),
+    ]; })()`);
+  check("screen time compares the past week with the one before",
+    trend[0] === "Past week: about 1 h a day, 50% less than the week before." && trend[1] === "Past week: about 1 h a day, about the same as the week before."
+    && trend[2] === "Past week: about 30 min a day, up from almost nothing the week before." && trend[3] === "", JSON.stringify(trend));
 
   // Narrow screen: the remote leads on Remote, follows on other menus.
   await send("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 2, mobile: true });
