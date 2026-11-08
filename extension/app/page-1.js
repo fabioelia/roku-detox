@@ -869,8 +869,25 @@ $("#picker-toggle").addEventListener("click", () => {
   if (state.tvPickerOpen) (isLite() ? $("#manual-input") : $("#tv-select")).focus();
 });
 
+// "Just the remote" (remembered per browser).
+state.remoteOnly = store.get("detox.remoteOnly", false);
+function renderRemoteOnly() {
+  document.documentElement.dataset.remoteOnly = String(Boolean(state.remoteOnly));
+  const name = state.device?.name || state.tv || "No TV yet";
+  $("#remote-only-tv").textContent = state.tv && state.reachable === false ? `${name}: not answering` : name;
+}
+for (const id of ["#remote-only", "#remote-only-exit"]) {
+  $(id).addEventListener("click", () => {
+    state.remoteOnly = id === "#remote-only";
+    store.set("detox.remoteOnly", state.remoteOnly);
+    renderRemoteOnly();
+    window.scrollTo(0, 0);
+  });
+}
+
 function renderTV() {
   renderPickerMode();
+  renderRemoteOnly();
   $("#tv-hint").hidden = true;
   $("#wake-btn").hidden = true;
   const tv = $("#tv");

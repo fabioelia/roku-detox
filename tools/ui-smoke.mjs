@@ -129,6 +129,11 @@ async function main() {
     const onFind = top(document.querySelector(".side")) > top(document.querySelector("main"));
     document.querySelector('#views [data-view="remote"]').click(); return onRemote && onFind; })()`);
   check("on phones the remote leads only on Remote", order);
+  const remoteOnly = await page(`(() => { document.querySelector("#remote-only").click();
+    const on = getComputedStyle(document.querySelector("main")).display === "none" && getComputedStyle(document.querySelector("#remote")).display !== "none";
+    document.querySelector("#remote-only-exit").click();
+    return on && getComputedStyle(document.querySelector("main")).display !== "none"; })()`);
+  check("Just the remote hides the rest and comes back", remoteOnly);
 
   ws.close();
   let failed = 0;
