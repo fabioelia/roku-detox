@@ -250,6 +250,7 @@
   .app-steps { max-width: 74ch; margin: 0 0 18px; padding-left: 1.3em; }
   .app-steps li + li { margin-top: 4px; }
   .by-hand { margin-top: 14px; font-size: 14px; }
+  .tvapp-roku-note { margin: 0 0 14px; padding: 10px 12px; border-radius: var(--radius-s); background: var(--warn-soft); color: var(--warn-ink); }
   .by-hand summary { cursor: pointer; color: var(--muted); }
   .install-form { display: flex; flex-wrap: wrap; gap: 8px; max-width: 560px; }
   .install-form input { flex: 1; min-width: 200px; min-height: 46px; padding: 8px 14px; border-radius: var(--radius-s); border: 1px solid var(--line); background: var(--raised); }
@@ -1037,7 +1038,7 @@
       <div class="view" data-view="tvapp" hidden>
       <section class="section">
         <h2>Detox Home on your TV</h2>
-        <p class="intro">A calm home screen for the TV: a big clock, your favorite apps and inputs, and no ads. It also shows rule notices like "Time's up," messages you send, videos from web links, and an ad-free clock screensaver. The clock, messages and videos need nothing else running. Roku OS 12 and later don't let apps on the TV open other apps, so on those TVs its app tiles stay empty; open apps from the Roku home screen or with Roku Detox instead.</p>
+        <p class="intro">A calm home screen for the TV: a big clock, your favorite apps and inputs, and no ads. It also shows rule notices like "Time's up," messages you send, videos from web links, and an ad-free clock screensaver. The clock, messages and videos need nothing else running.</p>
         <p class="app-status" id="app-status" role="status">Checking the TV…</p>
         <div id="app-body"></div>
       </section>
@@ -5148,7 +5149,15 @@ function renderLiteTvApp() {
       <li>Open <a href="${esc(tv)}" target="_blank" rel="noopener">${esc(tv)}</a> and sign in as <strong>rokudev</strong> with that password.</li>
       <li>Choose the downloaded file (on an iPhone: Browse, then Downloads), press Install, and wait for the TV to open Detox Home.</li>
     </ol>
-    <p class="note">Installing again updates it. Roku allows one custom app at a time; Detox Home goes in that slot and changes nothing else on the TV.</p>`;
+    <p class="note">Installing again updates it. Roku allows one custom app at a time; Detox Home goes in that slot and changes nothing else on the TV. On Roku OS 12 and later its app tiles stay empty (Roku doesn't let apps on the TV open other apps); the clock, screensaver, messages and videos work.</p>`;
+}
+
+// Roku OS 12 and later refuse remote-control requests from apps on the TV itself, so Detox Home's app tiles
+// stay empty there. Said up front, before anyone installs it for the tiles.
+function tvAppRokuNote() {
+  const major = parseInt(state.device?.software || "", 10);
+  if (!(major >= 12)) return "";
+  return `<p class="note tvapp-roku-note"><strong>On this TV (Roku OS ${esc(state.device.software)}), Detox Home can't open your apps.</strong> Roku doesn't let apps on the TV open other apps any more, so its tiles stay empty. The clock, the Detox Clock screensaver, rule notices, messages and videos you send all work.</p>`;
 }
 
 function renderTvApp() {
@@ -5156,6 +5165,10 @@ function renderTvApp() {
   const status = $("#app-status");
   const body = $("#app-body");
   if (!app) return;
+  try { renderTvAppBody(app, status, body); } finally { body.insertAdjacentHTML("afterbegin", tvAppRokuNote()); }
+}
+
+function renderTvAppBody(app, status, body) {
   const passwordForm = (label, id) => `<form class="install-form" id="${id}">
       <input type="password" id="${id}-password" autocomplete="off" placeholder="Developer password" aria-label="Developer password">
       <button class="btn ${id === "install-form" ? "primary" : ""}" type="submit">${label}</button>
