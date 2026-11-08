@@ -232,6 +232,26 @@ async function run(button, work, done) {
 
 function setUpQuickRemote() {
   for (const btn of document.querySelectorAll("#keys [data-key]")) btn.disabled = !tv;
+  // The same phrases as the page's search box: "open Netflix", "HDMI 2", "sleep 30", a scene's name.
+  $("#say-input").disabled = !tv;
+  $("#say-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const input = $("#say-input");
+    const text = input.value.trim();
+    if (!tv || !text) return;
+    input.disabled = true;
+    try {
+      const { done } = await api("POST", "/api/do", { body: { tv, do: text } });
+      setStatus(done, "ok");
+      input.value = "";
+      loadNow();
+    } catch (err) {
+      setStatus(err.message, "problem");
+    } finally {
+      input.disabled = false;
+      input.focus();
+    }
+  });
   $("#keys").addEventListener("click", (e) => {
     const btn = e.target.closest("[data-key]");
     if (btn && !btn.disabled) pressKey(btn.dataset.key);

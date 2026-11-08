@@ -121,6 +121,9 @@ async function main() {
   check("the popup shows what's on the TV", /^On the TV:/.test(pop.now), pop.now);
   check("the popup's remote is ready", pop.keys === 9, String(pop.keys));
   check("the popup offers the sleep timer", pop.launchers.some((t) => /Sleep/.test(t)), pop.launchers.join(" | "));
+  const said = await popup.eval(`(async () => { const i = document.querySelector("#say-input"); i.value = "hdmi 2";
+    document.querySelector("#say-form").requestSubmit(); await new Promise((r) => setTimeout(r, 1200)); return document.querySelector("#status").textContent; })()`);
+  check("the popup takes phrases", said === "Opening Xbox.", said);
   popup.close();
 
   // The address bar's suggestions and a right-click, run inside the worker.
