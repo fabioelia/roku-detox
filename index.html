@@ -533,7 +533,21 @@
   .sleep-chip[aria-pressed="true"] { border-color: var(--keep); background: var(--keep-soft); }
   .sleep-chip:disabled { opacity: .55; cursor: not-allowed; }
   .remote-note { max-width: 280px; text-align: center; font-size: 14px; color: var(--muted); }
-  @media (pointer: coarse) and (hover: none) { .remote-note { display: none; } }   /* keyboard tips: not on a phone */
+  @media (pointer: coarse) and (hover: none) {
+    .remote-note { display: none; }   /* keyboard tips: not on a phone */
+    /* Thumbs: 44px+ targets on the remote, and fast taps never turn into a page zoom. */
+    .rk { height: 46px; }
+    .rk.power { width: 46px; height: 46px; }
+    .dpad { width: 192px; height: 192px; }
+    .dpad .rk { width: 60px; height: 60px; }
+    .dpad .up { top: 3px; left: 66px; }
+    .dpad .down { bottom: 3px; left: 66px; }
+    .dpad .left { left: 3px; top: 66px; }
+    .dpad .right { right: 3px; top: 66px; }
+    .dpad .ok { left: 54px; top: 54px; width: 84px; height: 84px; }
+    .touchpad { width: 192px; height: 192px; }
+  }
+  .rk, .btn, .chip, .sleep-chip, .tile, .shortcut { touch-action: manipulation; }   /* (the swipe pad keeps touch-action: none) */
   .remote-error { max-width: 280px; text-align: center; font-size: 15px; font-weight: 600; color: var(--remove); }
   .smart { width: 100%; max-width: 300px; display: grid; gap: 8px; }
   .smart label { font-size: 14px; color: var(--muted); }
