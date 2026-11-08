@@ -1337,7 +1337,10 @@ renderPad();
   }
 }
 
-const KEYBOARD = { ArrowUp: "Up", ArrowDown: "Down", ArrowLeft: "Left", ArrowRight: "Right", Backspace: "Back", Escape: "Back", h: "Home", H: "Home", "*": "Info" };
+const KEYBOARD = {
+  ArrowUp: "Up", ArrowDown: "Down", ArrowLeft: "Left", ArrowRight: "Right", Backspace: "Back", Escape: "Back",
+  h: "Home", H: "Home", "*": "Info", "+": "VolumeUp", "=": "VolumeUp", "-": "VolumeDown", m: "VolumeMute", M: "VolumeMute",
+};
 
 /* ---------- Events ---------- */
 
@@ -1439,6 +1442,13 @@ document.addEventListener("keydown", (e) => {
   if (e.metaKey || e.ctrlKey || e.altKey || !state.control) return;
   const target = e.target;
   if (target.closest("input, select, textarea")) return;
+  if (e.key === "/") {   // jump to the search box
+    e.preventDefault();
+    const box = state.view === "find" ? $("#find-input") : $("#smart-input");
+    box.focus();
+    box.select();
+    return;
+  }
   let key = KEYBOARD[e.key];
   if (e.key === "Enter" || e.key === " ") {
     if (target.closest("button, a, label")) return;   // let focused controls work normally

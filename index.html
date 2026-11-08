@@ -897,7 +897,7 @@
         </div>
       </section>
       <p class="remote-error" id="remote-error" aria-live="assertive" hidden></p>
-      <p class="remote-note">Your keyboard works too: arrow keys to move, Enter for OK, Backspace for Back, H for Home.</p>
+      <p class="remote-note">Your keyboard works too: arrow keys to move, Enter for OK, Backspace for Back, H for Home, + and − for volume, M to mute, / to search.</p>
       <form class="smart" id="smart-form">
         <label for="smart-input">Search, paste a link, or type on the TV</label>
         <div class="smart-field">
@@ -2276,7 +2276,10 @@ renderPad();
   }
 }
 
-const KEYBOARD = { ArrowUp: "Up", ArrowDown: "Down", ArrowLeft: "Left", ArrowRight: "Right", Backspace: "Back", Escape: "Back", h: "Home", H: "Home", "*": "Info" };
+const KEYBOARD = {
+  ArrowUp: "Up", ArrowDown: "Down", ArrowLeft: "Left", ArrowRight: "Right", Backspace: "Back", Escape: "Back",
+  h: "Home", H: "Home", "*": "Info", "+": "VolumeUp", "=": "VolumeUp", "-": "VolumeDown", m: "VolumeMute", M: "VolumeMute",
+};
 
 /* ---------- Events ---------- */
 
@@ -2378,6 +2381,13 @@ document.addEventListener("keydown", (e) => {
   if (e.metaKey || e.ctrlKey || e.altKey || !state.control) return;
   const target = e.target;
   if (target.closest("input, select, textarea")) return;
+  if (e.key === "/") {   // jump to the search box
+    e.preventDefault();
+    const box = state.view === "find" ? $("#find-input") : $("#smart-input");
+    box.focus();
+    box.select();
+    return;
+  }
   let key = KEYBOARD[e.key];
   if (e.key === "Enter" || e.key === " ") {
     if (target.closest("button, a, label")) return;   // let focused controls work normally
