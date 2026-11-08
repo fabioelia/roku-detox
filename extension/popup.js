@@ -171,6 +171,44 @@ async function loadNow() {
   }
 }
 
+// --- Continue watching: the next episode of the show watched last, in the same app ---------
+
+const code = (season, episode) => `S${season} E${episode}`;
+
+async function loadResume() {
+  if (!tv) return;
+  let items;
+  try { ({ items = [] } = await api("GET", "/api/find/history", { query: { tv } })); } catch { return; }
+  const item = items.find((i) => i && i.type === "Show" && i.season?.id != null && i.episode?.number != null && i.appId != null);
+  if (!item) return;
+  const btn = $("#resume-btn");
+  btn.textContent = `Next episode of ${item.title}`;
+  btn.title = `After ${code(item.season.number, item.episode.number)}, in ${item.appName || "the same app"}`;
+  $("#resume").hidden = false;
+  btn.addEventListener("click", () => run(btn, async () => {
+    const next = await api("GET", "/api/find/next", { query: { tv, show: item.id, season: item.season.id, episode: item.episode.number } });
+    if (next.done) throw new Error(`That was the last episode of ${item.title}.`);
+    const { season = {}, episode } = next;
+    if (!episode) throw new Error("Couldn't find the next episode.");
+    const offer = (episode.offers || []).find((o) => String(o.appId) === String(item.appId));
+    if (!offer) throw new Error(`${code(season.number, episode.number)} isn't in ${item.appName || "that app"}. Open Roku Detox to pick another way.`);
+    await api("POST", "/api/watch", { body: { tv, appId: offer.appId, contentId: offer.contentId, mediaType: offer.mediaType } });
+    await api("POST", "/api/find/history", { body: { tv, item: {
+      id: item.id, title: item.title, type: "Show", year: item.year ?? null, poster: item.poster || null,
+      season: { id: season.id ?? null, number: season.number ?? null },
+      episode: { id: episode.id ?? null, number: episode.number, title: episode.title || "" },
+      appId: offer.appId, appName: item.appName || null,
+    } } });
+    // The next click goes on from here.
+    item.season = { id: season.id ?? null, number: season.number ?? null };
+    item.episode = { id: episode.id ?? null, number: episode.number, title: episode.title || "" };
+    btn.title = `After ${code(season.number, episode.number)}, in ${item.appName || "the same app"}`;
+    resumeSaid = `Playing ${item.title} ${code(season.number, episode.number)}${offer.showLevel ? " (pick it in the app)" : ""}.`;
+    setTimeout(loadNow, 3000);
+  }, () => resumeSaid));
+}
+let resumeSaid = "";
+
 // Favorites and scenes from the page, one tap each.
 let refreshSleep = async () => {};   // set once the sleep button exists
 async function loadLaunchers() {
@@ -229,7 +267,7 @@ async function run(button, work, done) {
   button.disabled = true;
   try {
     await work();
-    setStatus(done, "ok");
+    setStatus(typeof done === "function" ? done() : done, "ok");
   } catch (err) {
     setStatus(err.message, "problem");
   } finally {
@@ -301,6 +339,7 @@ async function main() {
   loadTvName();
   loadNow();
   loadLaunchers();
+  loadResume();
 }
 
 main();

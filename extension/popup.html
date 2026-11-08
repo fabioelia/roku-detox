@@ -34,6 +34,8 @@
   .launch { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
   .launch:empty { display: none; }
   .say { margin-top: 10px; }
+  .resume { margin-top: 10px; }
+  .resume .btn { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .say input { width: 100%; font-size: 12.5px; }
   .launch button {
     max-width: 100%; min-height: 32px; padding: 4px 12px; border: 1px solid var(--line); border-radius: 999px;
@@ -74,6 +76,9 @@
       <button class="key" data-key="VolumeDown" type="button" aria-label="Volume down" disabled><svg viewBox="0 0 24 24"><path d="M3 10v4h4l5 4V6L7 10z"/><path d="M16 12h5"/></svg></button>
       <button class="key" data-key="VolumeMute" type="button" aria-label="Mute" disabled><svg viewBox="0 0 24 24"><path d="M3 10v4h4l5 4V6L7 10z"/><path d="m16 9.5 5 5M21 9.5l-5 5"/></svg></button>
       <button class="key" data-key="VolumeUp" type="button" aria-label="Volume up" disabled><svg viewBox="0 0 24 24"><path d="M3 10v4h4l5 4V6L7 10z"/><path d="M16 12h5M18.5 9.5v5"/></svg></button>
+    </div>
+    <div class="resume" id="resume" hidden>
+      <button class="btn wide" type="button" id="resume-btn"></button>
     </div>
     <div class="launch" id="launch" aria-label="Your favorites and scenes"></div>
     <form class="say" id="say-form">

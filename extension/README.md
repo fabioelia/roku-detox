@@ -40,7 +40,9 @@ address once, or press Find TVs.
   an app (`tv netflix` opens it on the TV), one of your scenes (`tv game time`), a button
   (`tv pause`, `tv home`, `tv louder`, `tv off`), or a link to send.
 - **Toolbar popup**: send this tab's video, a small remote (also arrow keys, Enter and Backspace
-  while it's open), what's on the TV, and your favorites and scenes as one-tap buttons.
+  while it's open), what's on the TV, "Next episode of …" for the show you watched last (same app),
+  your favorites and scenes as one-tap buttons, a sleep timer, a box for phrases ("hdmi 2",
+  "sleep 30"), and a TV menu when there's more than one.
 - **Keyboard shortcuts**, from any tab: play/pause (Control+Shift+P on a Mac, Alt+Shift+P
   elsewhere), send this tab's video (…+S), volume up and down (…+. and …+,), plus mute, home and back
   with no key set. Change them at `chrome://extensions/shortcuts`, where you can also make them work
