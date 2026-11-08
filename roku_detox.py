@@ -3018,7 +3018,11 @@ class Handler(BaseHTTPRequestHandler):
 
         if url.path in ("/", "/index.html"):
             with open(INDEX_PATH, "rb") as f:
-                return self.send(200, f.read(), "text/html; charset=utf-8")
+                # Never inside another site's frame: a hidden frame could press buttons (or run a #do= link) unseen.
+                return self.send(200, f.read(), "text/html; charset=utf-8", {
+                    "Cache-Control": "no-store", "X-Frame-Options": "DENY",
+                    "Content-Security-Policy": "frame-ancestors 'none'",
+                })
         if url.path == "/manifest.webmanifest":
             return self.send(200, json.dumps(web_manifest()).encode(), "application/manifest+json")
         if url.path == "/icon.png":

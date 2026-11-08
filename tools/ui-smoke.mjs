@@ -163,6 +163,11 @@ async function main() {
     return { banner, opened, power: dev.device.powerMode }; })()`);
   check("a #do= link waits, then does it", doLink.banner && doLink.opened === "Opening Netflix.", JSON.stringify(doLink));
   check("Cancel stops a #do= link", doLink.power === "PowerOn", JSON.stringify(doLink));
+  const framing = await fetch(`http://127.0.0.1:${PAGE_PORT}/`).then((r) => [r.headers.get("x-frame-options"), r.headers.get("content-security-policy")]);
+  check("the page can't be put in another site's frame", framing[0] === "DENY" && /frame-ancestors 'none'/.test(framing[1] || ""), framing.join(" | "));
+  const kept = await page(`(async () => { location.hash = "do=pause"; await new Promise((r) => setTimeout(r, 200));
+    const hash = location.hash; document.querySelector("#do-cancel").click(); return hash; })()`);
+  check("a #do= link keeps its address (so it can be saved as a button)", kept === "#do=pause", kept);
 
   // The send-only page (phones without the program): every menu opens without errors, and the
   // things it can't do stay out of the way.

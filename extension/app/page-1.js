@@ -3739,27 +3739,48 @@ $("#cast-send").addEventListener("click", async () => {
 
 /* ---------- Links that do something: …/#do=open%20Netflix (home-screen buttons on a phone) ---------- */
 
+// The address keeps its #do= (so Share > Add to Home Screen saves the button), and each address is
+// offered once per visit. Never inside another page's frame: a hidden frame must not act unseen.
+let doOffered = "";
 function takeDoLink() {
   const match = /^#do=(.+)$/.exec(location.hash);
-  if (!match) return null;
-  history.replaceState(null, "", location.pathname + location.search);
+  if (!match || location.hash === doOffered) return null;
+  doOffered = location.hash;
+  if (window.top !== window) return null;
   try { return decodeURIComponent(match[1]).trim().slice(0, 120) || null; } catch { return null; }
 }
-// A short, visible pause first, so a link from somewhere else can't act without you seeing it.
+if (/^#do=/.test(location.hash)) {
+  // A saved button should open in the browser (already paired there), not as a separate home-screen app.
+  document.querySelector('link[rel="manifest"]')?.remove();
+}
+// A visible pause first, counted only while the page is on screen, so nothing happens unseen.
 let doTimer = null;
+function armDo() {
+  clearTimeout(doTimer);
+  if (!state.pendingDo) return;
+  const seen = document.visibilityState === "visible" && !document.prerendering && $("#pair").hidden;
+  if (seen) doTimer = setTimeout(runPendingDo, 2000);
+}
 function offerDo(phrase) {
   state.pendingDo = phrase;
   $("#do-text").textContent = `Doing “${phrase}” on the TV in 2 seconds…`;
+  $("#do-hint").textContent = "To keep this as a home-screen button: tap Cancel, then Share > Add to Home Screen.";
   $("#do-banner").hidden = false;
+  $("#do-cancel").focus();
+  armDo();
+}
+function cancelDo() {
   clearTimeout(doTimer);
-  doTimer = setTimeout(runPendingDo, 2000);
+  state.pendingDo = null;
+  $("#do-banner").hidden = true;
 }
 async function runPendingDo() {
   clearTimeout(doTimer);
   const phrase = state.pendingDo;
+  if (!phrase) return;
+  if (!$("#pair").hidden) return;   // the code first; the page reloads after pairing and offers it again
   $("#do-banner").hidden = true;
   state.pendingDo = null;
-  if (!phrase) return;
   if (!state.tv || !state.control) { toast("Couldn't reach the TV to do that."); return; }
   try {
     const { done } = await api("/api/do", { tv: state.tv, do: phrase });
@@ -3771,10 +3792,20 @@ async function runPendingDo() {
   }
 }
 $("#do-now").addEventListener("click", runPendingDo);
-$("#do-cancel").addEventListener("click", () => { clearTimeout(doTimer); state.pendingDo = null; $("#do-banner").hidden = true; });
+$("#do-cancel").addEventListener("click", cancelDo);
+$("#do-banner").addEventListener("keydown", (e) => {
+  if (e.key !== "Escape") return;
+  e.preventDefault();
+  e.stopPropagation();   // not also "Back" on the TV (the page's keyboard shortcuts)
+  cancelDo();
+});
+document.addEventListener("visibilitychange", armDo);   // hidden: the countdown stops; back on screen: it starts over
+document.addEventListener("prerenderingchange", armDo); // a page loaded ahead of time starts counting only once shown
+let pageReady = false;
 window.addEventListener("hashchange", () => {
   const phrase = takeDoLink();
-  if (phrase) offerDo(phrase);
+  if (!phrase) return;
+  if (pageReady) offerDo(phrase); else state.laterDo = phrase;   // the page is still starting: offer the latest one then
 });
 
 /* ---------- Menus ---------- */
@@ -3896,6 +3927,16 @@ function renderPhone() {
     ${homeButtonsHTML(phone.url)}`;
   if (window.QRCode) new QRCode($("#phone-qr"), { text: phone.url, width: 152, height: 152, correctLevel: QRCode.CorrectLevel.M });
   else $("#phone-qr").hidden = true;
+  showHomeQr();   // a button's code stays up when the page redraws (a phone paired, say)
+}
+
+function showHomeQr() {
+  const box = $("#home-qr-code");
+  if (!box || !state.homeQr || !window.QRCode) return;
+  box.innerHTML = "";
+  new QRCode(box, { text: state.homeQr.link, width: 150, height: 150, correctLevel: QRCode.CorrectLevel.M });
+  $("#home-qr-label").textContent = state.homeQr.label;
+  $("#home-qr").hidden = false;
 }
 
 // Home-screen buttons: links that open this page and do one thing (after a 2-second "Cancel" pause).
@@ -3910,7 +3951,7 @@ function homeButtonsHTML(base) {
   return `
     <div class="shortcuts-box">
       <h3 class="subhead">Home-screen buttons</h3>
-      <p class="note">Scan a code with your phone's camera (or copy the link to it), then use Share > Add to Home Screen. Tapping it then does that on the TV. The phone needs the code above once.</p>
+      <p class="note">Scan a code with your phone's camera (or send it the link). The page opens and does it after 2 seconds; tap Cancel there, then Share > Add to Home Screen to keep it as a button. The phone needs the code above once.</p>
       <div class="home-grid">
         <ul class="home-links">${items.map(([label, phrase]) => {
           const link = `${base}/#do=${encodeURIComponent(phrase)}`;
@@ -3955,11 +3996,8 @@ async function switchPhone(change) {
 $("#phone-body").addEventListener("click", async (e) => {
   const qr = e.target.closest("[data-qr]");
   if (qr && window.QRCode) {
-    const box = $("#home-qr-code");
-    box.innerHTML = "";
-    new QRCode(box, { text: qr.dataset.qr, width: 150, height: 150, correctLevel: QRCode.CorrectLevel.M });
-    $("#home-qr-label").textContent = qr.dataset.qrLabel;
-    $("#home-qr").hidden = false;
+    state.homeQr = { link: qr.dataset.qr, label: qr.dataset.qrLabel };
+    showHomeQr();
     return;
   }
   const copy = e.target.closest("[data-copy]");
@@ -4040,7 +4078,9 @@ function takeFindLink() {
   loadPhone();
   if (isLite()) {   // no finding TVs: the address is typed once and saved
     renderPicker();
-    if (state.tv) connect(state.tv);
+    if (state.tv) await connect(state.tv);
+    pageReady = true;
+    if (state.laterDo || doLink) offerDo(state.laterDo || doLink);   // says what it needs, instead of nothing
     return;
   }
   if (state.tv) {
@@ -4051,5 +4091,6 @@ function takeFindLink() {
     await findTVs();
   }
   if (findLink && state.tv) runFind(findLink);
-  if (doLink) offerDo(doLink);
+  pageReady = true;
+  if (state.laterDo || doLink) offerDo(state.laterDo || doLink);   // only the latest link
 })();
