@@ -890,6 +890,7 @@ function renderTV() {
   renderRemoteOnly();
   $("#tv-hint").hidden = true;
   $("#wake-btn").hidden = true;
+  $("#power-on-btn").hidden = true;
   const tv = $("#tv");
   const facts = $("#tv-facts");
   const d = state.device;
@@ -924,9 +925,13 @@ function renderTV() {
   $("#tv-name").textContent = d.name;
   const ready = isLite() ? "Ready. Taps go straight to the TV, but this page can't see what's playing on it."
     : "Connected. Channels and the remote are ready.";
-  $("#tv-status").textContent = state.control
-    ? ready
-    : "Connected, but the TV is only sharing basic info.";
+  // Off but still on the network (Fast TV start): say so, and offer to turn it on.
+  const off = Boolean(d.powerMode) && d.powerMode !== "PowerOn";
+  $("#tv-status").textContent = !state.control
+    ? "Connected, but the TV is only sharing basic info."
+    : off ? "The TV is off. It can be turned on from here." : ready;
+  $("#power-on-btn").hidden = !(off && state.control);
+  tv.dataset.power = off ? "off" : "on";
   const accessNames = { limited: "Limited", default: "Default", enabled: "Enabled", permissive: "Permissive", disabled: "Off" };
   const rows = [
     ["Model", [d.vendor && d.model && !d.model.toLowerCase().includes(d.vendor.toLowerCase()) ? d.vendor : "", d.model, d.modelNumber].filter(Boolean).join(" ")],
@@ -1304,7 +1309,8 @@ function pressKey(key) {
     btn.classList.add("sent");
     setTimeout(() => btn.classList.remove("sent"), 220);
   }
-  if (COARSE.matches && navigator.vibrate && !key.startsWith("Lit_")) navigator.vibrate(8);   // a small buzz, like a real remote's click
+  if (COARSE.matches && navigator.vibrate && !key.startsWith("Lit_")) navigator.vibrate(8);
+  if (key.startsWith("Power")) setTimeout(refreshDevice, 2500);   // show "The TV is off" / back on soon   // a small buzz, like a real remote's click
   // One at a time, so fast presses reach the TV in order.
   keysPending += 1;
   keyChain = keyChain.then(() => api("/api/key", { tv: state.tv, key }))
@@ -1993,6 +1999,19 @@ function clock(ms) {
   const sec = String(total % 60).padStart(2, "0");
   return h ? `${h}:${String(m).padStart(2, "0")}:${sec}` : `${m}:${sec}`;
 }
+
+$("#power-on-btn").addEventListener("click", async (e) => {
+  e.target.disabled = true;
+  try {
+    await api("/api/key", { tv: state.tv, key: "PowerOn" });
+    toast("Turning the TV on.");
+    setTimeout(refreshDevice, 2500);
+  } catch (err) {
+    toast(err.message);
+  } finally {
+    setTimeout(() => { e.target.disabled = false; }, 2500);
+  }
+});
 
 /* ---------- Waking a TV in deep sleep (the program sends a Wake-on-LAN packet) ---------- */
 

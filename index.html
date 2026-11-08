@@ -122,6 +122,7 @@
   .tv-glyph .screen span { width: 14px; height: 14px; border-radius: 50%; background: var(--line); transition: background .3s; }
   .tv-glyph .stand { width: 40%; height: 7px; margin: 0 auto; border-radius: 0 0 6px 6px; background: var(--ink); }
   .tv[data-state="ready"] .screen { background: var(--keep-soft); }
+  .tv[data-state="ready"][data-power="off"] .screen { background: var(--surface); }
   .tv[data-state="ready"] .screen span { background: var(--keep); }
   .tv[data-state="limited"] .screen { background: var(--warn-soft); }
   .tv[data-state="limited"] .screen span { background: var(--warn-ink); }
@@ -129,7 +130,7 @@
   .tv-name { font-size: clamp(26px, 3.6vw, 36px); font-weight: 800; letter-spacing: -0.02em; overflow-wrap: anywhere; }
   .tv-status { margin-top: 6px; font-weight: 600; }
   .tv-hint { margin-top: 4px; max-width: 70ch; font-size: 15px; color: var(--muted); }
-  #wake-btn { margin-top: 10px; }
+  #wake-btn, #power-on-btn { margin-top: 10px; }
   .tv-facts { display: flex; flex-wrap: wrap; gap: 4px 26px; margin: 10px 0 0; font-size: 15px; }
   .tv-facts div { display: flex; gap: 6px; }
   .tv-facts dt { color: var(--muted); }
@@ -641,6 +642,7 @@
       <p class="tv-status" id="tv-status" role="status">Looking for Roku TVs on your Wi-Fi.</p>
       <p class="tv-hint" id="tv-hint" hidden>If the TV is off: Roku TVs only stay reachable while off when Fast TV start is on (on the TV: Settings, System, Power).</p>
       <button class="btn" id="wake-btn" type="button" hidden>Try to wake it</button>
+      <button class="btn primary" id="power-on-btn" type="button" hidden>Turn on</button>
       <p class="engine-badge" id="engine-badge" hidden></p>
       <dl class="tv-facts" id="tv-facts"></dl>
       <p class="engine-warn" id="https-note" hidden>This page is secure (https), so your browser may block it from talking to the TV. Use the http:// link instead.</p>
@@ -1909,6 +1911,7 @@ function renderTV() {
   renderRemoteOnly();
   $("#tv-hint").hidden = true;
   $("#wake-btn").hidden = true;
+  $("#power-on-btn").hidden = true;
   const tv = $("#tv");
   const facts = $("#tv-facts");
   const d = state.device;
@@ -1943,9 +1946,13 @@ function renderTV() {
   $("#tv-name").textContent = d.name;
   const ready = isLite() ? "Ready. Taps go straight to the TV, but this page can't see what's playing on it."
     : "Connected. Channels and the remote are ready.";
-  $("#tv-status").textContent = state.control
-    ? ready
-    : "Connected, but the TV is only sharing basic info.";
+  // Off but still on the network (Fast TV start): say so, and offer to turn it on.
+  const off = Boolean(d.powerMode) && d.powerMode !== "PowerOn";
+  $("#tv-status").textContent = !state.control
+    ? "Connected, but the TV is only sharing basic info."
+    : off ? "The TV is off. It can be turned on from here." : ready;
+  $("#power-on-btn").hidden = !(off && state.control);
+  tv.dataset.power = off ? "off" : "on";
   const accessNames = { limited: "Limited", default: "Default", enabled: "Enabled", permissive: "Permissive", disabled: "Off" };
   const rows = [
     ["Model", [d.vendor && d.model && !d.model.toLowerCase().includes(d.vendor.toLowerCase()) ? d.vendor : "", d.model, d.modelNumber].filter(Boolean).join(" ")],
@@ -2323,7 +2330,8 @@ function pressKey(key) {
     btn.classList.add("sent");
     setTimeout(() => btn.classList.remove("sent"), 220);
   }
-  if (COARSE.matches && navigator.vibrate && !key.startsWith("Lit_")) navigator.vibrate(8);   // a small buzz, like a real remote's click
+  if (COARSE.matches && navigator.vibrate && !key.startsWith("Lit_")) navigator.vibrate(8);
+  if (key.startsWith("Power")) setTimeout(refreshDevice, 2500);   // show "The TV is off" / back on soon   // a small buzz, like a real remote's click
   // One at a time, so fast presses reach the TV in order.
   keysPending += 1;
   keyChain = keyChain.then(() => api("/api/key", { tv: state.tv, key }))
@@ -3012,6 +3020,19 @@ function clock(ms) {
   const sec = String(total % 60).padStart(2, "0");
   return h ? `${h}:${String(m).padStart(2, "0")}:${sec}` : `${m}:${sec}`;
 }
+
+$("#power-on-btn").addEventListener("click", async (e) => {
+  e.target.disabled = true;
+  try {
+    await api("/api/key", { tv: state.tv, key: "PowerOn" });
+    toast("Turning the TV on.");
+    setTimeout(refreshDevice, 2500);
+  } catch (err) {
+    toast(err.message);
+  } finally {
+    setTimeout(() => { e.target.disabled = false; }, 2500);
+  }
+});
 
 /* ---------- Waking a TV in deep sleep (the program sends a Wake-on-LAN packet) ---------- */
 
