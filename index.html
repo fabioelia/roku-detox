@@ -469,6 +469,8 @@
   .dpad .ok { left: 50px; top: 50px; width: 78px; height: 78px; background: var(--remote); font-weight: 700; font-size: 17px; }
   .dpad .ok:hover:not(:disabled) { background: #1A212D; }
   .r-label { margin-top: -10px; font-size: 12px; opacity: .7; }
+  .rk.ch { width: 76px; gap: 2px; grid-auto-flow: column; font-size: 13px; font-weight: 700; letter-spacing: .04em; }
+  .rk.ch svg { width: 16px; height: 16px; }
   /* Swipe pad: drag to send arrows (one per short stretch), tap for OK */
   .touchpad {
     width: 178px; height: 178px; border-radius: 30px; background: var(--remote-key);
@@ -496,6 +498,8 @@
   .smart { width: 100%; max-width: 300px; display: grid; gap: 8px; }
   .smart label { font-size: 14px; color: var(--muted); }
   .smart-field { position: relative; }
+  .find-field { flex: 1; min-width: 0; display: flex; }
+  .find-field input { flex: 1; }
   .smart-field input { width: 100%; }
   .smart-field:has(.mic:not([hidden])) input { padding-right: 46px; }
   .mic {
@@ -707,7 +711,10 @@
           <button type="button" data-source="sites" aria-pressed="false">My sites</button>
         </div>
         <form class="find-form" id="find-form" role="search">
-          <input type="search" id="find-input" placeholder="Show or movie name" aria-label="Show or movie name" autocomplete="off" maxlength="100">
+          <div class="smart-field find-field">
+            <input type="search" id="find-input" placeholder="Show or movie name" aria-label="Show or movie name" autocomplete="off" maxlength="100">
+            <button class="mic" id="find-mic" type="button" aria-label="Say it" aria-pressed="false" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg></button>
+          </div>
           <button class="btn primary" type="submit" id="find-go">Search</button>
         </form>
         <div class="continue" id="continue" hidden>
@@ -901,6 +908,10 @@
         </div>
         <div class="touchpad" id="touchpad" hidden tabindex="0" role="application" aria-label="Swipe pad. Swipe to move, tap for OK. Arrow keys and Enter work too.">
           <span aria-hidden="true">Swipe to move<br>Tap for OK</span>
+        </div>
+        <div class="r-row ch-row" id="ch-row" hidden>
+          <button class="rk ch" data-key="ChannelDown" type="button" aria-label="Channel down">CH <svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></button>
+          <button class="rk ch" data-key="ChannelUp" type="button" aria-label="Channel up">CH <svg viewBox="0 0 24 24"><path d="m6 15 6-6 6 6"/></svg></button>
         </div>
         <div class="r-row">
           <button class="rk" data-key="InstantReplay" type="button" aria-label="Replay"><svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.4-5.7"/><path d="M4 4v4.5h4.5"/></svg></button>
@@ -2309,52 +2320,55 @@ $("#pad-toggle").addEventListener("click", () => {
 renderPad();
 
 /* Voice: say a show or an app. Browsers only allow the microphone on secure pages (the extension, this Mac). */
-{
+function attachMic(mic, input, form, onText = () => {}) {
   const Speech = window.SpeechRecognition || window.webkitSpeechRecognition;
-  const mic = $("#smart-mic");
+  if (!Speech || !window.isSecureContext) return;
   let listening = null;
-  if (Speech && window.isSecureContext) {
-    mic.hidden = false;
-    mic.addEventListener("click", () => {
-      if (listening) { listening.stop(); return; }
-      const rec = new Speech();
-      rec.lang = navigator.language || "en-US";
-      rec.interimResults = true;
-      let heard = "";
-      rec.onresult = (e) => {
-        let text = "";
-        for (const result of e.results) text += result[0].transcript;
-        heard = text.trim();
-        $("#smart-input").value = heard;
-        renderSmart();
-      };
-      rec.onerror = (e) => {
-        if (e.error === "not-allowed" || e.error === "service-not-allowed") toast("Allow the microphone for this page to search by voice.");
-        else if (e.error !== "aborted" && e.error !== "no-speech") toast("Didn't catch that. Try again.");
-      };
-      rec.onend = () => {
-        listening = null;
-        mic.classList.remove("on");
-        mic.setAttribute("aria-pressed", "false");
-        mic.setAttribute("aria-label", "Say it");
-        if (heard) $("#smart-form").requestSubmit();
-      };
-      try {
-        rec.start();
-        listening = rec;
-        mic.classList.add("on");
-        mic.setAttribute("aria-pressed", "true");
-        mic.setAttribute("aria-label", "Listening. Tap to stop.");
-      } catch {
-        toast("The microphone isn't available right now.");
-      }
-    });
-  }
+  mic.hidden = false;
+  const idle = () => {
+    mic.classList.remove("on");
+    mic.setAttribute("aria-pressed", "false");
+    mic.setAttribute("aria-label", "Say it");
+  };
+  mic.addEventListener("click", () => {
+    if (listening) { listening.stop(); return; }
+    const rec = new Speech();
+    rec.lang = navigator.language || "en-US";
+    rec.interimResults = true;
+    let heard = "";
+    rec.onresult = (e) => {
+      let text = "";
+      for (const result of e.results) text += result[0].transcript;
+      heard = text.trim();
+      input.value = heard;
+      onText();
+    };
+    rec.onerror = (e) => {
+      if (e.error === "not-allowed" || e.error === "service-not-allowed") toast("Allow the microphone for this page to search by voice.");
+      else if (e.error !== "aborted" && e.error !== "no-speech") toast("Didn't catch that. Try again.");
+    };
+    rec.onend = () => {
+      listening = null;
+      idle();
+      if (heard) form.requestSubmit();
+    };
+    try {
+      rec.start();
+      listening = rec;
+      mic.classList.add("on");
+      mic.setAttribute("aria-pressed", "true");
+      mic.setAttribute("aria-label", "Listening. Tap to stop.");
+    } catch {
+      toast("The microphone isn't available right now.");
+    }
+  });
 }
+attachMic($("#smart-mic"), $("#smart-input"), $("#smart-form"), () => renderSmart());
+attachMic($("#find-mic"), $("#find-input"), $("#find-form"));
 
 const KEYBOARD = {
   ArrowUp: "Up", ArrowDown: "Down", ArrowLeft: "Left", ArrowRight: "Right", Backspace: "Back", Escape: "Back",
-  h: "Home", H: "Home", "*": "Info", "+": "VolumeUp", "=": "VolumeUp", "-": "VolumeDown", m: "VolumeMute", M: "VolumeMute",
+  h: "Home", H: "Home", "*": "Info", PageUp: "ChannelUp", PageDown: "ChannelDown", "+": "VolumeUp", "=": "VolumeUp", "-": "VolumeDown", m: "VolumeMute", M: "VolumeMute",
 };
 
 /* ---------- Events ---------- */
@@ -2973,7 +2987,7 @@ function renderNow() {
   const box = $("#now");
   const now = state.now;
   box.hidden = !(now && state.control && state.reachable);
-  if (box.hidden) return;
+  if (box.hidden) { $("#ch-row").hidden = true; return; }
   const playing = ["play", "pause", "buffer"].includes(now.state) && now.appId;
   const screen = now.screen || {};
   const home = !playing && isHomeScreen(screen);
@@ -2998,6 +3012,8 @@ function renderNow() {
   }
   box.querySelector(".now-app").textContent = name;
   box.querySelector(".now-state").textContent = detail;
+  // Channel buttons only make sense while the TV shows its antenna input.
+  $("#ch-row").hidden = screen.id !== "tvinput.dtv";
   const bar = box.querySelector(".now-bar");
   bar.hidden = percent === null;
   if (percent !== null) bar.firstElementChild.style.width = `${Math.min(100, percent)}%`;

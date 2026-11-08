@@ -1337,52 +1337,55 @@ $("#pad-toggle").addEventListener("click", () => {
 renderPad();
 
 /* Voice: say a show or an app. Browsers only allow the microphone on secure pages (the extension, this Mac). */
-{
+function attachMic(mic, input, form, onText = () => {}) {
   const Speech = window.SpeechRecognition || window.webkitSpeechRecognition;
-  const mic = $("#smart-mic");
+  if (!Speech || !window.isSecureContext) return;
   let listening = null;
-  if (Speech && window.isSecureContext) {
-    mic.hidden = false;
-    mic.addEventListener("click", () => {
-      if (listening) { listening.stop(); return; }
-      const rec = new Speech();
-      rec.lang = navigator.language || "en-US";
-      rec.interimResults = true;
-      let heard = "";
-      rec.onresult = (e) => {
-        let text = "";
-        for (const result of e.results) text += result[0].transcript;
-        heard = text.trim();
-        $("#smart-input").value = heard;
-        renderSmart();
-      };
-      rec.onerror = (e) => {
-        if (e.error === "not-allowed" || e.error === "service-not-allowed") toast("Allow the microphone for this page to search by voice.");
-        else if (e.error !== "aborted" && e.error !== "no-speech") toast("Didn't catch that. Try again.");
-      };
-      rec.onend = () => {
-        listening = null;
-        mic.classList.remove("on");
-        mic.setAttribute("aria-pressed", "false");
-        mic.setAttribute("aria-label", "Say it");
-        if (heard) $("#smart-form").requestSubmit();
-      };
-      try {
-        rec.start();
-        listening = rec;
-        mic.classList.add("on");
-        mic.setAttribute("aria-pressed", "true");
-        mic.setAttribute("aria-label", "Listening. Tap to stop.");
-      } catch {
-        toast("The microphone isn't available right now.");
-      }
-    });
-  }
+  mic.hidden = false;
+  const idle = () => {
+    mic.classList.remove("on");
+    mic.setAttribute("aria-pressed", "false");
+    mic.setAttribute("aria-label", "Say it");
+  };
+  mic.addEventListener("click", () => {
+    if (listening) { listening.stop(); return; }
+    const rec = new Speech();
+    rec.lang = navigator.language || "en-US";
+    rec.interimResults = true;
+    let heard = "";
+    rec.onresult = (e) => {
+      let text = "";
+      for (const result of e.results) text += result[0].transcript;
+      heard = text.trim();
+      input.value = heard;
+      onText();
+    };
+    rec.onerror = (e) => {
+      if (e.error === "not-allowed" || e.error === "service-not-allowed") toast("Allow the microphone for this page to search by voice.");
+      else if (e.error !== "aborted" && e.error !== "no-speech") toast("Didn't catch that. Try again.");
+    };
+    rec.onend = () => {
+      listening = null;
+      idle();
+      if (heard) form.requestSubmit();
+    };
+    try {
+      rec.start();
+      listening = rec;
+      mic.classList.add("on");
+      mic.setAttribute("aria-pressed", "true");
+      mic.setAttribute("aria-label", "Listening. Tap to stop.");
+    } catch {
+      toast("The microphone isn't available right now.");
+    }
+  });
 }
+attachMic($("#smart-mic"), $("#smart-input"), $("#smart-form"), () => renderSmart());
+attachMic($("#find-mic"), $("#find-input"), $("#find-form"));
 
 const KEYBOARD = {
   ArrowUp: "Up", ArrowDown: "Down", ArrowLeft: "Left", ArrowRight: "Right", Backspace: "Back", Escape: "Back",
-  h: "Home", H: "Home", "*": "Info", "+": "VolumeUp", "=": "VolumeUp", "-": "VolumeDown", m: "VolumeMute", M: "VolumeMute",
+  h: "Home", H: "Home", "*": "Info", PageUp: "ChannelUp", PageDown: "ChannelDown", "+": "VolumeUp", "=": "VolumeUp", "-": "VolumeDown", m: "VolumeMute", M: "VolumeMute",
 };
 
 /* ---------- Events ---------- */
@@ -2001,7 +2004,7 @@ function renderNow() {
   const box = $("#now");
   const now = state.now;
   box.hidden = !(now && state.control && state.reachable);
-  if (box.hidden) return;
+  if (box.hidden) { $("#ch-row").hidden = true; return; }
   const playing = ["play", "pause", "buffer"].includes(now.state) && now.appId;
   const screen = now.screen || {};
   const home = !playing && isHomeScreen(screen);
@@ -2026,6 +2029,8 @@ function renderNow() {
   }
   box.querySelector(".now-app").textContent = name;
   box.querySelector(".now-state").textContent = detail;
+  // Channel buttons only make sense while the TV shows its antenna input.
+  $("#ch-row").hidden = screen.id !== "tvinput.dtv";
   const bar = box.querySelector(".now-bar");
   bar.hidden = percent === null;
   if (percent !== null) bar.firstElementChild.style.width = `${Math.min(100, percent)}%`;

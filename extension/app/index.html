@@ -469,6 +469,8 @@
   .dpad .ok { left: 50px; top: 50px; width: 78px; height: 78px; background: var(--remote); font-weight: 700; font-size: 17px; }
   .dpad .ok:hover:not(:disabled) { background: #1A212D; }
   .r-label { margin-top: -10px; font-size: 12px; opacity: .7; }
+  .rk.ch { width: 76px; gap: 2px; grid-auto-flow: column; font-size: 13px; font-weight: 700; letter-spacing: .04em; }
+  .rk.ch svg { width: 16px; height: 16px; }
   /* Swipe pad: drag to send arrows (one per short stretch), tap for OK */
   .touchpad {
     width: 178px; height: 178px; border-radius: 30px; background: var(--remote-key);
@@ -496,6 +498,8 @@
   .smart { width: 100%; max-width: 300px; display: grid; gap: 8px; }
   .smart label { font-size: 14px; color: var(--muted); }
   .smart-field { position: relative; }
+  .find-field { flex: 1; min-width: 0; display: flex; }
+  .find-field input { flex: 1; }
   .smart-field input { width: 100%; }
   .smart-field:has(.mic:not([hidden])) input { padding-right: 46px; }
   .mic {
@@ -707,7 +711,10 @@
           <button type="button" data-source="sites" aria-pressed="false">My sites</button>
         </div>
         <form class="find-form" id="find-form" role="search">
-          <input type="search" id="find-input" placeholder="Show or movie name" aria-label="Show or movie name" autocomplete="off" maxlength="100">
+          <div class="smart-field find-field">
+            <input type="search" id="find-input" placeholder="Show or movie name" aria-label="Show or movie name" autocomplete="off" maxlength="100">
+            <button class="mic" id="find-mic" type="button" aria-label="Say it" aria-pressed="false" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg></button>
+          </div>
           <button class="btn primary" type="submit" id="find-go">Search</button>
         </form>
         <div class="continue" id="continue" hidden>
@@ -901,6 +908,10 @@
         </div>
         <div class="touchpad" id="touchpad" hidden tabindex="0" role="application" aria-label="Swipe pad. Swipe to move, tap for OK. Arrow keys and Enter work too.">
           <span aria-hidden="true">Swipe to move<br>Tap for OK</span>
+        </div>
+        <div class="r-row ch-row" id="ch-row" hidden>
+          <button class="rk ch" data-key="ChannelDown" type="button" aria-label="Channel down">CH <svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></button>
+          <button class="rk ch" data-key="ChannelUp" type="button" aria-label="Channel up">CH <svg viewBox="0 0 24 24"><path d="m6 15 6-6 6 6"/></svg></button>
         </div>
         <div class="r-row">
           <button class="rk" data-key="InstantReplay" type="button" aria-label="Replay"><svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.4-5.7"/><path d="M4 4v4.5h4.5"/></svg></button>
