@@ -737,6 +737,7 @@ async function findTVs({ autoConnect = true } = {}) {
 
 async function connect(address) {
   if (state.job) stopJobs();
+  state.pickerOpen = false;
   state.tv = address;
   store.set("detox.tv", address);
   state.device = null;
@@ -842,7 +843,25 @@ function renderAll() {
   renderJob();
 }
 
+// The TV picker folds away behind "Switch TV" once a TV answers.
+state.pickerOpen = false;
+function renderPickerMode() {
+  const connected = Boolean(state.tv && state.reachable);
+  const compact = connected && !state.pickerOpen;
+  $("#picker").dataset.compact = String(compact);
+  const toggle = $("#picker-toggle");
+  toggle.hidden = !connected;
+  toggle.textContent = compact ? (isLite() ? "Change TV" : "Switch TV") : "Done";
+  toggle.setAttribute("aria-expanded", String(!compact));
+}
+$("#picker-toggle").addEventListener("click", () => {
+  state.pickerOpen = !state.pickerOpen;
+  renderPickerMode();
+  if (state.pickerOpen) (isLite() ? $("#manual-input") : $("#tv-select")).focus();
+});
+
 function renderTV() {
+  renderPickerMode();
   const tv = $("#tv");
   const facts = $("#tv-facts");
   const d = state.device;
@@ -3207,9 +3226,26 @@ setInterval(() => {
   if (state.tv && !state.job && !(state.restart && ["sending", "waiting", "restarting"].includes(state.restart.phase))) refreshDevice();
 }, 15000);
 
+// "tv the bear" in the address bar (extension) opens this page with #find=the%20bear.
+function takeFindLink() {
+  const match = /^#find=(.+)$/.exec(location.hash);
+  if (!match) return null;
+  history.replaceState(null, "", location.pathname + location.search);
+  let query;
+  try { query = decodeURIComponent(match[1]).trim().slice(0, 100); } catch { return null; }
+  if (!query) return null;
+  state.view = "find";
+  store.set("detox.view", "find");
+  state.findSource = "catalog";
+  store.set("detox.findSource", "catalog");
+  $("#find-input").value = query;
+  return query;
+}
+
 (async function start() {
   await engineReady;
   applyEngine();
+  const findLink = takeFindLink();
   if (usesIconLoader()) watchIcons();
   loadSites().then(renderFindSource);
   renderViews();
@@ -3224,9 +3260,11 @@ setInterval(() => {
     return;
   }
   if (state.tv) {
-    connect(state.tv);
+    const connecting = connect(state.tv);
     findTVs({ autoConnect: false });
+    await connecting;
   } else {
     await findTVs();
   }
+  if (findLink && state.tv) runFind(findLink);
 })();

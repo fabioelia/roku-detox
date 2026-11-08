@@ -89,7 +89,7 @@
     min-height: 42px; padding: 8px 12px; border-radius: var(--radius-s);
     border: 1px solid var(--line); background: var(--raised);
   }
-  select { max-width: 260px; }
+  select { max-width: min(340px, 100%); }
   .manual { display: flex; gap: 8px; }
   .manual input { width: 170px; }
 
@@ -103,10 +103,13 @@
   .btn.quiet { background: transparent; border-color: transparent; text-decoration: underline; text-underline-offset: 3px; padding-inline: 8px; }
   .btn:disabled { opacity: .55; cursor: not-allowed; }
   .picker-note { width: 100%; color: var(--muted); font-size: 15px; text-align: right; }
+  .picker-tools { display: contents; }
+  /* Connected: the TV picker waits behind "Switch TV", and background searching stays quiet. */
+  .picker[data-compact="true"] .picker-tools, .picker[data-compact="true"] .picker-note { display: none; }
 
   /* The TV you're connected to */
-  .tv { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 22px; align-items: center; padding: 30px 0 26px; }
-  .tv-glyph { width: 104px; }
+  .tv { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 20px; align-items: center; padding: 24px 0 22px; }
+  .tv-glyph { width: 88px; }
   .tv-glyph .screen {
     aspect-ratio: 16 / 10; border: 4px solid var(--ink); border-radius: 9px;
     background: var(--surface); display: grid; place-items: center; transition: background .3s;
@@ -118,7 +121,7 @@
   .tv[data-state="limited"] .screen { background: var(--warn-soft); }
   .tv[data-state="limited"] .screen span { background: var(--warn-ink); }
   .tv[data-state="offline"] .screen span { background: var(--remove); }
-  .tv-name { font-size: clamp(28px, 4.4vw, 42px); font-weight: 800; letter-spacing: -0.02em; overflow-wrap: anywhere; }
+  .tv-name { font-size: clamp(26px, 3.6vw, 36px); font-weight: 800; letter-spacing: -0.02em; overflow-wrap: anywhere; }
   .tv-status { margin-top: 6px; font-weight: 600; }
   .tv-facts { display: flex; flex-wrap: wrap; gap: 4px 26px; margin: 10px 0 0; font-size: 15px; }
   .tv-facts div { display: flex; gap: 6px; }
@@ -308,8 +311,15 @@
   @media (max-width: 600px) {
     .shell { padding: 16px 16px 48px; }
     .picker-note { text-align: left; }
-    .tv { grid-template-columns: minmax(0, 1fr); gap: 14px; }
-    .tv-glyph { width: 76px; }
+    /* On a phone the remote matters most: a one-line TV header, details left out. */
+    .tv { grid-template-columns: auto minmax(0, 1fr); gap: 12px; padding: 14px 0 12px; }
+    .tv-glyph { width: 48px; }
+    .tv-glyph .screen { border-width: 3px; border-radius: 6px; }
+    .tv-glyph .screen span { width: 8px; height: 8px; }
+    .tv-glyph .stand { height: 5px; }
+    .tv-name { font-size: 22px; }
+    .tv-status { margin-top: 2px; font-size: 15px; }
+    .tv[data-state="ready"] .tv-facts, .tv[data-state="ready"] .engine-badge { display: none; }
   }
 
   .section { padding: 30px 0; border-top: 1px solid var(--line); }
@@ -532,14 +542,17 @@
       <svg viewBox="0 0 32 32" aria-hidden="true"><rect x="3" y="6" width="26" height="17" rx="3" fill="none" stroke="currentColor" stroke-width="2.5"/><path d="M11 27h10" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/><path d="m11.5 14.5 3 3 6-6" fill="none" stroke="var(--keep)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
       Roku Detox
     </h1>
-    <div class="picker">
-      <label for="tv-select" id="picker-label">TV</label>
-      <select id="tv-select" class="needs-engine" disabled><option>Looking…</option></select>
-      <button class="btn needs-engine" id="find-btn" type="button">Find TVs</button>
-      <form class="manual" id="manual-form">
-        <input type="text" id="manual-input" placeholder="Or type its IP address" aria-label="TV IP address" inputmode="decimal" autocomplete="off">
-        <button class="btn" type="submit">Connect</button>
-      </form>
+    <div class="picker" id="picker" data-compact="false">
+      <div class="picker-tools" id="picker-tools">
+        <label for="tv-select" id="picker-label">TV</label>
+        <select id="tv-select" class="needs-engine" disabled><option>Looking…</option></select>
+        <button class="btn needs-engine" id="find-btn" type="button">Find TVs</button>
+        <form class="manual" id="manual-form">
+          <input type="text" id="manual-input" placeholder="Or type its IP address" aria-label="TV IP address" inputmode="decimal" autocomplete="off">
+          <button class="btn" type="submit">Connect</button>
+        </form>
+      </div>
+      <button class="btn" id="picker-toggle" type="button" aria-controls="picker-tools" aria-expanded="false" hidden>Switch TV</button>
       <p class="picker-note" id="picker-note" aria-live="polite"></p>
     </div>
   </header>
@@ -1603,6 +1616,7 @@ async function findTVs({ autoConnect = true } = {}) {
 
 async function connect(address) {
   if (state.job) stopJobs();
+  state.pickerOpen = false;
   state.tv = address;
   store.set("detox.tv", address);
   state.device = null;
@@ -1708,7 +1722,25 @@ function renderAll() {
   renderJob();
 }
 
+// The TV picker folds away behind "Switch TV" once a TV answers.
+state.pickerOpen = false;
+function renderPickerMode() {
+  const connected = Boolean(state.tv && state.reachable);
+  const compact = connected && !state.pickerOpen;
+  $("#picker").dataset.compact = String(compact);
+  const toggle = $("#picker-toggle");
+  toggle.hidden = !connected;
+  toggle.textContent = compact ? (isLite() ? "Change TV" : "Switch TV") : "Done";
+  toggle.setAttribute("aria-expanded", String(!compact));
+}
+$("#picker-toggle").addEventListener("click", () => {
+  state.pickerOpen = !state.pickerOpen;
+  renderPickerMode();
+  if (state.pickerOpen) (isLite() ? $("#manual-input") : $("#tv-select")).focus();
+});
+
 function renderTV() {
+  renderPickerMode();
   const tv = $("#tv");
   const facts = $("#tv-facts");
   const d = state.device;
@@ -4073,9 +4105,26 @@ setInterval(() => {
   if (state.tv && !state.job && !(state.restart && ["sending", "waiting", "restarting"].includes(state.restart.phase))) refreshDevice();
 }, 15000);
 
+// "tv the bear" in the address bar (extension) opens this page with #find=the%20bear.
+function takeFindLink() {
+  const match = /^#find=(.+)$/.exec(location.hash);
+  if (!match) return null;
+  history.replaceState(null, "", location.pathname + location.search);
+  let query;
+  try { query = decodeURIComponent(match[1]).trim().slice(0, 100); } catch { return null; }
+  if (!query) return null;
+  state.view = "find";
+  store.set("detox.view", "find");
+  state.findSource = "catalog";
+  store.set("detox.findSource", "catalog");
+  $("#find-input").value = query;
+  return query;
+}
+
 (async function start() {
   await engineReady;
   applyEngine();
+  const findLink = takeFindLink();
   if (usesIconLoader()) watchIcons();
   loadSites().then(renderFindSource);
   renderViews();
@@ -4090,11 +4139,13 @@ setInterval(() => {
     return;
   }
   if (state.tv) {
-    connect(state.tv);
+    const connecting = connect(state.tv);
     findTVs({ autoConnect: false });
+    await connecting;
   } else {
     await findTVs();
   }
+  if (findLink && state.tv) runFind(findLink);
 })();
 </script>
 </body>

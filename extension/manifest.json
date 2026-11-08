@@ -34,6 +34,7 @@
     "declarativeNetRequest",
     "tabs",
     "scripting",
+    "contextMenus",
     "sidePanel"
   ],
   "host_permissions": [
@@ -54,5 +55,47 @@
       "http://localhost/*",
       "http://127.0.0.1/*"
     ]
+  },
+  "omnibox": {
+    "keyword": "tv"
+  },
+  "commands": {
+    "play-pause": {
+      "suggested_key": {
+        "default": "Alt+Shift+P",
+        "mac": "MacCtrl+Shift+P"
+      },
+      "description": "Play or pause the TV"
+    },
+    "send-tab": {
+      "suggested_key": {
+        "default": "Alt+Shift+S",
+        "mac": "MacCtrl+Shift+S"
+      },
+      "description": "Send this tab's video to the TV"
+    },
+    "volume-up": {
+      "suggested_key": {
+        "default": "Alt+Shift+Period",
+        "mac": "MacCtrl+Shift+Period"
+      },
+      "description": "Turn the TV's volume up"
+    },
+    "volume-down": {
+      "suggested_key": {
+        "default": "Alt+Shift+Comma",
+        "mac": "MacCtrl+Shift+Comma"
+      },
+      "description": "Turn the TV's volume down"
+    },
+    "mute": {
+      "description": "Mute or unmute the TV"
+    },
+    "tv-home": {
+      "description": "Go to the TV's home screen"
+    },
+    "tv-back": {
+      "description": "Go back on the TV"
+    }
   }
 }

@@ -7,6 +7,7 @@ import { initSniffer } from "./engine/video.js";
 import { ALARM, ensureAlarm, runBurst } from "./engine/rules.js";
 import { newRelayKey, relayInfo, startRelay } from "./engine/relay-host.js";
 import { watchNetErrors } from "./engine/neterrors.js";
+import { onCommand, onMenuClick, setUpMenus, setUpOmnibox } from "./engine/shortcuts.js";
 
 const EXTERNAL_HOSTS = new Set(["localhost", "127.0.0.1"]);
 
@@ -60,12 +61,18 @@ chrome.storage.onChanged.addListener((changes, area) => {
 
 function setUp() {
   ensureAlarm();
+  setUpMenus();
   installEcpHeaderRule();
 }
 
 // When the browser starts (or the extension is installed or updated), check the TVs right away.
 chrome.runtime.onInstalled.addListener(() => { setUp(); runBurst(); });
 chrome.runtime.onStartup.addListener(() => { setUp(); runBurst(); });
+
+// Right-click menu, "tv" in the address bar, keyboard shortcuts.
+chrome.contextMenus?.onClicked.addListener((info, tab) => { onMenuClick(info, tab); });
+chrome.commands?.onCommand.addListener((command, tab) => { onCommand(command, tab); });
+setUpOmnibox();
 
 watchNetErrors();
 initSniffer();
