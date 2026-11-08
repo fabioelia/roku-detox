@@ -2,6 +2,14 @@
 
 Find a Roku TV on your Wi-Fi and clean it up from a web page on your computer.
 
+<p>
+  <img src="docs/remote.png" alt="The Remote menu: favorites, inputs and an on-screen remote" width="560">
+  <img src="docs/phone.png" alt="On a phone: the remote with the swipe pad" width="180">
+</p>
+<p><img src="docs/clean-up.png" alt="Clean up: each channel shows how long it was watched" width="560"></p>
+
+(Screenshots use the pretend TV in `mock_roku.py`.)
+
 The page has six menus:
 
 - **Remote**: open any app or input, favorites, scenes, the on-screen remote (arrow buttons or a
