@@ -1244,7 +1244,8 @@ def usage_summary(target):
                         per_day[day] = per_day.get(day, 0) + int(seconds)
     tracked = sorted(day for day in days if isinstance(days[day], dict))
     return {"days": len(tracked), "since": tracked[0] if tracked else None, "totals": totals,
-            "perDay": [{"day": day, "seconds": per_day.get(day, 0)} for day in tracked]}
+            "perDay": [{"day": day, "seconds": per_day.get(day, 0)} for day in tracked],
+            "today": datetime.now().strftime("%Y-%m-%d")}  # this computer's date, which the log uses
 
 
 def run_scheduled(address, scene):

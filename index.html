@@ -204,13 +204,15 @@
   .screen-time { margin-top: 26px; }
   .screen-time-sum { margin: 4px 0 8px; font-weight: 600; }
   /* Viewing time per day: one hue, thin bars from one baseline, a label only on the busiest day. */
-  .day-chart { position: relative; max-width: 74ch; margin: 14px 0 16px; }
+  .day-chart { position: relative; max-width: 74ch; margin: 14px 0 16px; overflow-x: clip; overflow-y: visible; }
   .day-bars { display: flex; align-items: flex-end; gap: 2px; height: 84px; padding-top: 18px; border-bottom: 1px solid var(--line); }
   .day-bar { position: relative; flex: 1 1 0; display: flex; justify-content: center; align-items: flex-end; height: 100%; cursor: default; }
   .day-bar:focus-visible { outline: 2px solid var(--keep); outline-offset: 2px; border-radius: 4px; }
   .day-bar span { display: block; width: 100%; max-width: 24px; min-height: 2px; border-radius: 4px 4px 0 0; background: var(--keep); }
   .day-bar.none span { background: var(--line); }
   .day-bar .peak { position: absolute; bottom: calc(var(--h) + 4px); white-space: nowrap; font-size: 12px; color: var(--muted); width: auto; max-width: none; min-height: 0; background: none; }
+  .day-bar .peak.start { left: 0; }
+  .day-bar .peak.end { right: 0; }
   .day-axis { display: flex; justify-content: space-between; margin-top: 4px; font-size: 12px; color: var(--muted); }
   .day-tip {
     position: absolute; top: -8px; transform: translateX(-50%); padding: 4px 8px; border-radius: 6px; pointer-events: none;
@@ -1843,6 +1845,7 @@ async function refreshDevice() {
     }
   }
   const changed = hadControl !== state.control || hadReachable !== state.reachable;
+  if (state.control && !hadControl) loadLimits();   // came back: the time-left note can load now
   if (state.control && (!hadControl || !state.apps.length)) {
     if (isLite()) loadLiteApps(); else await loadApps();
   }
@@ -2598,10 +2601,16 @@ const looksLikeLink = (text) => /^\s*(https?:\/\/|www\.|m\.|youtu\.be\/|(music\.
 // Links sent from this box, newest first, to send again with one tap (kept in this browser).
 function recentLinks() {
   const list = store.get("detox.recentLinks", []);
-  return Array.isArray(list) ? list.filter((u) => typeof u === "string").slice(0, 4) : [];
+  const ok = Array.isArray(list) ? list.filter((u) => typeof u === "string") : [];
+  // The lite page can only send YouTube and Netflix links itself.
+  return (isLite() ? ok.filter((u) => parseLink(u)) : ok).slice(0, 4);
 }
 function rememberLink(url) {
-  store.set("detox.recentLinks", [url, ...recentLinks().filter((u) => u !== url)].slice(0, 4));
+  let parsed = null;
+  try { parsed = new URL(url); } catch { return; }
+  if (parsed.username || parsed.password) return;   // never keep a link with a sign-in in it
+  const all = store.get("detox.recentLinks", []);
+  store.set("detox.recentLinks", [url, ...(Array.isArray(all) ? all : []).filter((u) => u !== url)].slice(0, 4));
   renderRecentLinks();
 }
 function renderRecentLinks() {
@@ -2610,8 +2619,12 @@ function renderRecentLinks() {
   box.hidden = !list.length || $("#smart-form").dataset.live === "true";
   box.innerHTML = list.length ? `<span class="label">Sent recently:</span>${list.map((u) => {
     let label = u;
-    try { const x = new URL(u); label = x.hostname.replace(/^www\./, "") + x.pathname.replace(/\/$/, "") + x.search; } catch { /* as typed */ }
-    return `<button type="button" data-resend="${esc(u)}" title="Send ${esc(u)} to the TV again">${esc(label)}</button>`;
+    try {
+      const x = new URL(u);
+      const video = x.searchParams.get("v");   // YouTube's video id says which one; other query strings stay out of sight
+      label = x.hostname.replace(/^www\./, "") + x.pathname.replace(/\/$/, "") + (video ? `?v=${video}` : "");
+    } catch { /* as typed */ }
+    return `<button type="button" data-resend="${esc(u)}" title="Send it to the TV again">${esc(label)}</button>`;
   }).join("")}` : "";
 }
 $("#recent-links").addEventListener("click", async (e) => {
@@ -2620,6 +2633,7 @@ $("#recent-links").addEventListener("click", async (e) => {
   try {
     const { app } = await api("/api/link", { tv: state.tv, url });
     toast(app === "Detox Home" ? "Playing it on the TV again." : `Opening it in ${app} on the TV.`);
+    setRemoteError("");
     rememberLink(url);
   } catch (err) {
     setRemoteError(err.message);
@@ -3261,6 +3275,10 @@ function noteLimits(status, tv = state.tv) {
 function bedtimeNote() {
   const b = state.limitStatus?.tv === state.tv ? state.limitStatus.bedtime : null;
   if (!b || !/^\d\d:\d\d$/.test(b.start || "")) return "";
+  // "15 more minutes" was given: bedtime is then, not tomorrow's start time.
+  if (b.extendUntil && b.extendUntil * 1000 > Date.now()) {
+    return `bedtime at ${new Date(b.extendUntil * 1000).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}`;
+  }
   const [h, m] = b.start.split(":").map(Number);
   const now = new Date();
   const start = new Date(now);
@@ -3282,7 +3300,9 @@ function limitNote(appId) {
   return left > 0 ? `${minutesText(left * 60)} left today` : "time's up for today";
 }
 setInterval(() => {
-  if (!document.hidden && state.limitStatus && (Object.keys(state.limitStatus.limits).length || state.limitStatus.bedtime)) loadLimits();
+  const l = state.limitStatus;
+  // Nothing known yet (the TV wasn't answering, or limits were set elsewhere), or something to keep fresh.
+  if (!document.hidden && (!l || l.tv !== state.tv || Object.keys(l.limits).length || l.bedtime)) loadLimits();
 }, 60000);
 
 async function pollNow() {
@@ -4142,25 +4162,65 @@ function minutesText(seconds) {
 
 function usageLabel(id) { return id === "home" ? "Home screen" : appLabel(id) || id; }
 
-// One bar per day on record (the bars' labels say the date and time watched on hover or focus).
-function dayLabel(day, long = false) {
+// One bar per day (the bars' labels say the date and time watched on hover or focus).
+function dayLabel(day, long = false, today = "") {
   const date = new Date(`${day}T12:00:00`);
-  const now = new Date();   // the viewing log uses this computer's local dates
-  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}` === day;
-  if (today) return "Today";
+  if (day === today) return "Today";
   return date.toLocaleDateString(undefined, long ? { weekday: "long", month: "short", day: "numeric" } : { month: "short", day: "numeric" });
 }
-function renderDayChart(perDay) {
+// Every day from the first on record to today (the program's "today"), days with no record as zero,
+// and today's bar from the live count when Rules has one.
+function chartDays(perDay, today, liveToday) {
+  if (!perDay.length) return [];
+  const seconds = new Map(perDay.map((d) => [d.day, d.seconds]));
+  if (today && liveToday !== null) seconds.set(today, liveToday);
+  const last = today && today > perDay.at(-1).day ? today : perDay.at(-1).day;
+  const days = [];
+  for (let d = new Date(`${perDay[0].day}T12:00:00`); ; d.setDate(d.getDate() + 1)) {
+    const day = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    days.push({ day, seconds: seconds.get(day) || 0 });
+    if (day >= last || days.length > 60) break;
+  }
+  return days.slice(-14);
+}
+function renderDayChart(perDay, today = "", liveToday = null) {
+  const days = chartDays(perDay, today, liveToday);
+  $("#day-chart").hidden = !days.length;   // an older program or extension sends no days
   const bars = $("#day-bars");
-  const max = Math.max(...perDay.map((d) => d.seconds), 1);
-  const peak = perDay.reduce((best, d) => (d.seconds > (best?.seconds ?? -1) ? d : best), null);
-  bars.innerHTML = perDay.map((d) => {
+  const sig = JSON.stringify([days, today]);
+  if (bars.dataset.sig === sig) return;      // unchanged: keep the bars (and keyboard focus on one)
+  bars.dataset.sig = sig;
+  const max = Math.max(...days.map((d) => d.seconds), 1);
+  const peak = days.reduce((best, d) => (d.seconds > (best?.seconds ?? -1) ? d : best), null);
+  const n = days.length;
+  // Same days as before (only the numbers moved, like today's while the TV is on): update the bars
+  // in place, so a bar that has keyboard focus keeps it.
+  const shown = [...bars.children];
+  if (shown.length === n && shown.every((el, i) => el.dataset.day === days[i].day)) {
+    days.forEach((d, i) => {
+      const el = shown[i];
+      const h = Math.round((d.seconds / max) * 100);
+      const words = `${dayLabel(d.day, true, today)}: ${d.seconds >= 60 ? minutesText(d.seconds) : "nothing"}`;
+      el.classList.toggle("none", d.seconds < 60);
+      el.style.setProperty("--h", `${h}%`);
+      el.firstElementChild.style.height = `${h}%`;
+      el.dataset.tip = words;
+      el.setAttribute("aria-label", words);
+      const label = el.querySelector(".peak");
+      if (label && d === peak) label.textContent = minutesText(d.seconds);
+      else if (label) label.remove();
+      else if (d === peak && d.seconds >= 60) el.insertAdjacentHTML("beforeend", `<span class="peak${i < 2 ? " start" : i > n - 3 ? " end" : ""}">${esc(minutesText(d.seconds))}</span>`);
+    });
+    return;
+  }
+  bars.innerHTML = days.map((d, i) => {
     const h = Math.round((d.seconds / max) * 100);
-    const words = `${dayLabel(d.day, true)}: ${d.seconds >= 60 ? minutesText(d.seconds) : "nothing"}`;
-    return `<div class="day-bar${d.seconds < 60 ? " none" : ""}" tabindex="0" data-tip="${esc(words)}" aria-label="${esc(words)}" style="--h:${h}%">
-      <span style="height:${h}%"></span>${peak && d === peak && d.seconds >= 60 ? `<span class="peak">${esc(minutesText(d.seconds))}</span>` : ""}</div>`;
+    const words = `${dayLabel(d.day, true, today)}: ${d.seconds >= 60 ? minutesText(d.seconds) : "nothing"}`;
+    const edge = i < 2 ? " start" : i > n - 3 ? " end" : "";
+    return `<div class="day-bar${d.seconds < 60 ? " none" : ""}" tabindex="0" data-day="${esc(d.day)}" data-tip="${esc(words)}" aria-label="${esc(words)}" style="--h:${h}%">
+      <span style="height:${h}%"></span>${d === peak && d.seconds >= 60 ? `<span class="peak${edge}">${esc(minutesText(d.seconds))}</span>` : ""}</div>`;
   }).join("");
-  $("#day-axis").innerHTML = perDay.length ? `<span>${esc(dayLabel(perDay[0].day))}</span><span>${esc(dayLabel(perDay.at(-1).day))}</span>` : "";
+  $("#day-axis").innerHTML = n ? `<span>${esc(dayLabel(days[0].day, false, today))}</span><span>${esc(dayLabel(days.at(-1).day, false, today))}</span>` : "";
 }
 {
   const tip = $("#day-tip");
@@ -4169,11 +4229,17 @@ function renderDayChart(perDay) {
     const chart = $("#day-chart").getBoundingClientRect();
     const box = bar.getBoundingClientRect();
     tip.textContent = bar.dataset.tip;
-    tip.style.left = `${box.left - chart.left + box.width / 2}px`;
     tip.hidden = false;
+    const half = tip.offsetWidth / 2;
+    const center = box.left - chart.left + box.width / 2;
+    tip.style.left = `${Math.min(Math.max(center, half), chart.width - half)}px`;   // never past the chart's edges
   };
-  for (const type of ["pointerover", "focusin"]) $("#day-bars").addEventListener(type, (e) => show(e.target.closest(".day-bar")));
-  for (const type of ["pointerleave", "focusout"]) $("#day-bars").addEventListener(type, () => show(null));
+  let touched = false;
+  $("#day-bars").addEventListener("pointerover", (e) => { touched = e.pointerType !== "mouse"; show(e.target.closest(".day-bar")); });
+  $("#day-bars").addEventListener("focusin", (e) => show(e.target.closest(".day-bar")));
+  $("#day-bars").addEventListener("pointerleave", () => { if (!touched) show(null); });   // a finger lifting keeps it up
+  $("#day-bars").addEventListener("focusout", () => show(null));
+  document.addEventListener("pointerdown", (e) => { if (touched && !e.target.closest("#day-bars")) { touched = false; show(null); } });
 }
 
 // Screen time over the days on record: total, a daily average, and the apps that took the most.
@@ -4186,7 +4252,9 @@ function renderScreenTime() {
   const total = watched.reduce((n, [, s]) => n + s, 0);
   $("#screen-time-title").textContent = `Past ${u.days} days`;
   $("#screen-time-sum").textContent = `${minutesText(total)} in all, about ${minutesText(total / u.days)} a day.`;
-  renderDayChart(u.perDay || []);
+  // Today's bar follows the live count Rules refreshes (minus the home screen).
+  const live = state.rulesStatus?.usage && u.today ? Object.entries(state.rulesStatus.usage).reduce((n, [id, sec]) => n + (id === "home" ? 0 : sec), 0) : null;
+  renderDayChart(u.perDay || [], u.today || "", live);
   $("#screen-time-list").innerHTML = watched.slice(0, 6).map(([id, seconds]) =>
     `<li><span>${esc(usageLabel(id))}</span><span>${minutesText(seconds)}</span></li>`).join("");
 }

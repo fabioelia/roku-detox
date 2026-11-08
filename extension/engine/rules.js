@@ -231,7 +231,9 @@ export async function usageSummary(address) {
     }
     perDay.push({ day, seconds: watched });
   }
-  return { days: tracked.length, since: tracked[0] || null, totals, perDay };
+  const now = new Date();   // this computer's date, which the log uses
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  return { days: tracked.length, since: tracked[0] || null, totals, perDay, today };
 }
 
 async function saveUsage(address, day, usage) {
