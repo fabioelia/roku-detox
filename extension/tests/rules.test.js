@@ -220,6 +220,10 @@ test("all TV together: once the day's total is used, any app or input is closed"
   assert.equal((await messages())[0], "Time's up for TV today (2 minutes in all). Closed YouTube.");
   const status = await ok("GET", "/api/rules", { tv: TV });
   assert.equal(status.totalToday, 2);
+  // An older page saves its whole rules object without the total: kept. An empty object clears it.
+  await setRules({ limits: {}, blocked: [] });
+  assert.equal((await ok("GET", "/api/rules", { tv: TV })).rules.totalLimit, 2);
   await setRules({});
+  assert.equal((await ok("GET", "/api/rules", { tv: TV })).rules.totalLimit, 0);
   await tv("/keypress/Home");
 });

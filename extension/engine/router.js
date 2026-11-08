@@ -207,7 +207,8 @@ const POST_ROUTES = {
     const rules = keepOwnedFields(cleanRules(c.body.rules), stored);
     const rawBedtime = isPlainObject(c.body.rules) ? c.body.rules.bedtime : null;
     if (isPlainObject(rawBedtime) && !("days" in rawBedtime)) rules.bedtime.days = stored.bedtime.days; // a page from before bedtime nights
-    if (isPlainObject(c.body.rules) && !("totalLimit" in c.body.rules)) { // ... or total TV time
+    // ... or total TV time: a full rules object from such a page has "limits" but no "totalLimit" ({} clears it)
+    if (isPlainObject(c.body.rules) && "limits" in c.body.rules && !("totalLimit" in c.body.rules)) {
       rules.totalLimit = stored.totalLimit || 0;
       rules.totalWeekendLimit = stored.totalWeekendLimit || 0;
     }

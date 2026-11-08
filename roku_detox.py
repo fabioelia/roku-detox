@@ -3710,7 +3710,8 @@ class Handler(BaseHTTPRequestHandler):
         raw_bedtime = body["rules"].get("bedtime") if isinstance(body.get("rules"), dict) else None
         if isinstance(raw_bedtime, dict) and "days" not in raw_bedtime:  # a page from before bedtime nights
             rules["bedtime"]["days"] = stored["bedtime"].get("days", list(BEDTIME_DAYS))
-        if isinstance(body.get("rules"), dict) and "totalLimit" not in body["rules"]:  # ... or total TV time
+        # ... or total TV time: a full rules object from such a page has "limits" but no "totalLimit" ({} clears it)
+        if isinstance(body.get("rules"), dict) and "limits" in body["rules"] and "totalLimit" not in body["rules"]:
             rules["totalLimit"], rules["totalWeekendLimit"] = stored.get("totalLimit", 0), stored.get("totalWeekendLimit", 0)
         if isinstance(body.get("rules"), dict) and "weekendLimits" not in body["rules"]:  # ... or weekend limits
             rules["weekendLimits"] = {k: v for k, v in stored.get("weekendLimits", {}).items() if k in rules["limits"]}
